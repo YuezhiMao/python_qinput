@@ -1,0 +1,428 @@
+import os, glob, re, sys
+import subprocess as sp
+import numpy as np
+from optparse import OptionParser
+
+def ParseInput(ArgsIn):
+   UseMsg = '''
+   python make_input_E_bind.py [options] [xyz_path] [frgm_partition]
+   ''' 
+   parser = OptionParser(usage=UseMsg)
+   parser.add_option('-a','--all',dest='all',action='store_true',default=False,help='run all the xyz files under the xyz_path')
+   parser.add_option('-k','--keyword',dest='keyword',action='store',type='string',default=None,help='create inputs for xyz files containing the keyword')
+   parser.add_option('-t','--target',dest='target',action='callback',callback=string_sp_callback,type='string',default=None,help='create input for certain xyz files')
+   parser.add_option('--onsite',dest='onsite',action='store_true',default=False,help='frgm file and xyz file under the same dir and sharing the same nameroot')
+   parser.add_option('-b','--basis',dest='basis',action='callback',callback=string_sp_callback, type='string', default='aug-cc-pvtz',help='The target basis (default is aug-cc-pvtz)')
+   parser.add_option('-m','--method',dest='method',action='callback',type='string', default=None, callback=string_sp_callback,help='The methods (density functionals) to use')
+   parser.add_option('-i','--input_path',dest='input_path',action='store',type='string', default='input/',help='The directory storing the generated inputs')
+   parser.add_option('--blur',dest='blur',action='store_true',default=False,help='Apply Gaussian blurring to AMOEBA monopoles')
+   parser.add_option('--noback',dest='noback',action='store_true',default=False,help='No back polarization on the AMOEBA waters')
+   parser.add_option('-v','--vdw_param',dest='vdw_param',type='string',action='store',default=None,help='The vdw parameter file')
+   options, args = parser.parse_args(ArgsIn)
+
+   if not options.onsite:
+      if len(args) < 3:
+         parser.print_help()
+         sys.exit(1)
+   else:
+      if len(args) < 2:
+         parser.print_help()
+         sys.exit(1)
+
+   if not options.all and options.target==None and options.keyword==None:
+      print "The target directory must be specified: one or some or all"
+      parser.print_help()
+      sys.exit(1)
+   return options, args
+
+def string_sp_callback(option, opt, value, parser):
+   setattr(parser.values, option.dest, value.split(','))
+
+class XYZ:
+   def __init__(self, xyz_file):
+      #print xyz_file
+      self.Name = re.search("/([^/]+).xyz$", xyz_file).group(1)
+      f = open(xyz_file, 'r')
+      self.AtomList = []
+      self.CoordList = []
+      for line in f.readlines():
+         l = re.search('^\s*(\d+)\s*$', line)
+         if l!=None:
+            self.NAtom = int(l.group(1))
+         l = re.search('(\S+)\s+(\S+)\s+(\S+)\s+(\S+)', line)
+         if l!=None:
+            self.AtomList.append(l.group(1))
+            coord = float(l.group(2)), float(l.group(3)), float(l.group(4))
+            self.CoordList.append(coord)
+
+      if(len(self.AtomList)!=self.NAtom):
+         print "Error in number of atoms"
+         sys.exit(1)
+
+
+def ParseFRGM(FRGMFile, debug = False):
+   FRGM = {}
+   counter = 0
+   f = open(FRGMFile,'r')
+   line = f.readline()
+   while line!='':
+      l=re.search("(\#)",line) 
+      if (l==None):
+         counter = counter + 1
+         if counter == 1:
+            l=re.search("(\S+)",line) 
+            if (not l==None):
+               FRGM["total_charge"] = int(l.group(1)) 
+               if debug:
+                  print "supersystem charge is "+ str(FRGM["total_charge"])
+            else:
+               print "error parsing frgm file"
+         if counter == 2:
+            l=re.search("(\S+)",line) 
+            if (not l==None):
+               FRGM["total_mult"] = int(l.group(1)) 
+               if debug:
+                  print "supersystem multiplicity is "+ str(FRGM["total_mult"])
+            else:
+               print "error parsing frgm file"
+         if counter == 3:
+            l=re.search("(\S+)",line) 
+            if (not l==None):
+               FRGM["charge_frgm"] = [int(i) for i in line.split()]
+               if debug:
+                  print "printing fragment charges"
+                  print FRGM["charge_frgm"]
+            else:
+               print "error parsing frgm file"
+         if counter == 4:
+            l=re.search("(\S+)",line) 
+            if (not l==None):
+               FRGM["mult_frgm"] = [int(i) for i in line.split()]
+               if debug:
+                  print "printing fragment multiplicites"
+                  print FRGM["mult_frgm"]
+            else:
+               print "error parsing frgm file"
+         if counter == 5:
+            l=re.search("(\S+)",line) 
+            if (not l==None):
+               FRGM["atoms_frgm"] = [int(i) for i in line.split()]
+               if debug:
+                  print "printing number of atoms in each fragment"
+                  print FRGM["atoms_frgm"]
+            else:
+               print "error parsing frgm file"
+            #make a list for number of atoms prior to each fragment (offset)
+            FRGM["NFrgm"] = len(FRGM["atoms_frgm"])
+            FRGM["atoms_offset"] = np.zeros(FRGM["NFrgm"],dtype=int)
+            offset = 0
+            for index in range(0,FRGM["NFrgm"]):
+               FRGM["atoms_offset"][index] = offset
+               offset += FRGM["atoms_frgm"][index]
+      line = f.readline()
+   if counter != 5:
+      print "did not parse the expected number of lines in "+FRGMFile 
+   return FRGM
+
+def ParseRems(RemFile):
+   f = open(RemFile,'r')
+   REMS = {}
+   REMS["name"] = RemFile[4:]
+   REMS["nrems"] = 0
+   currem = 0
+   REMS["the_rem"] = {}
+   line = f.readline()
+   while line!='':
+      l=re.search("(\S+)\s+(\S+)",line) #rem and value
+      if (not l==None):
+         REMS["the_rem"][str(currem)] = {}
+         REMS["the_rem"][str(currem)]["name"] = l.group(1).upper()
+         REMS["the_rem"][str(currem)]["value"] = l.group(2).upper()
+         currem += 1
+         REMS["nrems"] = currem
+      line = f.readline()
+   f.close()
+   return REMS
+
+def ModRem(r_name,r_value,MyREMS):
+	#see if the rem is already set
+   REM_NAME = r_name.upper()
+   REM_VALUE = r_value.upper()
+   done = False
+   for rem in range(MyREMS["nrems"]):
+      if (MyREMS["the_rem"][str(rem)]["name"] == REM_NAME):
+	#found in the rem already set up
+         MyREMS["the_rem"][str(rem)]["value"] = REM_VALUE
+         done = True
+   if (not done):	#not find, add this new rem
+      currem = MyREMS["nrems"]
+      MyREMS["the_rem"][str(currem)] = {}
+      MyREMS["the_rem"][str(currem)]["name"] = REM_NAME
+      MyREMS["the_rem"][str(currem)]["value"] = REM_VALUE
+      MyREMS["nrems"] = currem + 1
+   return
+
+def AppendRem(fh,MyREMS):
+   fh.write('$rem\n')
+   for rem in range(MyREMS["nrems"]):
+      fh.write(MyREMS["the_rem"][str(rem)]["name"]+'  '+MyREMS["the_rem"][str(rem)]["value"]+'\n')
+   fh.write('$end\n')
+   return
+
+def WriteQMFrgm(fw, XYZ, FRGM, frgm_index=0):
+   fw.write('$molecule\n')
+   fw.write("%d %d\n" %(FRGM["charge_frgm"][frgm_index], FRGM["mult_frgm"][frgm_index]))
+   for index in range(0,FRGM["atoms_frgm"][frgm_index]):   #QM atoms
+      atomic_symbol = XYZ.AtomList[index]
+      x, y, z = XYZ.CoordList[index]
+      fw.write("%-4s %-10.5f %-10.5f %-10.5f\n" %(atomic_symbol, x, y, z))
+   fw.write('$end\n')
+
+def WriteAMOEBAFrgm(fw, XYZ, FRGM, frgmname='amoebawater_l', frgm_index=1):
+   fw.write('$efp_fragments\n')
+   N_MM_atoms = FRGM["atoms_frgm"][frgm_index]
+   if N_MM_atoms%3!=0:
+      print "N_MM_ATOM = %d" %N_MM_atoms
+      print "Only water is supported for now so the number of atoms in the MM region must be multiple of 3"
+      sys.exit(0)
+   for i in range(0, N_MM_atoms):
+      if i%3 == 0:
+         fw.write("%s\n" %frgmname)
+      index = FRGM["atoms_frgm"][0]+i
+      atomic_symbol = XYZ.AtomList[index]
+      x, y, z = XYZ.CoordList[index]
+      fw.write("%-4s %-10.5f %-10.5f %-10.5f\n" %(atomic_symbol, x, y, z))
+   fw.write('$end\n')
+
+def WriteQMVDWParams(fw, vdw_param_file, n_qm_atoms):
+   fw.write('$qm_atoms_vdw_parameters\n')
+   fr = open(vdw_param_file, 'r')
+   count = 0
+   for line in fr.readlines():
+      not_empty = re.search('(\S+)\s+(\S+)\s+(\S+)', line)
+      if not_empty:
+         fw.write(line)
+         count += 1
+   fw.write('$end\n')
+   fr.close()
+   if count != n_qm_atoms:
+      print "Error: wrong number of QM vdW parameters"
+      sys.exit(0)
+
+def WriteMolecule(fw, XYZ, FRGM, monomer=0, pureAMOEBA=False):
+   if monomer == 0:   #supersystem QM/AMOEBA: currently QM must be the first frgm (frgm_index 0)
+      WriteQMFrgm(fw, XYZ, FRGM)
+      WriteAMOEBAFrgm(fw, XYZ, FRGM) 
+
+   elif monomer > 2:
+      print "At most there could be two fragments for QM/MM"
+      sys.exit(0)
+   else:   #monomer job
+      index_frgm = monomer - 1   #start from zero
+      if index_frgm == 0:
+         if pureAMOEBA:
+            print "The first frgm must be QM for now"
+            sys.exit(0)
+         else:   #the qm frgm
+            WriteQMFrgm(fw, XYZ, FRGM, index_frgm)
+      else:
+         if not pureAMOEBA:
+            print "The second frgm must be AMOEBA for now"
+            sys.exit(0)
+         else:
+            #write the He
+            fw.write('$molecule\n')
+            fw.write('0 1\n')
+            fw.write('%-4s %-10.5f %-10.5f %-10.5f\n' %("He", 50, 50, 50))
+            fw.write('$end\n')
+            WriteAMOEBAFrgm(fw, XYZ, FRGM)
+
+
+def basis_abbr(BasName):    #generating abbreviated name for basis sets, using for input file names
+   fullname = BasName.lower()
+   if fullname == 'cc-pvdz':
+      return 'dz'
+   elif fullname == 'cc-pvtz':
+      return 'tz'
+   elif fullname == 'cc-pvqz':
+      return 'qz'
+   elif fullname == 'aug-cc-pvdz':
+      return 'adz'
+   elif fullname == 'aug-cc-pvtz':
+      return 'atz'
+   elif fullname == 'aug-cc-pvqz':
+      return 'aqz'
+   elif fullname == 'def2-svpd' or fullname == 'svpd':
+      return 'svpd'
+   elif fullname == 'def2-tzvpp' or fullname == 'tzvpp':
+      return 'tzvpp'
+   elif fullname == 'def2-tzvppd' or fullname == 'tzvppd':
+      return 'tzvppd'
+   elif fullname == 'def2-qzvpp' or fullname == 'qzvpp':
+      return 'qzvpp'
+   elif fullname == 'def2-qzvppd' or fullname == 'qzvppd':
+      return 'qzvppd'
+   elif fullname == 'pc-2':
+      return 'pc2'
+   elif fullname == 'pc-3':
+      return 'pc3'
+   elif fullname == 'aug-pc-2':
+      return 'apc2'
+   elif fullname == 'aug-pc-3':
+      return 'apc3'
+   elif fullname == 'dp':
+      return 'dp'
+   elif fullname == 'tp':
+      return 'tp' 
+   elif fullname == 'lp':
+      return 'lp'
+   else:
+      print "unrecognized basis choice: %s" %fullname
+      sys.exit(1)
+
+def Set_rems_common(curREM, method, basis):
+   if basis.upper()=='DEF2-SVPD' or basis.upper() == 'SVPD': #Hack! def2-SVPD->SV
+      ModRem('BASIS','SV',curREM)
+      ModRem('purecart', '1111', curREM)
+   elif basis.upper()=='DEF2-TZVPP' or basis.upper() == 'TZVPP': #Hack! def2-TZVPP->G3MP2large
+      ModRem('BASIS','G3MP2LARGE',curREM)
+      ModRem('purecart', '1111', curREM)
+   elif basis.upper()=='DEF2-TZVPPD' or basis.upper() == 'TZVPPD': #Hack! def2-TZVPPD->4-31G
+      ModRem('BASIS','4-31G',curREM)
+      ModRem('purecart', '1111', curREM)
+   elif basis.upper()=='DEF2-QZVPP' or basis.upper() == 'QZVPP': #Hack! def2-QZVPP->G3large
+      ModRem('BASIS','G3LARGE',curREM)
+      ModRem('purecart', '1111', curREM)
+   elif basis.upper() == 'DEF2-QZVPPD' or basis.upper() == 'QZVPPD': #Hack! def2-QZVPPD->STO-2G
+      ModRem('BASIS','STO-2G',curREM)
+      ModRem('purecart','1111',curREM)
+   elif basis.upper() == 'DP': #double-zeta Pople: 6-31+G(d)
+      ModRem('BASIS','6-31+G(d)', curREM)
+   elif basis.upper() == 'TP': #triple-zeta Pople: 6-311++G(2df,2pd)
+      ModRem('BASIS','6-311++G(2df,2pd)',curREM)
+   elif basis.upper() == 'LP':
+      ModRem('BASIS','6-311++G(3df,3pd)', curREM)
+   elif basis.upper()=='DEF2-TZVPP' or basis.upper() == 'TZVPP': #Hack! def2-TZVPP->G3MP2large
+      ModRem('BASIS','G3MP2LARGE',curREM)
+      ModRem('purecart', '1111', curREM)
+   else:
+      ModRem('BASIS', basis, curREM)
+   ModRem('MEM_TOTAL', '8000', curREM)
+   ModRem('MEM_STATIC','2000', curREM)
+   ModRem('SCF_GUESS', 'SAD', curREM)
+   ModRem('EXCHANGE', method, curREM)	
+   if (method != 'HF'):
+      ModRem ('XC_GRID', '000075000302', curREM)		
+      ModRem ('NL_GRID', '1', curREM)
+   if (method == 'PBE'):
+      ModRem('CORRELATION', 'PBE', curREM)
+   if (method == 'PBE-D3'):
+      ModRem('EXCHANGE', 'PBE', curREM)
+      ModRem('CORRELATION', 'PBE', curREM)
+      ModRem('DFT_D','EMPIRICAL_GRIMME3', curREM)
+   if (method == 'B3LYP-D3'):
+      ModRem('EXCHANGE', 'B3LYP', curREM)
+      ModRem('DFT_D','EMPIRICAL_GRIMME3', curREM)
+   if (method == 'BLYP'):
+      ModRem('EXCHANGE','B', curREM)
+      ModRem('CORRELATION','LYP', curREM)
+   if (method == 'TPSS'):
+      ModRem('CORRELATION','TPSS', curREM)
+   if (method == 'M06-L' or method == 'M06L'):
+      ModRem('EXCHANGE','M06L', curREM)
+   if (method == 'M06-2X' or method == 'M062X'):
+      ModRem('EXCHANGE','M062X', curREM) 
+   
+def XYZ_to_Input(XYZ, inputfile, FRGM, method, basis, vdw_param_file, blur=False, nobackpol=False):
+   fw = open(inputfile, 'w')
+   if FRGM["NFrgm"] != 2:
+      print "Only two-fragment case is supported for now"
+      sys.exit(0)
+   #write isolated frgm jobs 
+   #Order: 1. AMOEBA; 2. QM
+   #AMOEBA
+   WriteMolecule(fw, XYZ, FRGM, 2, pureAMOEBA=True)
+   curREM = ParseRems('rems/rem_amoebaonly') 
+   AppendRem(fw, curREM)
+   fw.write('\n@@@\n\n')
+   #QM
+   WriteMolecule(fw, XYZ, FRGM, 1)
+   curREM = ParseRems('rems/rem_qmonly')
+   if FRGM["mult_frgm"][0] > 1:
+      ModRem('UNRESTRICTED','TRUE',curREM)
+   else:
+      ModRem('UNRESTRICTED','FALSE',curREM)
+   Set_rems_common(curREM, method, basis)
+   AppendRem(fw, curREM)
+   fw.write('\n@@@\n\n')
+   #QM/AMOEBA
+   WriteMolecule(fw, XYZ, FRGM, 0)
+   curREM = ParseRems('rems/rem_qmamoeba')
+   if FRGM["mult_frgm"][0] > 1:
+      ModRem('UNRESTRICTED','TRUE',curREM)
+   else:
+      ModRem('UNRESTRICTED','FALSE',curREM)
+   Set_rems_common(curREM, method, basis)
+   ModRem('SCF_GUESS','READ', curREM)
+   if vdw_param_file!=None:
+      ModRem('EFP_QM_DISP', '2', curREM)
+   else:
+      ModRem('EFP_QM_DISP', '0', curREM)
+   if not blur:
+      ModRem('GAUSSIAN_BLUR', 'FALSE', curREM)
+   else:
+      ModRem('GAUSSIAN_BLUR', 'TRUE', curREM)
+   if nobackpol:
+      ModRem('EFP_QM_POL','FALSE', curREM)
+   AppendRem(fw, curREM)
+   if vdw_param_file!=None:
+      WriteQMVDWParams(fw, vdw_param_file, FRGM["atoms_frgm"][0])
+
+   fw.close()
+
+
+#the script 
+options, args = ParseInput(sys.argv)
+xyz_path = args[1]
+frgm_partition = ''
+if not options.onsite:
+   frgm_partition = args[2]
+if xyz_path[-1:] != '/':
+   xyz_path += '/'
+
+#determine xyz_file list
+curdir = os.getcwd()
+xyzfile_list = []
+if options.all:
+   xyzfile_list = glob.glob(xyz_path+'*.xyz')
+elif options.keyword:
+   xyzfile_list = glob.glob(xyz_path+'*'+options.keyword+'*.xyz')
+if options.target!=None:
+   for xyz_file in options.target:
+      if xyz_file not in xyzfile_list:
+         xyzfile_list.append(xyz_file)
+
+#check the input_path
+input_path = options.input_path
+if input_path[-1:] != '/':
+   input_path += '/'
+if not os.path.exists(input_path):
+   sp.call(['mkdir', input_path])
+
+#parse the fragment file
+FRGM = ''
+if not options.onsite:   #all xyz files share the common frgm file: parse it beforehand
+   FRGM = ParseFRGM(frgm_partition)
+
+#create the input file, and move it into the input_path
+for method in options.method:
+   for basis in options.basis: 
+      basis_short = basis_abbr(basis)
+      for xyz_file in xyzfile_list:
+         parsed_XYZ = XYZ(xyz_file)
+         if options.onsite:
+            frgm_file = xyz_file[:-4]+'.frgm'
+            FRGM = ParseFRGM(frgm_file)
+
+         inputfile = input_path+parsed_XYZ.Name+'_'+'dft-amoeba'+'_'+method+'_'+basis_short+'.in'
+         XYZ_to_Input(parsed_XYZ, inputfile, FRGM, method, basis, options.vdw_param, options.blur, options.noback)
