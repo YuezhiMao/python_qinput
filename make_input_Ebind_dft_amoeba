@@ -1,3 +1,5 @@
+#! /usr/bin/env python
+
 import os, glob, re, sys
 import subprocess as sp
 import numpy as np
@@ -18,6 +20,8 @@ def ParseInput(ArgsIn):
    parser.add_option('--blur',dest='blur',action='store_true',default=False,help='Apply Gaussian blurring to AMOEBA monopoles')
    parser.add_option('--noback',dest='noback',action='store_true',default=False,help='No back polarization on the AMOEBA waters')
    parser.add_option('-v','--vdw_param',dest='vdw_param',type='string',action='store',default=None,help='The vdw parameter file')
+   parser.add_option('--nocp',dest='nocp',action='store_true',default=False,help='do not apply counterpoise correction')
+   parser.add_option('--natoms_solute',dest='natoms_solute',action='store',type='int',default=False,help='number of atoms for the solute')
    options, args = parser.parse_args(ArgsIn)
 
    if not options.onsite:
@@ -58,7 +62,6 @@ class XYZ:
       if(len(self.AtomList)!=self.NAtom):
          print "Error in number of atoms"
          sys.exit(1)
-
 
 def ParseFRGM(FRGMFile, debug = False):
    FRGM = {}
@@ -169,18 +172,46 @@ def AppendRem(fh,MyREMS):
    fh.write('$end\n')
    return
 
-def WriteQMFrgm(fw, XYZ, FRGM, frgm_index=0):
+def WriteQMFrgm(fw, XYZ, FRGM, frgm_index, natoms_solute, nocp=False):
    fw.write('$molecule\n')
-   fw.write("%d %d\n" %(FRGM["charge_frgm"][frgm_index], FRGM["mult_frgm"][frgm_index]))
-   for index in range(0,FRGM["atoms_frgm"][frgm_index]):   #QM atoms
-      atomic_symbol = XYZ.AtomList[index]
-      x, y, z = XYZ.CoordList[index]
-      fw.write("%-4s %-10.5f %-10.5f %-10.5f\n" %(atomic_symbol, x, y, z))
+   if frgm_index == 0 or frgm_index == 1: #solute + qm solvent (0) or solute only (1)
+      fw.write("%d %d\n" %(FRGM["charge_frgm"][0], FRGM["mult_frgm"][0]))
+      if frgm_index == 0: #solute + qm solvent
+         for index in range(0,FRGM["atoms_frgm"][0]):
+            atomic_symbol = XYZ.AtomList[index]
+            x, y, z = XYZ.CoordList[index]
+            fw.write("%-4s %-10.5f %-10.5f %-10.5f\n" %(atomic_symbol, x, y, z))
+      if frgm_index == 1: #solute only
+         for index in range(0, natoms_solute):
+            atomic_symbol = XYZ.AtomList[index]
+            x, y, z = XYZ.CoordList[index]
+            fw.write("%-4s %-10.5f %-10.5f %-10.5f\n" %(atomic_symbol, x, y, z))
+         if not nocp: #if docp, add the ghost atoms for QM solvents
+            for index in range(natoms_solute, FRGM["atoms_frgm"][0]):
+               atomic_symbol = XYZ.AtomList[index]
+               x, y, z = XYZ.CoordList[index]
+               fw.write("@%-4s %-10.5f %-10.5f %-10.5f\n" %(atomic_symbol, x, y, z))
+   if frgm_index == 2: #qm solvents only
+      if natoms_solute == FRGM["atoms_frgm"][0]: #no qm solute, then write a helium for the QM region
+         fw.write('0 1\n')
+         fw.write('%-4s %-10.5f %-10.5f %-10.5f\n' %("He", 50, 50, 50))
+      else:
+         fw.write("%d %d\n" %(FRGM["charge_frgm"][1], FRGM["mult_frgm"][1]))
+         if not nocp: #if docp, add the ghost atoms for solute
+            for index in range(0, natoms_solute):
+               atomic_symbol = XYZ.AtomList[index]
+               x, y, z = XYZ.CoordList[index]
+               fw.write("@%-4s %-10.5f %-10.5f %-10.5f\n" %(atomic_symbol, x, y, z))
+         for index in range(natoms_solute, FRGM["atoms_frgm"][0]):
+            atomic_symbol = XYZ.AtomList[index]
+            x, y, z = XYZ.CoordList[index]
+            fw.write("%-4s %-10.5f %-10.5f %-10.5f\n" %(atomic_symbol, x, y, z))
+
    fw.write('$end\n')
 
-def WriteAMOEBAFrgm(fw, XYZ, FRGM, frgmname='amoebawater_l', frgm_index=1):
+def WriteAMOEBAFrgm(fw, XYZ, FRGM, frgmname='amoebawater_l'):
    fw.write('$efp_fragments\n')
-   N_MM_atoms = FRGM["atoms_frgm"][frgm_index]
+   N_MM_atoms = FRGM["atoms_frgm"][1]
    if N_MM_atoms%3!=0:
       print "N_MM_ATOM = %d" %N_MM_atoms
       print "Only water is supported for now so the number of atoms in the MM region must be multiple of 3"
@@ -194,49 +225,38 @@ def WriteAMOEBAFrgm(fw, XYZ, FRGM, frgmname='amoebawater_l', frgm_index=1):
       fw.write("%-4s %-10.5f %-10.5f %-10.5f\n" %(atomic_symbol, x, y, z))
    fw.write('$end\n')
 
-def WriteQMVDWParams(fw, vdw_param_file, n_qm_atoms):
-   fw.write('$qm_atoms_vdw_parameters\n')
+def ParseVDWParams(vdw_param_file):
+   VDW = {}
    fr = open(vdw_param_file, 'r')
    count = 0
+   VDW["params"]={}
    for line in fr.readlines():
-      not_empty = re.search('(\S+)\s+(\S+)\s+(\S+)', line)
-      if not_empty:
-         fw.write(line)
+      l = re.search('(\S+)\s+(\S+)\s+(\S+)', line)
+      if l!=None:
+         VDW["params"][str(count)] = line
          count += 1
-   fw.write('$end\n')
+   VDW["natoms"] = count
    fr.close()
-   if count != n_qm_atoms:
-      print "Error: wrong number of QM vdW parameters"
-      sys.exit(0)
+   return VDW
 
-def WriteMolecule(fw, XYZ, FRGM, monomer=0, pureAMOEBA=False):
-   if monomer == 0:   #supersystem QM/AMOEBA: currently QM must be the first frgm (frgm_index 0)
-      WriteQMFrgm(fw, XYZ, FRGM)
+def WriteQMVDWParams(fw, VDW):
+   fw.write('$qm_atoms_vdw_parameters\n')
+   for i in range(0, VDW["natoms"]):
+      fw.write(VDW["params"][str(i)])
+   fw.write('$end\n')
+
+def WriteMolecule(fw, XYZ, FRGM, mode, natoms_solute, docp=True):
+   if mode == 0:   #supersystem QM/AMOEBA: currently QM must be the first frgm (frgm_index 0)
+      WriteQMFrgm(fw, XYZ, FRGM, mode, natoms_solute)
       WriteAMOEBAFrgm(fw, XYZ, FRGM) 
-
-   elif monomer > 2:
-      print "At most there could be two fragments for QM/MM"
+   elif mode == 1: #QM solute only
+      WriteQMFrgm(fw, XYZ, FRGM, mode, natoms_solute, docp)
+   elif mode == 2: #QM solvents + MM solvents
+      WriteQMFrgm(fw, XYZ, FRGM, mode, natoms_solute, docp)
+      WriteAMOEBAFrgm(fw, XYZ, FRGM)
+   else:
+      print "Unsupported mode: %d" %mode
       sys.exit(0)
-   else:   #monomer job
-      index_frgm = monomer - 1   #start from zero
-      if index_frgm == 0:
-         if pureAMOEBA:
-            print "The first frgm must be QM for now"
-            sys.exit(0)
-         else:   #the qm frgm
-            WriteQMFrgm(fw, XYZ, FRGM, index_frgm)
-      else:
-         if not pureAMOEBA:
-            print "The second frgm must be AMOEBA for now"
-            sys.exit(0)
-         else:
-            #write the He
-            fw.write('$molecule\n')
-            fw.write('0 1\n')
-            fw.write('%-4s %-10.5f %-10.5f %-10.5f\n' %("He", 50, 50, 50))
-            fw.write('$end\n')
-            WriteAMOEBAFrgm(fw, XYZ, FRGM)
-
 
 def basis_abbr(BasName):    #generating abbreviated name for basis sets, using for input file names
    fullname = BasName.lower()
@@ -311,43 +331,47 @@ def Set_rems_common(curREM, method, basis):
    ModRem('MEM_STATIC','2000', curREM)
    ModRem('SCF_GUESS', 'SAD', curREM)
    ModRem('EXCHANGE', method, curREM)	
-   if (method != 'HF'):
+   if (method.upper() != 'HF'):
       ModRem ('XC_GRID', '000099000590', curREM)		
       ModRem ('NL_GRID', '1', curREM)
-   if (method == 'PBE'):
+   if (method.upper() == 'PBE'):
       ModRem('CORRELATION', 'PBE', curREM)
-   if (method == 'PBE-D3'):
+   if (method.upper() == 'PBE-D3'):
       ModRem('EXCHANGE', 'PBE', curREM)
       ModRem('CORRELATION', 'PBE', curREM)
       ModRem('DFT_D','EMPIRICAL_GRIMME3', curREM)
-   if (method == 'B3LYP-D3'):
+   if (method.upper() == 'REVPBE-D3'):
+      ModRem('EXCHANGE', 'REVPBE', curREM)
+      ModRem('CORRELATION', 'PBE', curREM)
+      ModRem('DFT_D','EMPIRICAL_GRIMME3', curREM)
+   if (method.upper() == 'B3LYP-D3'):
       ModRem('EXCHANGE', 'B3LYP', curREM)
       ModRem('DFT_D','EMPIRICAL_GRIMME3', curREM)
-   if (method == 'BLYP'):
+   if (method.upper() == 'BLYP'):
       ModRem('EXCHANGE','B', curREM)
       ModRem('CORRELATION','LYP', curREM)
-   if (method == 'TPSS'):
+   if (method.upper() == 'BLYP-D3'):
+      ModRem('EXCHANGE','B', curREM)
+      ModRem('CORRELATION','LYP', curREM)
+      ModRem('DFT_D','EMPIRICAL_GRIMME3', curREM)
+   if (method.upper() == 'TPSS'):
       ModRem('CORRELATION','TPSS', curREM)
-   if (method == 'M06-L' or method == 'M06L'):
-      ModRem('EXCHANGE','M06L', curREM)
-   if (method == 'M06-2X' or method == 'M062X'):
-      ModRem('EXCHANGE','M062X', curREM) 
    
-def XYZ_to_Input(XYZ, inputfile, FRGM, method, basis, vdw_param_file, blur=False, nobackpol=False):
+def XYZ_to_Input(XYZ, inputfile, FRGM, method, basis, vdw_params, options):
    fw = open(inputfile, 'w')
    if FRGM["NFrgm"] != 2:
       print "Only two-fragment case is supported for now"
       sys.exit(0)
-   #write isolated frgm jobs 
-   #Order: 1. AMOEBA; 2. QM
-   #AMOEBA
-   WriteMolecule(fw, XYZ, FRGM, 2, pureAMOEBA=True)
-   curREM = ParseRems('rems/rem_amoebaonly') 
-   AppendRem(fw, curREM)
-   fw.write('\n@@@\n\n')
-   #QM
-   WriteMolecule(fw, XYZ, FRGM, 1)
-   curREM = ParseRems('rems/rem_qmonly')
+   if vdw_params!=None:
+      natoms_solute = vdw_params["natoms"] 
+   elif options.natoms_solute!=None:
+      natoms_solute = options.natoms_solute
+   else:
+      natoms_solute = FRGM["atoms_frgm"][0]
+
+   #The solute
+   WriteMolecule(fw, XYZ, FRGM, 1, natoms_solute, options.nocp)
+   curREM = ParseRems('rems/rem_qmonly') 
    if FRGM["mult_frgm"][0] > 1:
       ModRem('UNRESTRICTED','TRUE',curREM)
    else:
@@ -355,28 +379,47 @@ def XYZ_to_Input(XYZ, inputfile, FRGM, method, basis, vdw_param_file, blur=False
    Set_rems_common(curREM, method, basis)
    AppendRem(fw, curREM)
    fw.write('\n@@@\n\n')
-   #QM/AMOEBA
-   WriteMolecule(fw, XYZ, FRGM, 0)
+
+   #QM solvent with MM solvent
+   WriteMolecule(fw, XYZ, FRGM, 2, natoms_solute, options.nocp)
+   if natoms_solute == FRGM["atoms_frgm"][0]:
+      curREM = ParseRems('rems/rem_amoebaonly')
+   else:
+      curREM = ParseRems('rems/rem_qmamoeba')
+      Set_rems_common(curREM, method, basis)
+      ModRem('SCF_GUESS', 'SAD', curREM)
+      ModRem('EFP_QM_DISP', '0', curREM)
+      if not options.blur:
+         ModRem('GAUSSIAN_BLUR', 'FALSE', curREM)
+      else:
+         ModRem('GAUSSIAN_BLUR', 'TRUE', curREM)
+      if options.noback:
+         ModRem('EFP_QM_POL','FALSE', curREM)
+   AppendRem(fw, curREM)
+   fw.write('\n@@@\n\n')
+
+   #Full system
+   WriteMolecule(fw, XYZ, FRGM, 0, natoms_solute)
    curREM = ParseRems('rems/rem_qmamoeba')
    if FRGM["mult_frgm"][0] > 1:
       ModRem('UNRESTRICTED','TRUE',curREM)
    else:
       ModRem('UNRESTRICTED','FALSE',curREM)
    Set_rems_common(curREM, method, basis)
-   ModRem('SCF_GUESS','READ', curREM)
-   if vdw_param_file!=None:
+   ModRem('SCF_GUESS','SAD', curREM)
+   if vdw_params!=None:
       ModRem('EFP_QM_DISP', '2', curREM)
    else:
       ModRem('EFP_QM_DISP', '0', curREM)
-   if not blur:
+   if not options.blur:
       ModRem('GAUSSIAN_BLUR', 'FALSE', curREM)
    else:
       ModRem('GAUSSIAN_BLUR', 'TRUE', curREM)
-   if nobackpol:
+   if options.noback:
       ModRem('EFP_QM_POL','FALSE', curREM)
    AppendRem(fw, curREM)
-   if vdw_param_file!=None:
-      WriteQMVDWParams(fw, vdw_param_file, FRGM["atoms_frgm"][0])
+   if vdw_params!=None:
+      WriteQMVDWParams(fw, vdw_params)
 
    fw.close()
 
@@ -402,6 +445,11 @@ if options.target!=None:
       if xyz_file not in xyzfile_list:
          xyzfile_list.append(xyz_file)
 
+#parse the vdw parameters
+VDW = None
+if options.vdw_param!=None:
+   VDW = ParseVDWParams(options.vdw_param) 
+
 #check the input_path
 input_path = options.input_path
 if input_path[-1:] != '/':
@@ -425,4 +473,4 @@ for method in options.method:
             FRGM = ParseFRGM(frgm_file)
 
          inputfile = input_path+parsed_XYZ.Name+'_'+'dft-amoeba'+'_'+method+'_'+basis_short+'.in'
-         XYZ_to_Input(parsed_XYZ, inputfile, FRGM, method, basis, options.vdw_param, options.blur, options.noback)
+         XYZ_to_Input(parsed_XYZ, inputfile, FRGM, method, basis, VDW, options)

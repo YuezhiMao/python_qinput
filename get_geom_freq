@@ -1,0 +1,197 @@
+#! /usr/bin/env python
+
+import os, glob, re, sys, csv
+import subprocess as sp
+from optparse import OptionParser
+
+def ParseInput(ArgsIn):
+   UseMsg = "python get_geom.py [options] [result_dir]\nExample for a result dir: reoptimized_geoms/"
+   parser = OptionParser(UseMsg)
+   parser.add_option('-a','--all',dest='all', action='store_true', default=False, help='manipulate all the output directories under the folder \"result\"')
+   parser.add_option('-t','--target', dest='target', action='callback', callback=string_sp_callback, type='string', default=None, help='the output directory (only one) to manipulate')
+   parser.add_option('-k','--keyword', dest='keyword', action='store', type='string', default=None, help='search for all matching output direcotries based on the keyword and manipulate them')
+   parser.add_option('-f','--format',dest='format', action='store', type='string', default='xyz', help='the format of geometry files (xyz or gzmat)')
+   parser.add_option('--pes',dest='pes',action='store_true',default=False,help='optimize geometry for PES scan')
+   parser.add_option('--placeholder',dest='placeholder',action='store',type='string',default='dist',help='placeholder to get the geom param')
+   parser.add_option('--do_freq',dest='do_freq',action='store_true',default=False,help='parse the vibrational frequencies')
+   parser.add_option('--intens',dest='intensity',action='store_true',default=False,help='parse the IR intensities together with the frequencies')
+   options, args=parser.parse_args(ArgsIn)
+   if len(args) < 2 and options.target==None:
+      print "Specify the directory that stores all the results"
+      parser.print_help()
+      sys.exit(1)
+   if not options.all and options.target==None and options.keyword==None: 
+      print "The target directory or keyword must be specified"
+      parser.print_help()
+      sys.exit(1)
+   elif options.format!='xyz' and options.format!='gzmat':
+      print "The specified format of geometry files is not recognized"
+      parser.print_help()
+      sys.exit(1)
+   else:
+      return options, args
+
+def string_sp_callback(option, opt, value, parser):
+   setattr(parser.values, option.dest, value.split(','))
+
+def manipulate_one_folder(target_path, options):
+   print "manipulating directory %s" %target_path
+   cur_dir = os.getcwd()
+   os.chdir(target_path)
+   get_energy(options)
+   if options.do_freq:
+      get_frequency(options)
+   out_list = glob.glob('*.out')
+   if not os.path.exists("geometry"):
+      sp.call(['mkdir', 'geometry'])
+   for out in out_list:
+      if options.format.lower()=='xyz':
+         xyz_file = get_xyz(out)
+         sp.call(['mv',xyz_file,'geometry/'])
+      
+      elif options.format.lower()=='gzmat':
+         gzmat_file = get_gzmat(out)
+         sp.call(['mv',gzmat_file,'geometry/'])
+    
+   os.chdir(cur_dir)
+
+def get_xyz(output_file):
+   name = output_file[:-4]
+   tmp_file = name+'.tmp'
+   xyz_file = name+'.xyz'
+   #os.system('grep -B 100 "OPTIMIZATION CONVERGED" '+output_file+' | grep -A 1000 "Coordinates (Angstroms)" | grep -B 1000 Point | grep -A 1000 ATOM | grep -v ATOM | grep -v Point | awk \'{print $2, $3, $4, $5}\' > '+tmp_file)   
+   os.system('grep -A 500 "OPTIMIZATION CONVERGED" '+output_file+' | grep -B 500 "Z-matrix" | grep -A 500 "ATOM" | grep -v "ATOM" | grep -v "Print" > '+tmp_file)
+   fr = open(tmp_file, 'r')
+   AtomList =  []
+   CoordList = []
+   all_lines = fr.readlines()
+   for line in all_lines:
+      l = re.search('(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)', line)
+      if l!=None:
+         AtomList.append(l.group(2))
+         CoordList.append((float(l.group(3)), float(l.group(4)), float(l.group(5))))
+   fr.close()
+   sp.call(['rm', tmp_file])
+   fw = open(xyz_file, 'w')
+   NAtom = len(AtomList)
+   fw.write("%d\n\n" %NAtom) #NAtom
+   for index in range(0, NAtom):
+      atomic_symbol = AtomList[index]
+      x,y,z = CoordList[index]
+      fw.write("%-2s %14.10f %14.10f %14.10f\n" %(atomic_symbol,x,y,z))
+   fw.close()
+   return xyz_file #return the file name
+
+def get_gzmat(output_file):
+   print "\"get_gzmat\" is not implemented yet"
+   sys.exit(1)
+
+def get_energy(options): #This function should be called in "manipulate_one_folder"
+   tmpfile = 'tmp_energy'
+   data_file = 'energy.csv'
+   os.system('grep "Final energy is" *.out > '+tmpfile)
+   fr = open(tmpfile,'r')
+   datapoints = []
+   for line in fr.readlines():
+      if options.pes:
+         placeholder = options.placeholder
+         l = re.search(placeholder+'_([^_]+)_\S+.out:\s+Final energy is\s+(\S+)',line)
+         coord = float(l.group(1))
+         energy = float(l.group(2))
+         datapoints.append((coord,energy))
+      else:
+         l = re.search('(\S+).out:\s+Final energy is\s+(\S+)',line)
+         jobname = l.group(1)
+         energy = float(l.group(2))
+         datapoints.append((jobname,energy))
+   fr.close()
+   fw = open(data_file,'w')
+   if options.pes:
+      for data in sorted(datapoints, key=lambda data:data[0]):
+         fw.write("%.2f,%.10f\n" %data)
+   else:
+      for data in datapoints:
+         fw.write("%s,%.10f\n" %data)
+   fw.close()
+   sp.call(['rm', tmpfile])
+   print "\"energy_of_opt_structures.csv\" created"
+
+def get_frequency(options):
+   freq_data={}
+   tmpfile = 'tmp_freq'
+   os.system('grep "Frequency: " *.out > '+tmpfile)
+   fr = open(tmpfile, 'r')
+   for line in fr.readlines():
+      l = line.split()
+      jobname = re.search('(\S+).out', l[0]).group(1)
+      if jobname not in freq_data:
+         freq_data[jobname] = {}
+         freq_data[jobname]["freq"]=[]
+      for data in l[2:]:
+         freq_data[jobname]["freq"].append(float(data))
+   fr.close()
+   sp.call(['rm', tmpfile])
+
+   if options.intensity:
+      tmpfile = 'tmp_intensity'
+      os.system('grep "IR Intens: " *.out > '+tmpfile)
+      fr = open(tmpfile, 'r')
+      for line in fr.readlines():
+         l = line.split()
+         jobname = re.search('(\S+).out', l[0]).group(1)
+         if jobname not in freq_data:
+            print "Error: the frequency data for %s does not exist" %jobname
+            sys.exit(0)
+         if "intens" not in freq_data[jobname]:
+            freq_data[jobname]["intens"]=[]
+         for data in l[3:]:
+            freq_data[jobname]["intens"].append(float(data))
+      fr.close()
+      sp.call(['rm', tmpfile])
+
+   freq_data_file = 'frequency.csv'
+   fw = open(freq_data_file, 'w')
+   for jobname in freq_data:
+      fw.write('%s,' %jobname)
+      for freq in freq_data[jobname]["freq"]:
+         fw.write('%.2f,' %freq)
+      fw.write('\n')
+   fw.close()
+   if options.intensity:
+      intens_data_file = 'intensity.csv'
+      fw = open(intens_data_file, 'w')
+      for jobname in freq_data:
+         fw.write('%s,' %jobname)
+         for intens in freq_data[jobname]["intens"]:
+            fw.write('%.3f,' %intens)
+         fw.write('\n')
+      fw.close()
+
+
+#The script
+options,args=ParseInput(sys.argv)
+outdir_list=[]
+cur_dir = os.getcwd()
+if len(args) > 1:
+   result_dir = args[1]
+   if result_dir[-1:]!='/':
+      result_dir += '/'
+if options.all:
+   outdir_list = glob.glob(result_dir+'*/')
+elif options.keyword!=None:
+   outdir_list = glob.glob(result_dir+'*'+options.keyword+'*/')
+if options.target!=None:
+   for target_dir in  options.target:
+      if target_dir not in outdir_list:
+         outdir_list.append(target_dir)
+print outdir_list
+
+for outdir in outdir_list:
+   manipulate_one_folder(outdir, options)
+
+
+
+
+
+
+ 

@@ -1,4 +1,4 @@
-#A one-shot script to create compressed and stretched geometries
+#! /usr/bin/env python
 
 import os, glob, re, sys
 import subprocess as sp
