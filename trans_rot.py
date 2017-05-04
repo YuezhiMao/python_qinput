@@ -1,0 +1,163 @@
+import os, glob, re, sys
+import subprocess as sp
+from optparse import OptionParser
+import numpy as np
+
+def ParseInput(ArgsIn):
+   UseMsg = "python trans_rot.py [options] [root_coord]\nFor now the root coordinate file must live in the same dir as the script."
+   parser = OptionParser(usage=UseMsg)
+   parser.add_option('-r', '--rotate', dest='rot', action='store', type='float', default=None, help='rotate in the xy-plane by the given angle')
+   parser.add_option('--rotate_n',dest='rot_n',action='store',type='int',default=None,help="specify the n-fold rotational axis. The coordinates will be rotated by 2pi/n in the xy plane")
+   parser.add_option('--trans',dest='trans',action='store',type='float',default=None,help="translate along the z axis with the given value")
+   parser.add_option('-m','--mirror',dest='mirror',action='store',type='float',default=None,help="reflection with respect to plane at z=[value]")
+   parser.add_option('-o','--out',dest='out',action='store',type='string',default=None,help="the filename (xyz) for the new coordinates")
+   parser.add_option('--origin',dest='origin',action='store',type='int',default=None,help="set atom X's position the origin")
+   parser.add_option('-a','--adv',dest='advanced',action='callback',type='string',callback=string_sp_callback,default=None,help='set up a coordinate with 3 given atoms (serial numbers)')
+   parser.add_option('-p','--pivot',dest='pivot',action='store',type='int',default=None,help='permute axis. 1: x->y, y->z, z->x; 2: x->z, y->x, z->y')
+   options, args = parser.parse_args(ArgsIn)
+   if len(args) < 2:
+      print "Missing the root coordinate file"
+      parser.print_help()
+      sys.exit(0)
+   elif not os.path.exists(args[1]):
+      print "The root coordinate file does not exist in the current dir"
+      parser.print_help()
+      sys.exit(0)
+
+   return options, args
+
+def string_sp_callback(option, opt, value, parser):
+   setattr(parser.values, option.dest, value.split(','))
+   
+def parse_xyz_file(filename):
+   AtomList = []
+   CoordList = []
+   fr = open(filename, 'r')
+   for line in fr.readlines():
+      l = re.search('(\S+)\s+(\S+)\s+(\S+)\s+(\S+)', line)
+      if l!=None:
+         AtomList.append(l.group(1))
+         coord = float(l.group(2)),float(l.group(3)),float(l.group(4))
+         CoordList.append(coord)
+   fr.close()
+   Coords = np.array(CoordList)
+   print Coords
+   return AtomList, Coords
+
+def set_origin(Coords, OrigAtom):
+   print "Set the position of Atom %d as the origin" %OrigAtom
+   origin = np.copy(Coords[OrigAtom-1])
+   print origin
+   for i in range(0, Coords.shape[0]):
+      Coords[i] -= origin
+
+def rotate_to_z_perpendicular(Coords, PlaneAtoms):
+   iAtom0, iAtom1, iAtom2 = int(PlaneAtoms[0]), int(PlaneAtoms[1]), int(PlaneAtoms[2])   #iAtom0 is the origin of new coordinates
+   print "Set the plane determined by atoms %d, %d, %d as the xy-plane" %(iAtom0, iAtom1, iAtom2) 
+   A0, A1, A2 = Coords[iAtom0-1], Coords[iAtom1-1], Coords[iAtom2-1]
+   dx = A1 - A0
+   dy = A2 - A0
+   xprime = dx/np.sqrt(np.dot(dx, dx))
+   zprime = np.cross(dx, dy)
+   zprime /= np.sqrt(np.dot(zprime, zprime))
+   yprime = np.cross(zprime, xprime)
+   rotmat = np.zeros((3,3))
+   rotmat[0] = xprime
+   rotmat[1] = yprime
+   rotmat[2] = zprime
+   rotmat = rotmat.transpose()
+   Coords = np.dot(Coords, rotmat)
+   #print Coords
+   return Coords
+
+def z_translate_all(Coords, distance):   #translate all the atoms along the z-axis 
+   print "Translate all the atoms along z-axis by %.8f Angstrom" %distance
+   Coords[:,2:3] += distance     #simply increment the 3rd column
+   print Coords
+   return Coords
+   
+def xy_rotate(Coords, angle):
+   print "rotate in the xy-plane by %f degrees" %angle
+   rotmat = np.zeros((3,3))
+   rotmat[0] = np.array([np.cos(angle/180.0*np.pi), -np.sin(angle/180.0*np.pi), 0.0])
+   rotmat[1] = np.array([np.sin(angle/180.0*np.pi), np.cos(angle/180.0*np.pi), 0.0])
+   rotmat[2] = np.array([0.0, 0.0, 1.0])
+   Coords = np.dot(Coords, rotmat)
+   print rotmat
+   print Coords
+   return Coords
+
+def xy_rotate_nfold(Coords, fold):
+   print "rotate in the xy-plane by 2pi/%d" %fold
+   n = float(fold) #n-fold rotational axis
+   rotmat = np.zeros((3,3))
+   rotmat[0] = np.array([np.cos(2*np.pi/n), -np.sin(2*np.pi/n), 0.0])
+   rotmat[1] = np.array([np.sin(2*np.pi/n), np.cos(2*np.pi/n), 0.0])
+   rotmat[2] = np.array([0.0, 0.0, 1.0])
+   Coords = np.dot(Coords, rotmat)
+   print rotmat
+   print Coords
+   return Coords
+
+def z_reflection(Coords, mirror_pos):
+   print "reflection with respect to the mirror at z=%f" %mirror_pos
+   Coords[:,2:3] = 2*mirror_pos - Coords[:,2:3]
+   print Coords
+   return Coords 
+   
+def pivot(Coords_orig, mode):
+   if mode != 1 and mode != 2:
+      print "Unknown pivot mode: %d" %mode
+      sys.exit()
+   print "pivot the axes"
+   Coords = np.zeros(Coords_orig.shape)
+   if mode == 1: #x->y, y->z, z->x
+      Coords[:,0:1] = np.copy(Coords_orig[:,2:3])
+      Coords[:,1:2] = np.copy(Coords_orig[:,0:1])
+      Coords[:,2:3] = np.copy(Coords_orig[:,1:2])
+   else:  #x->z, y->x, z->y
+      Coords[:,0:1] = np.copy(Coords_orig[:,1:2])
+      Coords[:,1:2] = np.copy(Coords_orig[:,2:3])
+      Coords[:,2:3] = np.copy(Coords_orig[:,0:1])
+   return Coords
+
+def write_xyz_file(outfile, Coords, AtomList):
+   fw = open(outfile, 'w')
+   fw.write("%d\n" %len(AtomList))
+   fw.write("\n")
+   for iAtom in range(0, len(AtomList)):
+      x, y, z = Coords[iAtom][0], Coords[iAtom][1], Coords[iAtom][2]
+      fw.write("%-3s %15.10f %15.10f %15.10f\n" %(AtomList[iAtom], x, y, z))
+   fw.close()
+   
+
+#the script
+options, args = ParseInput(sys.argv)
+rootfile = args[1]
+AtomList, Coords = parse_xyz_file(rootfile)
+#print AtomList
+#print CoordList
+if options.origin:
+   set_origin(Coords, options.origin)
+   print Coords
+if options.advanced:
+   Coords = rotate_to_z_perpendicular(Coords, options.advanced)
+   print Coords
+if options.mirror:
+   Coords = z_reflection(Coords, options.mirror)
+if options.trans:
+   Coords = z_translate_all(Coords, options.trans)
+if options.rot_n:
+   Coords = xy_rotate_nfold(Coords, options.rot_n)
+if options.rot:
+   Coords = xy_rotate(Coords, options.rot)
+if options.pivot:
+   Coords = pivot(Coords, options.pivot)
+   print Coords
+
+outfile = 'new.xyz'
+if options.out:
+   outfile = options.out
+write_xyz_file(outfile, Coords, AtomList)
+
+   

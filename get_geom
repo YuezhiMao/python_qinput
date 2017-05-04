@@ -1,0 +1,127 @@
+#! /usr/bin/env python
+
+#This script is used to copy output files into "result" from the input dir
+
+import os, glob, re, sys, csv
+import subprocess as sp
+from optparse import OptionParser
+
+def ParseInput(ArgsIn):
+   UseMsg = "python get_geom.py [options] [result_dir]\nExample for a result dir: reoptimized_geoms/"
+   parser = OptionParser(UseMsg)
+   parser.add_option('-a','--all',dest='all', action='store_true', default=False, help='manipulate all the output directories under the folder \"result\"')
+   parser.add_option('-t','--target', dest='target', action='store', type='string', default=None, help='the output directory (only one) to manipulate')
+   parser.add_option('-k','--keyword', dest='keyword', action='store', type='string', default=None, help='search for all matching output direcotries based on the keyword and manipulate them')
+   parser.add_option('-f','--format',dest='format', action='store', type='string', default='xyz', help='the format of geometry files (xyz or gzmat)')
+   options, args=parser.parse_args(ArgsIn)
+   if len(args) < 2:
+      print "Specify the directory that stores all the results"
+      parser.print_help()
+      sys.exit(1)
+   if not options.all and options.target==None and options.keyword==None: 
+      #print "options:"
+      #print options
+      #print "args:"
+      #print args
+      print "The target directory or keyword must be specified"
+      parser.print_help()
+      sys.exit(1)
+   elif options.format!='xyz' and options.format!='gzmat':
+      print "The specified format of geometry files is not recognized"
+      parser.print_help()
+      sys.exit(1)
+   else:
+      return options, args
+
+def manipulate_one_folder(target_path, format='xyz'):
+   print "manipulating directory %s" %target_path
+   cur_dir = os.getcwd()
+   os.chdir(target_path)
+   get_energy()
+   out_list = glob.glob('*.out')
+   if not os.path.exists("geometry"):
+      sp.call(['mkdir', 'geometry'])
+   for out in out_list:
+      if format.lower()=='xyz':
+         xyz_file = get_xyz(out)
+         sp.call(['mv',xyz_file,'geometry/'])
+      
+      elif format.lower()=='gzmat':
+         gzmat_file = get_gzmat(out)
+         sp.call(['mv',gzmat_file,'geometry/'])
+    
+   os.chdir(cur_dir)
+
+
+def get_xyz(output_file):
+   name = output_file[:-4]
+   tmp_file = name+'.tmp'
+   xyz_file = name+'.xyz'
+   os.system('grep -B 100 "OPTIMIZATION CONVERGED" '+output_file+' | grep -A 1000 "Coordinates (Angstroms)" | grep -B 1000 Point | grep -A 1000 ATOM | grep -v ATOM | grep -v Point | awk \'{print $2, $3, $4, $5}\' > '+tmp_file)   
+   fr = open(tmp_file, 'r')
+   fw = open(xyz_file, 'w')
+   all_lines = fr.readlines()
+   fr.close()
+   N_atom = len(all_lines)
+   fw.write("%d\n"  %N_atom)
+   fw.write('\n')
+   for line in all_lines:
+      l = re.search('(\S+)\s+(\S+)\s+(\S+)\s+(\S+)', line)
+      atom = l.group(1)
+      x,y,z = float(l.group(2)), float(l.group(3)), float(l.group(4))
+
+      fw.write("%2s %14.10f %14.10f %14.10f\n" %(atom,x,y,z))
+   fw.close()
+   sp.call(['rm', tmp_file])
+   return xyz_file
+
+def get_gzmat(output_file):
+   print "\"get_gzmat\" is not implemented yet"
+   sys.exit(1)
+
+def get_energy(): #This function should be called in "manipulate_one_folder"
+   datapoints = []
+   tmpfile = 'tmp_energy'
+   data_file = 'energy_curve.csv'
+   os.system('grep "Final energy is" *.out > '+tmpfile)
+   fr = open(tmpfile,'r')
+   for line in fr.readlines():
+      l = re.search('_([^_]+).out:\s+Final energy is\s+(\S+)',line)
+      coord = float(l.group(1))
+      energy = float(l.group(2))
+      datapoints.append((coord,energy))
+   datapoints.sort(key=lambda data: data[0])
+   fr.close()
+   fw = open(data_file,'w')
+   for data in datapoints:
+      fw.write("%.2f  %18.12f\n" %(data[0],data[1]))
+   fw.close()
+   print "\"energy_curve.csv\" created"
+      
+
+#The script
+options,args=ParseInput(sys.argv)
+outdir_list=[]
+
+if options.all or options.keyword!=None:
+   cur_dir = os.getcwd()
+   result_dir = args[1]
+   os.chdir(result_dir)
+   if options.all:
+      outdir_list=glob.glob('*/')
+   else:
+      outdir_list = glob.glob('*'+options.keyword+'*/')
+   for outdir in outdir_list:
+      manipulate_one_folder(outdir, options.format)
+   
+   os.chdir(cur_dir)
+
+elif options.target!=None:
+   cur_dir = os.getcwd()
+   manipulate_one_folder(options.target, options.format)
+
+
+
+
+
+ 
