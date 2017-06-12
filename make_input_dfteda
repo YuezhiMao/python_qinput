@@ -366,27 +366,51 @@ def Set_rems_common(curREM, method, basis, options):
       ModRem ('XC_GRID', '000099000590', curREM)		
       ModRem ('NL_GRID', '1', curREM)
    #deal with -D3 in the method
-   if (method.upper() == 'PBE-D3'):
-      ModRem('METHOD', 'PBE', curREM)
-      ModRem('DFT_D','EMPIRICAL_GRIMME3', curREM)
-   if (method.upper() == 'REVPBE-D3'):
-      ModRem('METHOD', 'REVPBE', curREM)
-      ModRem('DFT_D','EMPIRICAL_GRIMME3', curREM)
-   if (method.upper() == 'B3LYP-D3'):
-      ModRem('METHOD', 'B3LYP', curREM)
-      ModRem('DFT_D','EMPIRICAL_GRIMME3', curREM)
-   if (method.upper() == 'BLYP-D3'):
-      ModRem('METHOD', 'BLYP', curREM)
-      ModRem('DFT_D','EMPIRICAL_GRIMME3', curREM)
-   if (method.upper() == 'TPSS-D3'):
-      ModRem('METHOD', 'TPSS', curREM)
-      ModRem('DFT_D','EMPIRICAL_GRIMME3', curREM)
+   if "-D3" in method.upper():
+      add_d3_til(method, curREM)
+   #if (method.upper() == 'PBE-D3'):
+   #   ModRem('METHOD', 'PBE', curREM)
+   #   ModRem('DFT_D','EMPIRICAL_GRIMME3', curREM)
+   #if (method.upper() == 'REVPBE-D3'):
+   #   ModRem('METHOD', 'REVPBE', curREM)
+   #   ModRem('DFT_D','EMPIRICAL_GRIMME3', curREM)
+   #if (method.upper() == 'B3LYP-D3'):
+   #   ModRem('METHOD', 'B3LYP', curREM)
+   #   ModRem('DFT_D','EMPIRICAL_GRIMME3', curREM)
+   #if (method.upper() == 'B3LYP-D3BJ'):
+   #   ModRem('METHOD', 'B3LYP', curREM)
+   #   ModRem('DFT_D','D3_BJ', curREM)
+   #if (method.upper() == 'BLYP-D3'):
+   #   ModRem('METHOD', 'BLYP', curREM)
+   #   ModRem('DFT_D','EMPIRICAL_GRIMME3', curREM)
+   #if (method.upper() == 'BLYP-D3BJ' or method.upper() == 'BLYP-D3(BJ)'):
+   #   ModRem('METHOD', 'BLYP', curREM)
+   #   ModRem('DFT_D','D3_BJ', curREM)
+   #if (method.upper() == 'TPSS-D3'):
+   #   ModRem('METHOD', 'TPSS', curREM)
+   #   ModRem('DFT_D','EMPIRICAL_GRIMME3', curREM)
 
    #default rem_frgm
    ModRem_Frgm('MEM_TOTAL', '8000', curREM)
    ModRem_Frgm('MEM_STATIC', '2000', curREM)
    ModRem_Frgm('SCF_GUESS', 'SAD', curREM)
    ModRem_Frgm('SKIP_GESMAN', 'FALSE', curREM)
+
+def add_d3_tail(method, curREM):
+   if method.upper() == 'WB97X-D3' or method.upper() == 'B97-D3':
+      return
+   l = re.search('(\S+)-(D3\S*)', method)
+   parent_func = l.group(1)
+   tail = l.group(2)
+   ModRem('METHOD', parent_func, curREM)
+   if 'BJ' in tail.upper():
+      ModRem('DFT_D', 'D3_BJ', curREM)
+   elif 'OP' in tail.upper():
+      ModRem('DFT_D', 'D3_OP', curREM)
+   elif 'CSO' in tail.upper():
+      ModRem('DFT_D', 'D3_CSO', curREM)
+   else:
+      ModRem('DFT_D', 'EMPIRICAL_GRIMME3', curREM)
 
 def XYZ_to_Input(XYZ, inputfile, FRGM, curREM, skipfrgm=0):
    #print "generate %s" %inputfile

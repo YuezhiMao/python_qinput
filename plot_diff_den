@@ -1,0 +1,261 @@
+#!/usr/bin/env python
+
+import re
+import os, glob
+import subprocess as sp
+import time
+import math
+import sys
+import matplotlib
+import numpy as np
+import matplotlib.cm as cm
+import matplotlib.mlab as mlab
+import matplotlib.pyplot as plt
+from matplotlib import rc
+from optparse import OptionParser
+
+def ParseInput(ArgsIn):
+   '''Parse command line options using outparse.'''
+   UseMsg='''usage: %prog [final cube] [initial cube] [figure name] [options]
+   Generates contour plots of difference densities of two fragments.
+   Cubes are assumed to have all been generated on the same grid of points,
+   and F1final.cube is assumed to know about all atomic positions (has ghost atoms for 2).
+   --PRH
+   '''
+   parser=OptionParser(usage=UseMsg)
+   parser.add_option('--debug',dest='debug',action='store_true',help='Turns on debug printing in the script.')
+   parser.add_option('--restart',dest='restart',action='store_true',help='Reads generated X,Y,Z condensed cube data from another run.')
+   parser.add_option('--fi_also',dest='fi_also',action='store_true',help='generates final and initial plots also instead of just the difference.')
+   parser.add_option('--separate',dest='separate',action='store_true',help='If multiple contour plots are generated, they are not subplots but separate figures')
+   parser.add_option('--incl_titles',dest='incl_titles',action='store_true',help='If passed, titles are added to plots')
+   parser.add_option('--curve_labels',dest='curve_labels',action='store_true',help='If passed, curves are labeled with values')
+   parser.add_option('--diff_sep',dest='diff_sep',action='store',type='float',default=0.4,help='The difference between contour values in the density difference plot (default: 0.4)')
+   parser.add_option('--crash_axis',dest='crash_axis',action='store',type='str',default='Z',help='The axis that is summed over to generate a 2D plot of the other two dimensions (default: Z)')
+   options,args=parser.parse_args(ArgsIn)
+   if len(args) < 4:
+      parser.print_help()
+      sys.exit(1)
+   else:
+      return options,args
+
+#takes float list=[x,y,z], returns float
+def LenVec (vector):
+   Length = float( math.sqrt( math.pow(float(vector[0]),2.0) + math.pow(float(vector[1]),2.0) + math.pow(float(vector[2]),2.0) ) )
+   return Length
+
+def ParseCubeFile(cubefilename,restart,debug):
+   CubeDict = {}
+   f = open(cubefilename,'r')
+   line = f.readline()
+   CubeDict['comment1'] = line
+   line = f.readline()
+   CubeDict['comment2'] = line
+   line = f.readline() #this line has NAtoms and then 3 floats giving the origin of the vol data coords
+   l=line.split()
+   CubeDict['NAtoms'] = int(l[0])
+   CubeDict['VolOrigin'] = [float(l[1]),float(l[2]),float(l[3])]
+   line = f.readline() #this line has the number of 'x' volume steps along the 'x' volume vector (3 floats)
+   l=line.split()
+   CubeDict['XSteps']= int(l[0])
+   CubeDict['XVector'] = [float(l[1]),float(l[2]),float(l[3])]
+   line = f.readline() #this line has the number of 'y' volume steps along the 'y' volume vector (3 floats)
+   l=line.split()
+   CubeDict['YSteps']= int(l[0])
+   CubeDict['YVector'] = [float(l[1]),float(l[2]),float(l[3])]
+   line = f.readline() #this line has the number of 'z' volume steps along the 'z' volume vector (3 floats)
+   l=line.split()
+   CubeDict['ZSteps']= int(l[0])
+   CubeDict['ZVector'] = [float(l[1]),float(l[2]),float(l[3])]
+   #We assume orthogonal volume vectors
+   CubeDict['VolumeElement'] = float( LenVec(CubeDict['XVector']) * LenVec(CubeDict['YVector']) * LenVec(CubeDict['ZVector']) )
+   #convert to angstroms
+   conv_cu = 0.529*0.529*0.529
+   inv_conv_cu = 1.0/conv_cu
+   CubeDict['VolumeElement'] = CubeDict['VolumeElement'] * conv_cu
+   CubeDict['NVolumeElements'] = CubeDict['XSteps'] * CubeDict['YSteps'] * CubeDict['ZSteps']
+   
+   #lets get the grid information in a more agreeable form
+   CubeDict['x_A'] = np.arange(CubeDict['VolOrigin'][0],CubeDict['VolOrigin'][0]+float(CubeDict['XSteps'])*CubeDict['XVector'][0],CubeDict['XVector'][0])
+   CubeDict['y_A'] = np.arange(CubeDict['VolOrigin'][1],CubeDict['VolOrigin'][1]+float(CubeDict['YSteps'])*CubeDict['YVector'][1],CubeDict['YVector'][1])
+   CubeDict['z_A'] = np.arange(CubeDict['VolOrigin'][2],CubeDict['VolOrigin'][2]+float(CubeDict['ZSteps'])*CubeDict['ZVector'][2],CubeDict['ZVector'][2])
+   #to angstroms
+   CubeDict['x_A'] = CubeDict['x_A']*0.529
+   CubeDict['y_A'] = CubeDict['y_A']*0.529
+   CubeDict['z_A'] = CubeDict['z_A']*0.529
+   if debug:
+      print 'first x value '+str(CubeDict['x_A'][0])+' last value '+str(CubeDict['x_A'][len(CubeDict['x_A'])-1])
+      print 'first y value '+str(CubeDict['y_A'][0])+' last value '+str(CubeDict['y_A'][len(CubeDict['y_A'])-1])
+      print 'first z value '+str(CubeDict['z_A'][0])+' last value '+str(CubeDict['z_A'][len(CubeDict['z_A'])-1])
+   
+   CubeDict['Atom'] = {}
+   for a in range(1,int(CubeDict['NAtoms'])+1): #the next lines have atomic number, atomic number as float, and 3 floats for cartesians for each atom
+      CubeDict['Atom'][str(a)] = {}
+      line = f.readline() 
+      l=line.split()
+      CubeDict['Atom'][str(a)]['ele'] = int(l[0])
+      CubeDict['Atom'][str(a)]['carts'] = [float(l[2]),float(l[3]),float(l[4])]
+   CubeDict['carts_A'] = np.zeros((CubeDict['NAtoms'],3))
+   for a in range(1,int(CubeDict['NAtoms'])+1): 
+      CubeDict['carts_A'][a-1,0] = CubeDict['Atom'][str(a)]['carts'][0]
+      CubeDict['carts_A'][a-1,1] = CubeDict['Atom'][str(a)]['carts'][1]
+      CubeDict['carts_A'][a-1,2] = CubeDict['Atom'][str(a)]['carts'][2]
+   CubeDict['carts_A'] = CubeDict['carts_A']*0.529 #convert from bohr to angstroms
+   if debug:
+      print 'the cartesians'
+      print CubeDict['carts_A']
+
+   #the next lines contain 1-6 signed floats indicating density value at a location.
+   #all density data is converted from e/b^3 to e/A^3
+   if not restart:
+      #for now just grab everything
+      CubeDict['VolData'] = [float(w)*inv_conv_cu for w in f.read().split()]#e/b^3 to e/A^3 
+      CubeDict['Xcrash'] = np.zeros((CubeDict["YSteps"],CubeDict["ZSteps"]))
+      CubeDict['Ycrash'] = np.zeros((CubeDict["XSteps"],CubeDict["ZSteps"]))
+      CubeDict['Zcrash'] = np.zeros((CubeDict["XSteps"],CubeDict["YSteps"]))
+      pos = 0;
+      integral = 0.0
+      for x in range(CubeDict['XSteps']):
+         for y in range(CubeDict['YSteps']):
+            for z in range(CubeDict['ZSteps']):
+               integral += CubeDict['VolumeElement']*CubeDict['VolData'][pos]
+               CubeDict['Xcrash'][y,z] += CubeDict['VolData'][pos]
+               CubeDict['Ycrash'][x,z] += CubeDict['VolData'][pos]
+               CubeDict['Zcrash'][y,x] += CubeDict['VolData'][pos]
+               pos += 1
+      print 'integral for parsed cube is '+str(integral)
+      np.save(cubefilename+'.Xcrash',CubeDict['Xcrash'])
+      np.save(cubefilename+'.Ycrash',CubeDict['Ycrash'])
+      np.save(cubefilename+'.Zcrash',CubeDict['Zcrash'])
+   else:
+      #added to avoid parsing cubes multiple times
+      CubeDict['Xcrash'] = np.load(cubefilename+'.Xcrash.npy')
+      CubeDict['Ycrash'] = np.load(cubefilename+'.Ycrash.npy')
+      CubeDict['Zcrash'] = np.load(cubefilename+'.Zcrash.npy')
+   if debug:
+      print 'len of x y z = '+str(len(CubeDict['x_A']))+'  '+str(len(CubeDict['y_A']))+'   '+str(len(CubeDict['z_A']))
+      print 'dimenstion of Xcrash'
+      print CubeDict['Xcrash'].shape
+      print 'dimenstion of Ycrash'
+      print CubeDict['Ycrash'].shape
+      print 'dimenstion of Zcrash'
+      print CubeDict['Zcrash'].shape
+   
+   return CubeDict
+
+######################################################################################
+#the script itself
+######################################################################################
+rc('font', **{'family':'serif','serif':['Times New Roman']})
+
+options,args=ParseInput(sys.argv)
+
+if options.debug:
+   print "these are the args:"
+   print args
+   print "these are the options:"
+   print options
+
+#see if we were passed real files
+for i in [1,2]:
+   if not os.path.exists(args[i]):
+      print "specified input file does not exist "+args[i] 
+      sys.exit(1)
+
+F1_F_cube   = str(args[1])
+if options.debug:
+   print 'parsing Final Fragment 1 cube: '+F1_F_cube  
+DataF1_F = ParseCubeFile(F1_F_cube,options.restart,options.debug)
+
+F1_I_cube   = str(args[2])    #The density to subtract out
+if options.debug:
+   print 'parsing Initial Fragment 1 cube: '+F1_I_cube  
+DataF1_I = ParseCubeFile(F1_I_cube,options.restart,options.debug)
+
+
+matplotlib.rcParams['xtick.direction'] = 'in'
+matplotlib.rcParams['ytick.direction'] = 'in'
+#levels = [-0.001,-0.002,-0.005,-0.01,-0.02,-0.05,-0.1,-0.2,-0.5,-1.0,0.0,0.001,0.002,0.005,0.01,0.02,0.05,0.1,0.2,0.5,1.0]
+
+diff_levels = np.arange(options.diff_sep,1.0,options.diff_sep)
+temp = -1.0*diff_levels
+diff_levels = np.concatenate([temp,diff_levels])
+#diff_levels = [-0.001,-0.002,-0.005,-0.01,-0.02,-0.05,-0.1,-0.2,-0.5,-1.0,0.0,0.001,0.002,0.005,0.01,0.02,0.05,0.1,0.2,0.5,1.0]
+
+#den_levels = [1.0E-3,2.5E-3,5.0E-3,7.5E-3,1.0E-2,2.5E-2,5.0E-2,7.5E-2,1.0E-1,2.5E-1,5.0E-1,7.5E-1,1.0,2.5,5.0,7.5,1.0E1,2.5E1,5.0E1,7.5E1,1.0E2,2.5E2,5.0E2,7.5E2,1.0E3,5.0E3]
+den_levels = np.arange(0.0,200.0,5.0)
+
+
+crash_string = ''
+horiz_string = ''
+vert_string = ''
+horiz_int = -1
+vert_int = -1
+if options.crash_axis == 'X':
+   crash_string = 'Xcrash'
+   horiz_string = 'z_A'
+   vert_string = 'x_A'
+   horiz_int = 2
+   vert_int = 1
+elif options.crash_axis == 'Y':
+   crash_string = 'Ycrash'
+   horiz_string = 'z_A'
+   vert_string = 'x_A'
+   horiz_int = 2
+   vert_int = 0
+elif options.crash_axis == 'Z':
+   crash_string = 'Zcrash'
+   horiz_string = 'x_A'
+   vert_string = 'y_A'
+   horiz_int = 0
+   vert_int = 1
+else:
+   print 'axis choice not recognized'
+
+fig = plt.figure()
+plt.tick_params(labelsize=18)
+if options.fi_also and not options.separate:
+   diff = fig.add_subplot(3,1,2)  #3*1 is the grid for subplot, 2 is its order
+else:
+   diff = fig.add_subplot(1,1,1)
+if options.incl_titles:
+   diff.set_title('Density Difference')
+Z1 = DataF1_F[crash_string] - DataF1_I[crash_string]
+diff.set_xlim(-4.0,3.0)
+diff.set_ylim(-3.0,4.0)
+diff.set_xlabel('$x(\AA)$', fontsize=20)
+diff.get_xaxis().set_label_coords(0.5, -0.06)
+diff.set_ylabel('$y(\AA)$', fontsize=20)
+#diff.set_title('Gaussian-blurred',fontsize=20)
+#diff.set_title('Unmodified',fontsize=24)
+diff_nucl = diff.scatter(DataF1_F['carts_A'][:,horiz_int],DataF1_F['carts_A'][:,vert_int],c='black',s=40,zorder=2)
+diff_contour1 = diff.contour(DataF1_F[horiz_string],DataF1_F[vert_string],Z1,diff_levels,colors='r',zorder=1)
+#dfff_contour1 = diff.contourf(DataF1_F[horiz_string],DataF1_F[vert_string],Z1,diff_levels,cmap=plt.cm.rainbow,vmax=1,vmin=-1,extend='both')
+if options.curve_labels:
+   diff.clabel(diff_contour1, inline=1, fontsize=8)
+if options.fi_also:
+   if options.separate:
+      fig_final = plt.figure()
+      final = fig_final.add_subplot(1,1,1)
+   else:
+      final = fig.add_subplot(3,1,1)
+   if options.incl_titles:
+      final.set_title('Final Density')
+   final_contour1 = final.contour(DataF1_F[horiz_string],DataF1_F[vert_string],DataF1_F[crash_string],den_levels,colors='red') 
+   final_nucl = final.scatter(DataF1_F['carts_A'][:,horiz_int],DataF1_F['carts_A'][:,vert_int],c='black')
+   if options.curve_labels:
+      final.clabel(final_contour1, inline=1, fontsize=6)
+   
+   if options.separate:
+      fig_initial = plt.figure()
+      initial = fig_initial.add_subplot(1,1,1)
+   else:
+      initial = fig.add_subplot(3,1,3)
+   if options.incl_titles:
+      initial.set_title('Initial Density')
+   initial_contour1 = initial.contour(DataF1_F[horiz_string],DataF1_F[vert_string],DataF1_I[crash_string],den_levels,colors='red') 
+   initial_nucl = initial.scatter(DataF1_F['carts_A'][:,horiz_int],DataF1_F['carts_A'][:,vert_int],c='black')
+   if options.curve_labels:
+      initial.clabel(initial_contour1, inline=1, fontsize=6)
+
+figname = args[3]
+plt.savefig(figname)

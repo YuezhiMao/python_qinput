@@ -304,21 +304,10 @@ def set_common_rems(curREM, method, basis, options):
 
    ModRem('METHOD', method, curREM)	
    #deal with -D3 in the method
-   if (method == 'PBE-D3'):
-      ModRem('METHOD', 'PBE', curREM)
-      ModRem('DFT_D','EMPIRICAL_GRIMME3', curREM)
-   if (method == 'REVPBE-D3'):
-      ModRem('METHOD', 'REVPBE', curREM)
-      ModRem('DFT_D','EMPIRICAL_GRIMME3', curREM)
-   if (method == 'B3LYP-D3'):
-      ModRem('METHOD', 'B3LYP', curREM)
-      ModRem('DFT_D','EMPIRICAL_GRIMME3', curREM)
-   if (method == 'BLYP-D3'):
-      ModRem('METHOD', 'BLYP', curREM)
-      ModRem('DFT_D','EMPIRICAL_GRIMME3', curREM)
-   if (method == 'TPSS-D3'):
-      ModRem('METHOD', 'TPSS', curREM)
-      ModRem('DFT_D','EMPIRICAL_GRIMME3', curREM)
+   if "-D3" in method.upper():
+      add_d3_tail(method, curREM)
+   if method.upper() == 'RIMP2':
+      add_aux_basis(basis, curREM)
 
    #default rem_frgm
    #ModRem_Frgm('MEM_TOTAL', '8000', curREM)
@@ -332,6 +321,34 @@ def set_ferf_rems(curREM):
    ModRem('CHILD_MP', 'TRUE', curREM)
    ModRem('CHILD_MP_ORDERS', '122', curREM) #nDQ
    ModRem('GUESS_ALWAYS', 'TRUE', curREM)
+
+def add_d3_tail(method, curREM):
+   if method.upper() == 'WB97X-D3' or method.upper() == 'B97-D3':
+      return
+   l = re.search('(\S+)-(D3\S*)', method)
+   parent_func = l.group(1)
+   tail = l.group(2)
+   ModRem('METHOD', parent_func, curREM)
+   if 'BJ' in tail.upper():
+      ModRem('DFT_D', 'D3_BJ', curREM)
+   elif 'OP' in tail.upper():
+      ModRem('DFT_D', 'D3_OP', curREM)
+   elif 'CSO' in tail.upper():
+      ModRem('DFT_D', 'D3_CSO', curREM)
+   else:
+      ModRem('DFT_D', 'EMPIRICAL_GRIMME3', curREM)
+
+def add_aux_basis(basis, curREM):
+   if basis.upper() == 'CC-PVTZ':
+      ModRem('AUX_BASIS', 'RIMP2-CC-PVTZ', curREM)
+   elif basis.upper() == 'AUG-CC-PVTZ':
+      ModRem('AUX_BASIS', 'RIMP2-AUG-CC-PVTZ', curREM)
+   elif basis.upper() == 'CC-PVQZ':
+      ModRem('AUX_BASIS', 'RIMP2-CC-PVQZ', curREM)
+   elif basis.upper() == 'AUG-CC-PVQZ':
+      ModRem('AUX_BASIS', 'RIMP2-AUG-CC-PVQZ', curREM)
+   else:
+      print "No corresponding auxiliary basis for "+basis
 
 def XYZ_to_Input(fw, XYZ, FRGM, curREM, read_mol=False, do_freq=False, do_ferf=False):
    #print "generate %s" %inputfile

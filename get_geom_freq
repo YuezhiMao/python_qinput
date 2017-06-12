@@ -12,9 +12,13 @@ def ParseInput(ArgsIn):
    parser.add_option('-k','--keyword', dest='keyword', action='store', type='string', default=None, help='search for all matching output direcotries based on the keyword and manipulate them')
    parser.add_option('-f','--format',dest='format', action='store', type='string', default='xyz', help='the format of geometry files (xyz or gzmat)')
    parser.add_option('--pes',dest='pes',action='store_true',default=False,help='optimize geometry for PES scan')
+   parser.add_option('--snapshot',dest='snap',action='store_true',default=False,help='optimized geometry for different configurations (specified by integers)')
    parser.add_option('--placeholder',dest='placeholder',action='store',type='string',default='dist',help='placeholder to get the geom param')
    parser.add_option('--do_freq',dest='do_freq',action='store_true',default=False,help='parse the vibrational frequencies')
    parser.add_option('--intens',dest='intensity',action='store_true',default=False,help='parse the IR intensities together with the frequencies')
+   parser.add_option('--n_imag',dest='n_imag',action='store_true',default=False,help='count the number of imaginary frequencies')
+   parser.add_option('--sorted',dest='sorted',action='store',type='string',default=None,help='sort the output based on a given criteria: [given_str]_[sort_key]_')
+   parser.add_option('--modelchem',dest='modelchem',action='store_true',default=False,help='parse the model chemistry')
    options, args=parser.parse_args(ArgsIn)
    if len(args) < 2 and options.target==None:
       print "Specify the directory that stores all the results"
@@ -24,12 +28,20 @@ def ParseInput(ArgsIn):
       print "The target directory or keyword must be specified"
       parser.print_help()
       sys.exit(1)
-   elif options.format!='xyz' and options.format!='gzmat':
+   if options.format!='xyz' and options.format!='gzmat':
       print "The specified format of geometry files is not recognized"
       parser.print_help()
       sys.exit(1)
-   else:
-      return options, args
+   if options.intensity and not options.do_freq:
+      print "Can't request intensity without parsing frequency"
+      parser.print_help()
+      sys.exit() 
+   if options.n_imag and not options.do_freq:
+      print "Can't figure out the number of imaginary frequencies without parsing frequency"
+      parser.print_help()
+      sys.exit()
+
+   return options, args
 
 def string_sp_callback(option, opt, value, parser):
    setattr(parser.values, option.dest, value.split(','))
@@ -54,6 +66,21 @@ def manipulate_one_folder(target_path, options):
          sp.call(['mv',gzmat_file,'geometry/'])
     
    os.chdir(cur_dir)
+
+def manipulate_folder_modelchem(target_path, options):
+   print "manipulating directory %s" %target_path
+   cur_dir = os.getcwd()
+   os.chdir(target_path)
+   datapoint = initialize_datapoint(options)
+   get_energy_modelchem(datapoint, options)
+   get_xyz_modelchem(datapoint, options)
+   if options.do_freq:
+      get_frequency_modelchem(datapoint, options)
+   if options.n_imag:
+      get_n_imaginary(datapoint)
+
+   modelchem_based_print(datapoint, options)
+   modelchem_sorted_geometry(datapoint)
 
 def get_xyz(output_file):
    name = output_file[:-4]
@@ -99,6 +126,12 @@ def get_energy(options): #This function should be called in "manipulate_one_fold
          coord = float(l.group(1))
          energy = float(l.group(2))
          datapoints.append((coord,energy))
+      elif options.snap:
+         placeholder = options.placeholder
+         l = re.search(placeholder+'_(\d+)_\S+.out:\s+Final energy is\s+(\S+)',line)
+         snap_ID = int(l.group(1))
+         energy = float(l.group(2))
+         datapoints.append((snap_ID,energy))
       else:
          l = re.search('(\S+).out:\s+Final energy is\s+(\S+)',line)
          jobname = l.group(1)
@@ -119,7 +152,8 @@ def get_energy(options): #This function should be called in "manipulate_one_fold
 def get_frequency(options):
    freq_data={}
    tmpfile = 'tmp_freq'
-   os.system('grep "Frequency: " *.out > '+tmpfile)
+   #os.system('grep "Frequency: " *.out > '+tmpfile)
+   os.system('grep -A 50000 "Final energy is" *.out | grep "Frequency: " > '+tmpfile)
    fr = open(tmpfile, 'r')
    for line in fr.readlines():
       l = line.split()
@@ -134,7 +168,8 @@ def get_frequency(options):
 
    if options.intensity:
       tmpfile = 'tmp_intensity'
-      os.system('grep "IR Intens: " *.out > '+tmpfile)
+      #os.system('grep "IR Intens: " *.out > '+tmpfile)
+      os.system('grep -A 50000 "Final energy is" *.out | grep "IR Intens: " > '+tmpfile)
       fr = open(tmpfile, 'r')
       for line in fr.readlines():
          l = line.split()
@@ -151,7 +186,7 @@ def get_frequency(options):
 
    freq_data_file = 'frequency.csv'
    fw = open(freq_data_file, 'w')
-   for jobname in freq_data:
+   for jobname in sorted(freq_data, key=lambda jobname:get_sorting_key(jobname, options)):
       fw.write('%s,' %jobname)
       for freq in freq_data[jobname]["freq"]:
          fw.write('%.2f,' %freq)
@@ -160,13 +195,194 @@ def get_frequency(options):
    if options.intensity:
       intens_data_file = 'intensity.csv'
       fw = open(intens_data_file, 'w')
-      for jobname in freq_data:
+      for jobname in sorted(freq_data, key=lambda jobname:get_sorting_key(jobname, options)):
          fw.write('%s,' %jobname)
          for intens in freq_data[jobname]["intens"]:
             fw.write('%.3f,' %intens)
          fw.write('\n')
       fw.close()
 
+def get_sorting_key(jobname, options):
+   if options.sorted==None:
+      return jobname
+   else:
+      l = re.search(options.sorted+'_([^_]+)_', jobname)
+      if l!=None:
+         return float(l.group(1))
+      else:
+         print "Can't locate the sort key"
+         sys.exit(0)
+
+def get_jobname_modelchem(line, options):
+   l = re.search('(\S+)_([^_]+)_([^_]+).out', line)
+   jobname = l.group(1)
+   functional = l.group(2)
+   basis = l.group(3)
+   if options.snap:
+      jobname = int(re.search(options.placeholder+'_([^_]+)', jobname).group(1))
+   elif options.pes:
+      jobname = float(re.search(options.placeholder+'_([^_]+)', jobname).group(1))
+   modelchem = functional, basis
+   return jobname, modelchem
+
+def initialize_datapoint(options):
+   datapoint = {}
+   outlist = glob.glob('*.out')
+   for outfile in outlist:
+      jobname, modelchem = get_jobname_modelchem(outfile, options)
+      if modelchem not in datapoint:
+         datapoint[modelchem] = {}
+      datapoint[modelchem][jobname] = {}
+      datapoint[modelchem][jobname]["flag"] = 0 #initialized as unfinished
+   return datapoint 
+
+def get_energy_modelchem(datapoint, options):
+   tmpfile = 'tmp_energy'
+   os.system('grep "Final energy is" *.out > '+tmpfile)
+   fr = open(tmpfile, 'r')
+   for line in fr.readlines():
+      l = re.search('(\S+).out:\s+Final energy is\s+(\S+)',line)
+      jobname, modelchem = get_jobname_modelchem(l.group(1)+'.out', options)
+      energy = float(l.group(2))
+      datapoint[modelchem][jobname]["energy"] = energy
+      datapoint[modelchem][jobname]["flag"] = 1  #succeed if the final energy is detected
+   fr.close()
+   sp.call(['rm', tmpfile])
+
+def get_xyz_modelchem(datapoint, options):
+   outfile_list = glob.glob('*.out')
+   tmpfile = 'geom.tmp'
+   for outfile in outfile_list:
+      jobname, modelchem = get_jobname_modelchem(outfile, options)
+      if datapoint[modelchem][jobname]["flag"] == 1:
+         os.system('grep -A 500 "OPTIMIZATION CONVERGED" '+outfile+' | grep -B 500 "Z-matrix" | grep -A 500 "ATOM" | grep -v "ATOM" | grep -v "Print" > '+tmpfile)
+         fr = open(tmpfile, 'r')
+         datapoint[modelchem][jobname]["AtomList"] = []
+         datapoint[modelchem][jobname]["CoordList"] = []
+         for line in fr.readlines():
+            l = re.search('(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)', line)
+            if l!=None:
+               datapoint[modelchem][jobname]["AtomList"].append(l.group(2))
+               datapoint[modelchem][jobname]["CoordList"].append((float(l.group(3)), float(l.group(4)), float(l.group(5))))
+         fr.close()
+   sp.call(['rm', tmpfile])
+
+def get_frequency_modelchem(datapoint, options):
+   tmpfile = 'tmp_freq'
+   os.system('grep -A 50000 "Final energy is" *.out | grep "Frequency: "  > '+tmpfile)
+   fr = open(tmpfile, 'r')
+   for line in fr.readlines():
+      l = line.split()
+      jobname, modelchem = get_jobname_modelchem(l[0], options)
+      if datapoint[modelchem][jobname]["flag"] == 1:  #optimization converged
+         if "freq" not in datapoint[modelchem][jobname]:
+            datapoint[modelchem][jobname]["freq"] = []
+         for data in l[2:]:
+            datapoint[modelchem][jobname]["freq"].append(float(data))
+   fr.close()
+   sp.call(['rm', tmpfile])
+   
+   if options.intensity:
+      tmpfile = 'tmp_intensity'
+      os.system('grep -A 50000 "Final energy is" *.out | grep "IR Intens: " > '+tmpfile)
+      fr = open(tmpfile, 'r')
+      for line in fr.readlines():
+         l = line.split()
+         jobname, modelchem = get_jobname_modelchem(l[0], options)
+         if datapoint[modelchem][jobname]["flag"] == 1: #optimized converged
+            if "intens" not in datapoint[modelchem][jobname]:
+               datapoint[modelchem][jobname]["intens"] = []
+            for data in l[3:]:
+               datapoint[modelchem][jobname]["intens"].append(float(data))
+      fr.close()
+      sp.call(['rm', tmpfile])
+
+def get_n_imaginary(datapoint):
+   for modelchem in datapoint:
+      for jobname in datapoint[modelchem]:
+         if datapoint[modelchem][jobname]["flag"] == 0:
+            datapoint[modelchem][jobname]["n_imag"] = 'NA'
+         else:
+            count = 0
+            for freq in datapoint[modelchem][jobname]["freq"]:
+               if freq < 0:
+                  count += 1
+            datapoint[modelchem][jobname]["n_imag"] = count
+
+def modelchem_based_print(datapoint, options):
+   energy_output = 'energy.csv'
+   fw = open(energy_output, 'w')
+   for modelchem in sorted(datapoint, key=lambda modelchem:modelchem[0]):
+      fw.write('%s/%s\n' %modelchem)
+      for jobname in sorted(datapoint[modelchem]):
+         if datapoint[modelchem][jobname]["flag"] == 1:
+            energy = datapoint[modelchem][jobname]["energy"]
+            fw.write('%s,%.10f\n' %(jobname, energy))
+         else:
+            fw.write('%s,NA\n' %jobname)
+   fw.close()
+
+   if options.do_freq: 
+      freq_output = 'frequency.csv'
+      fw = open(freq_output, 'w')
+      for modelchem in sorted(datapoint, key=lambda modelchem:modelchem[0]):
+         fw.write('%s/%s\n' %modelchem)
+         for jobname in sorted(datapoint[modelchem]):
+            if datapoint[modelchem][jobname]["flag"] == 1:
+               fw.write('%s,' %jobname)
+               for freq in datapoint[modelchem][jobname]["freq"]:
+                  fw.write('%.2f,' %freq)
+               fw.write('\n')
+         fw.write('\n')
+      fw.close()
+
+   if options.intensity:
+      intens_output = 'intensity.csv'
+      fw = open(intens_output, 'w')
+      for modelchem in sorted(datapoint, key=lambda modelchem:modelchem[0]):
+         fw.write('%s/%s\n' %modelchem)
+         for jobname in sorted(datapoint[modelchem]):
+            if datapoint[modelchem][jobname]["flag"] == 1:
+               fw.write('%s,' %jobname)
+               for intens in datapoint[modelchem][jobname]["intens"]:
+                  fw.write('%.3f,' %intens)
+               fw.write('\n')
+         fw.write('\n')
+      fw.close()
+
+   if options.n_imag:
+      fw = open('n_imag.csv', 'w')
+      for modelchem in sorted(datapoint, key=lambda modelchem:modelchem[0]):
+         fw.write('%s/%s\n' %modelchem)
+         for jobname in sorted(datapoint[modelchem]):
+            if datapoint[modelchem][jobname]["flag"] == 1:
+               fw.write('%s,%d\n' %(jobname, datapoint[modelchem][jobname]["n_imag"]))
+            else:
+               fw.write('%s,NA\n' %jobname)
+         fw.write('\n')
+      fw.close()
+
+def modelchem_sorted_geometry(datapoint):
+   geom_path = "geometry"
+   curdir = os.getcwd()
+   if not os.path.exists(geom_path):
+      sp.call(['mkdir', geom_path])
+   for modelchem in datapoint:
+      directory_name = geom_path+'/'+modelchem[0]+'_'+modelchem[1]
+      sp.call(['mkdir', directory_name])
+      os.chdir(directory_name)
+      for jobname in datapoint[modelchem]:
+         if datapoint[modelchem][jobname]["flag"] == 1:
+            xyz_file = str(jobname)+'.xyz'
+            fw = open(xyz_file, 'w')
+            NAtom = len(datapoint[modelchem][jobname]["AtomList"])
+            fw.write("%d\n\n" %NAtom)
+            for index in range(0, NAtom):
+               atomic_symbol = datapoint[modelchem][jobname]["AtomList"][index]
+               x,y,z = datapoint[modelchem][jobname]["CoordList"][index] 
+               fw.write("%-2s %14.10f %14.10f %14.10f\n" %(atomic_symbol,x,y,z))
+            fw.close()
+      os.chdir(curdir)
 
 #The script
 options,args=ParseInput(sys.argv)
@@ -187,11 +403,7 @@ if options.target!=None:
 print outdir_list
 
 for outdir in outdir_list:
-   manipulate_one_folder(outdir, options)
-
-
-
-
-
-
- 
+   if not options.modelchem:
+      manipulate_one_folder(outdir, options)
+   else:
+      manipulate_folder_modelchem(outdir, options)
