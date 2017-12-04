@@ -17,7 +17,7 @@ def ParseInput(ArgsIn):
    parser.add_option('-b','--basis',dest='basis',action='callback',callback=string_sp_callback, type='string', default='aug-cc-pvtz',help='The target basis (default is aug-cc-pVTZ)')
    parser.add_option('-m','--method',dest='method',action='callback',type='string', default=None, callback=string_sp_callback,help='The methods (density functionals) to use')
    parser.add_option('-i','--input_path',dest='input_path',action='store',type='string', default='input/',help='The directory storing the generated inputs')
-   parser.add_option('--op',dest='eda_option',action='store',type='int',default=1,help='EDA option; default is 2 (almo-pol)')
+   parser.add_option('--op',dest='eda_option',action='store',type='int',default=2,help='EDA option; default is 2 (almo-pol)')
    parser.add_option('--bsse',dest='bsse',action='store_true',default=False,help='set EDA_BSSE to true')
    parser.add_option('--skip_ortho_decomp', dest='skip_ortho_decomp',action='store_true',default=False,help='skip the orthogonal decomposition of frozen interaction')
    parser.add_option('--dfxc',dest='dfxc',action='store',type='string',default=None, help='choose the DFXC to use')
@@ -67,11 +67,12 @@ class XYZ:
          l = re.search('^\s*(\d+)\s*$', line)
          if l!=None:
             self.NAtom = int(l.group(1))
-         l = re.search('(\S+)\s+(\S+)\s+(\S+)\s+(\S+)', line)
-         if l!=None:
-            self.AtomList.append(l.group(1))
-            coord = float(l.group(2)), float(l.group(3)), float(l.group(4))
-            self.CoordList.append(coord)
+         if len(line.split()) == 4:
+            l = re.search('(\S+)\s+(\S+)\s+(\S+)\s+(\S+)', line)
+            if l!=None:
+               self.AtomList.append(l.group(1))
+               coord = float(l.group(2)), float(l.group(3)), float(l.group(4))
+               self.CoordList.append(coord)
 
       if(len(self.AtomList)!=self.NAtom):
          print "Error in number of atoms"
@@ -286,12 +287,16 @@ def basis_abbr(BasName):    #generating abbreviated name for basis sets, using f
       return 'tz'
    elif fullname == 'cc-pvqz':
       return 'qz'
+   elif fullname == 'cc-pv5z':
+      return '5z'
    elif fullname == 'aug-cc-pvdz':
       return 'adz'
    elif fullname == 'aug-cc-pvtz':
       return 'atz'
    elif fullname == 'aug-cc-pvqz':
       return 'aqz'
+   elif fullname == 'aug-cc-pv5z':
+      return 'a5z'
    elif fullname == 'def2-svpd' or fullname == 'svpd':
       return 'svpd'
    elif fullname == 'def2-tzvpp' or fullname == 'tzvpp':

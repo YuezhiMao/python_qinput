@@ -17,6 +17,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--start_percent',dest='start_percent',action='store',type='float',default=0.7,help='Set the smallest value for coord to this percent of the initial value. Relevant for the scan option "percent". Default 0.7')
    parser.add_option('--end_percent',dest='end_percent',action='store',type='float',default=3.0,help='Set the largest value for coord to this percent of the initial value. Relevant for the scan option "percent". Default 3.0')
    parser.add_option('--scan_coord',dest='scan_coord',action='callback',type='string', callback=string_sp_callback, default=None, help='specify the intermolecular distance')
+   #parser.add_option('--log',dest='logrithm',action='store_true',default=False,help='use the logrithm(10) scale for distance: 10^x')
 
    options, args = parser.parse_args(ArgsIn)
    if options.scan_coord == None or len(options.scan_coord)!=2:
@@ -160,6 +161,20 @@ def fragment_translate_rel(XYZ, FRGM, name_root, atom1_idx, atom2_idx, shifted_f
    outfile = dest_path + '/' + name_root+'_rel_dist_'+format(dist_abs, '.2f')+'.xyz'
    write_xyz_file(outfile, Coords, XYZ.AtomList)
 
+def fragment_translate_log(XYZ, FRGM, name_root, atom1_idx, atom2_idx, shifted_frgm, dist_log, dest_path): 
+   #compute the shift vector
+   Coords = np.copy(XYZ.CoordList)
+   orig_vector = Coords[atom1_idx-1] - Coords[atom2_idx-1]
+   distance = pow(10.0, dist_log)
+   trans_vector = orig_vector/np.sqrt(np.dot(orig_vector, orig_vector))*distance - orig_vector
+   
+   #figure out the atoms to shift
+   offset = FRGM["atoms_offset"][shifted_frgm]
+   for iatom in range(0, FRGM["atoms_frgm"][shifted_frgm]):
+      Coords[offset+iatom] += trans_vector
+
+   outfile = dest_path + '/'+name_root+'_logdist_'+format(dist_log, '.2f')+'.xyz'
+   write_xyz_file(outfile, Coords, XYZ.AtomList)
 
 def write_xyz_file(outfile, Coords, AtomList):
    fw = open(outfile, 'w')
@@ -221,7 +236,15 @@ elif options.type == 'percent':
       fragment_translate_rel(parse_XYZ, FRGM, name_root, atom1_idx, atom2_idx, shifted_frgm, ratio, dest_path)
       ratio += increment
 
+elif options.type == 'logrithm':
+   start_value = float(options.start_absolute)
+   end_value = float(options.end_absolute)
+   increment = float(options.increment)
+   dist_log = start_value
+   while dist_log <= end_value + 0.001*increment:
+      fragment_translate_log(parse_XYZ, FRGM, name_root, atom1_idx, atom2_idx, shifted_frgm, dist_log, dest_path)
+      dist_log += increment
+
 else:
    print "Unsupported type: " +options.type
    sys.exit(0)
-

@@ -2,10 +2,11 @@
 
 import os, glob, re, sys
 import subprocess as sp
+import numpy as np
 from optparse import OptionParser
 
 def ParseInput(ArgsIn):
-   UseMsg = "python edajob_parser.py [options] [result_dir]\nExample for a result dir: jobs_new_eda_opt3_atz/result/"
+   UseMsg = "parse_eda [options] [result_dir]"
    parser = OptionParser(usage=UseMsg)
    parser.add_option('-a','--all',dest='all',action='store_true',default=False, help='parse all the output directories under the specified directory')
    parser.add_option('--skip',dest='skip',action='store',type='string',default=None,help='The output directory we want to skip')
@@ -18,6 +19,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--single_atom',dest='single_atom',action='store',default=None, help="When parsing the total binding curve, enable the special case in which one monomer is a single atom so one job covers everything. Recognizable options: mon1(monA,1), mon2(monB,2), both")
    parser.add_option('--old',dest='oldeda',action='store_true',default=False,help='Parsing EDA jobs using the old ALMO-EDA code')
    parser.add_option('--modified',dest='modified',action='store_true',default=False,help='Modified frozen decomposition: E_cls_elec, E_mod_pauli, E_disp')
+   parser.add_option('--cls_disp',dest='cls_disp',action='store_true',default=False,help='Use E_cls_disp when E_disp is unavailable or else')
    parser.add_option('--ff',dest='ff',action='store_true',default=False,help='Three terms only: cls_elec, pol, vdw(pauli+disp+ct)')
    parser.add_option('--pes',dest='pes',action='store_true',default=False,help='scanning a PES (searching for \"dist\" or \"angle\"')
    parser.add_option('--snapshot',dest='snapshot',action='store_true',default=False,help='doing EDA for snapshots instead of scanning a potential energy curve')
@@ -339,8 +341,10 @@ def parse_neweda_pes(options, output_dir, keyword=None):
    for geom_param in sorted(DataPoints,key=lambda geom_param:float(geom_param)):
       if not options.modified:
          f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(geom_param,DataPoints[geom_param]["E_frz"],DataPoints[geom_param]["E_pol"],DataPoints[geom_param]["E_vct"],DataPoints[geom_param]["E_int"],DataPoints[geom_param]["E_elec"],DataPoints[geom_param]["E_pauli"],DataPoints[geom_param]["E_disp"],DataPoints[geom_param]["E_cls_elec"]))
-      else:
+      elif not options.cls_disp:
          f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(geom_param,DataPoints[geom_param]["E_frz"],DataPoints[geom_param]["E_pol"],DataPoints[geom_param]["E_vct"],DataPoints[geom_param]["E_int"],DataPoints[geom_param]["E_cls_elec"],DataPoints[geom_param]["E_frz"]-DataPoints[geom_param]["E_cls_elec"]-DataPoints[geom_param]["E_disp"],DataPoints[geom_param]["E_disp"]))
+      else:
+         f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(geom_param,DataPoints[geom_param]["E_frz"],DataPoints[geom_param]["E_pol"],DataPoints[geom_param]["E_vct"],DataPoints[geom_param]["E_int"],DataPoints[geom_param]["E_cls_elec"],DataPoints[geom_param]["E_mod_pauli"],DataPoints[geom_param]["E_cls_disp"]))
 
    f.close()
 
@@ -443,30 +447,43 @@ def parse_neweda_generic(options, output_dir, keyword=None): #TODO: make this th
             E_pol = DataPoints[system]["E_pol"]
             E_vct = DataPoints[system]["E_vct"]
             E_int = DataPoints[system]["E_int"]
-            E_elec = DataPoints[system]["E_elec"]
-            E_pauli = DataPoints[system]["E_pauli"]
-            E_disp = DataPoints[system]["E_disp"]
-            E_cls_elec = DataPoints[system]["E_cls_elec"]
             if not options.modified:
+               E_elec = DataPoints[system]["E_elec"]
+               E_pauli = DataPoints[system]["E_pauli"]
+               E_disp = DataPoints[system]["E_disp"]
                f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(system,E_frz,E_pol,E_vct,E_int,E_elec,E_pauli,E_disp,E_cls_elec))
-            else:
+            elif not options.cls_disp:
+               E_cls_elec = DataPoints[system]["E_cls_elec"]
+               E_disp = DataPoints[system]["E_disp"]
                E_mod_pauli = E_frz - E_disp - E_cls_elec
                f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(system,E_frz,E_pol,E_vct,E_int,E_cls_elec,E_mod_pauli,E_disp))
+            else:
+               E_cls_elec = DataPoints[system]["E_cls_elec"]
+               E_cls_disp = DataPoints[system]["E_cls_disp"]
+               E_mod_pauli = DataPoints[system]["E_mod_pauli"]
+               f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(system,E_frz,E_pol,E_vct,E_int,E_cls_elec,E_mod_pauli,E_cls_disp))
+
          else:
             for method in DataPoints[system]:
                E_frz = DataPoints[system][method]["E_frz"] 
                E_pol = DataPoints[system][method]["E_pol"]
                E_vct = DataPoints[system][method]["E_vct"]
                E_int = DataPoints[system][method]["E_int"]
-               E_elec = DataPoints[system][method]["E_elec"]
-               E_pauli = DataPoints[system][method]["E_pauli"]
-               E_disp = DataPoints[system][method]["E_disp"]
-               E_cls_elec = DataPoints[system][method]["E_cls_elec"]
                if not options.modified:
+                  E_elec = DataPoints[system][method]["E_elec"]
+                  E_pauli = DataPoints[system][method]["E_pauli"]
+                  E_disp = DataPoints[system][method]["E_disp"]
                   f.write("%s,%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(system,method,E_frz,E_pol,E_vct,E_int,E_elec,E_pauli,E_disp,E_cls_elec))
-               else:
+               elif not options.cls_disp:
+                  E_cls_elec = DataPoints[system][method]["E_cls_elec"]
+                  E_disp = DataPoints[system][method]["E_disp"]
                   E_mod_pauli = E_frz - E_disp - E_cls_elec
                   f.write("%s,%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(system,method,E_frz,E_pol,E_vct,E_int,E_cls_elec,E_mod_pauli,E_disp))
+               else:
+                  E_cls_elec = DataPoints[system][method]["E_cls_elec"]
+                  E_cls_disp = DataPoints[system][method]["E_cls_disp"]
+                  E_mod_pauli = DataPoints[system][method]["E_mod_pauli"]
+                  f.write("%s,%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(system,method,E_frz,E_pol,E_vct,E_int,E_cls_elec,E_mod_pauli,E_cls_disp))
 
    f.close()
 
@@ -543,8 +560,11 @@ def parse_neweda_snapshot(options, output_dir, keyword=None):
    for geom_param in sorted(DataPoints,key=lambda geom_param:float(geom_param)):
       if not options.modified:
          f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(geom_param,DataPoints[geom_param]["E_frz"],DataPoints[geom_param]["E_pol"],DataPoints[geom_param]["E_vct"],DataPoints[geom_param]["E_int"],DataPoints[geom_param]["E_elec"],DataPoints[geom_param]["E_pauli"],DataPoints[geom_param]["E_disp"],DataPoints[geom_param]["E_cls_elec"]))
-      else:
+      elif not options.cls_disp:
          f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(geom_param,DataPoints[geom_param]["E_frz"],DataPoints[geom_param]["E_pol"],DataPoints[geom_param]["E_vct"],DataPoints[geom_param]["E_int"],DataPoints[geom_param]["E_cls_elec"],DataPoints[geom_param]["E_frz"]-DataPoints[geom_param]["E_cls_elec"]-DataPoints[geom_param]["E_disp"],DataPoints[geom_param]["E_disp"]))
+      else:
+         f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(geom_param,DataPoints[geom_param]["E_frz"],DataPoints[geom_param]["E_pol"],DataPoints[geom_param]["E_vct"],DataPoints[geom_param]["E_int"],DataPoints[geom_param]["E_cls_elec"],DataPoints[geom_param]["E_mod_pauli"],DataPoints[geom_param]["E_cls_disp"]))
+
 
    f.close()
 
@@ -816,4 +836,5 @@ for outdir in outdir_list:
                parse_neweda_snapshot(options, outdir, keyword)
             else:
                parse_neweda_generic(options, outdir, keyword)
-         compute_3b_terms(outdir)
+         if options.pes:
+            compute_3b_terms(outdir)
