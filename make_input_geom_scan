@@ -1,0 +1,152 @@
+#! /usr/bin/env python
+
+import os, re, time, sys, qrems
+import subprocess as sp
+from optparse import OptionParser
+
+def ParseInput(ArgsIn):
+   UseMsg= "usage: %prog [options] [mol_template] [rem_file]"
+
+   parser=OptionParser(usage=UseMsg)
+   parser.add_option('--name_root',dest='name_root',action='store',type='str',default=None,help='The name root for the input files generated. Default name_root.mol->name_root_coordvalue.in')
+   parser.add_option('--dest_path',dest='dest_path',action='store',type='str',default='.',help='The relative path to the directory where the generated files should be dumped. Default "."')
+   parser.add_option('--type',dest='type',action='store',type='str',default='absolute',help='Type of scan. Options are "absolute" and "percent". An absolut scan goes from --start_abs to --end_abs in --num_step steps. A percent scan goes from --start_pct/100*value to --end_pct/100*value in --num_steps where value is the initial value of the variable scan in the .mol file. Default "percent"')
+   parser.add_option('--num_step',dest='num_step',action='store',type='int',default=10,help='Set the number of steps between the first coordinate value and the last coordiante value. Relevant for the scan options "absolute" and "percent". Default 10')
+   parser.add_option('--increment',dest='increment',action='store',type='float',default=0.05,help='Set the increment of the scan. Default 0.05 Angs')
+   parser.add_option('--start_absolute',dest='start_absolute',action='store',type='float',default=1.0,help='Set the smallest value for coord. Relevant for the scan option "absolute". Default 1.0')
+   parser.add_option('--end_absolute',dest='end_absolute',action='store',type='float',default=6.0,help='Set the largest value for coord. Relevant for the scan option "absolute". Default 6.0')
+   parser.add_option('--start_percent',dest='start_percent',action='store',type='float',default=70.0,help='Set the smallest value for coord to this percent of the initial value. Relevant for the scan option "percent". Default 70.0')
+   parser.add_option('--end_percent',dest='end_percent',action='store',type='float',default=300.0,help='Set the largest value for coord to this percent of the initial value. Relevant for the scan option "percent". Default 300.0')
+   parser.add_option('--debug',dest='debug',action='store_true',help='Turns on debug printing in the script.')
+   options,args=parser.parse_args(ArgsIn)
+   if len(args) < 3:
+      parser.print_help()
+      sys.exit(1)
+   else:
+      return options,args
+
+def ParseMolecule(MoleculeFile):
+   MOLECULE = {}
+   name_parser = re.search('([^\/]+).mol', MoleculeFile)
+   MOLECULE["name"] = name_parser.group(1)
+   MOLECULE["nlines"] = 0
+   curline = 0
+   MOLECULE["the_line"] = {}
+   MOLECULE["unrestricted"] = False
+   MOLECULE["fragmented"] = False
+   MOLECULE["has_scan"] = False
+   MOLECULE["scan_line_number"] = None
+   MOLECULE["scan_initial_value"] = None
+
+   f = open(MoleculeFile,'r')
+   line = f.readline()
+   while line!='':
+      MOLECULE["the_line"][str(curline)] = line
+      l=re.search("^\s*(\S+)\s+(\S+)\s*$",line) #charge and mult
+      if (not l==None):
+         if (int(l.group(2)) != 1):
+            MOLECULE["unrestricted"] = True
+      l=re.search("(--)",line) #fragment indicator
+      if (not l==None):
+         MOLECULE["fragmented"] = True
+      l=re.search("scan\s*=\s*(\S+)",line) #scan coordinate initial value
+      if (not l==None):
+         MOLECULE["has_scan"] = True
+         MOLECULE["scan_line_number"] = curline
+         MOLECULE["scan_initial_value"] = float(l.group(1))
+      curline += 1
+      MOLECULE["nlines"] = curline
+      line = f.readline()
+   f.close()
+   return MOLECULE
+
+
+def WriteMolecule(fw,MyMOLECULE,CoordinateValue):
+   #the MyMOLECULE object is assumed to be structred like that produced by ParseMolecule
+   fw.write('$molecule\n') 
+   for line in range(MyMOLECULE["nlines"]):
+      if (MyMOLECULE["has_scan"]) and (MyMOLECULE["scan_line_number"] == line):
+         fw.write("scan = "+str(CoordinateValue)+"\n")
+      else:
+         fw.write(MyMOLECULE["the_line"][str(line)])
+   fw.write("$\end\n\n")
+
+
+######################################################################################
+#the script itself
+######################################################################################
+options,args=ParseInput(sys.argv)
+
+do_debug = bool(options.debug) 
+
+if do_debug:
+   print "these are the args:"
+   print args
+   print "these are the options:"
+   print options
+
+#test that the molecule file exists and try to parse it
+if not os.path.exists(args[1]):
+   print "specified molecule file does not exist "+args[1] 
+   sys.exit(1)
+elif do_debug:
+   print "molecule file exists"
+MyMol = ParseMolecule(args[1])
+if (not MyMol["has_scan"]):
+   print "scan coordinate not parsed in molecule file: "+args[1] 
+   sys.exit(1)
+MyRems = qrems.ParseRems(args[2])
+
+
+#determine which values the coordinate will take
+scan_type = options.type.upper() 
+
+start_value = 0.0
+end_value = 100.0
+coord_values = []
+if (scan_type == "ABSOLUTE"):
+   start_value = float(options.start_absolute)
+   end_value = float(options.end_absolute)
+   if do_debug:
+      print "(absolute) scan values: "+str(start_value)+" to "+str(end_value)
+   #not using num_step for absolute scan any more
+   increment = options.increment
+   cur_pos = start_value
+   coord_values.append(cur_pos)
+   while cur_pos <= end_value+1.0E-4: #have one extra point beyond the end value
+      cur_pos += increment
+      coord_values.append(cur_pos)
+
+elif (scan_type == "PERCENT"):
+   start_value = (float(options.start_percent)/100.0)*float(MyMol["scan_initial_value"])
+   end_value = (float(options.end_percent)/100.0)*float(MyMol["scan_initial_value"])
+   if do_debug:
+      print "(percent) scan values: "+str(start_value)+" to "+str(end_value)
+   #determine which values the coordiante will take
+   n_steps = int(options.num_step)
+   step_length = (end_value-start_value)/float(n_steps)
+   cur_pos = start_value
+   coord_values = []
+   coord_values.append(cur_pos)
+   for i in range(n_steps):
+      cur_pos = cur_pos + step_length
+      coord_values.append(cur_pos)
+else:
+   print "specified type of scan not recognized. valid argments are 'absolute' and 'percent'"
+   sys.exit(1)
+
+
+#determine what we will call the input files produced
+name_root = options.name_root
+if (name_root == None):
+   name_root = MyMol["name"]
+
+#make the inputs
+if not os.path.exists(options.dest_path):
+   sp.call(['mkdir',options.dest_path])
+for c in coord_values:
+   file_name = options.dest_path+"/"+name_root+'_'+str(c)+'.in'
+   fw = open(file_name, 'w')
+   WriteMolecule(fw, MyMol, c)
+   qrems.AppendRem(fw, MyRems)
+   fw.close()
