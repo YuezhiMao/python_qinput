@@ -309,11 +309,6 @@ def set_common_rems(curREM, method, basis, options):
    if method.upper() == 'RIMP2':
       add_aux_basis(basis, curREM)
 
-   #default rem_frgm
-   #ModRem_Frgm('MEM_TOTAL', '8000', curREM)
-   #ModRem_Frgm('MEM_STATIC', '2000', curREM)
-   #ModRem_Frgm('SCF_GUESS', 'SAD', curREM)
-
 def set_ferf_rems(curREM):
    ModRem('IDERIV', '0', curREM)
    ModRem('POL_GEOM', 'FALSE', curREM)

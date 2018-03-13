@@ -249,57 +249,50 @@ def basis_abbr(BasName):    #generating abbreviated name for basis sets, using f
       sys.exit(1)
 
 def Set_rems_common(curREM, method, basis):
-   if basis.upper()=='DEF2-SVPD' or basis.upper() == 'SVPD': #Hack! def2-SVPD->SV
-      ModRem('BASIS','SV',curREM)
-      ModRem('purecart', '1111', curREM)
-   elif basis.upper()=='DEF2-TZVPP' or basis.upper() == 'TZVPP': #Hack! def2-TZVPP->G3MP2large
-      ModRem('BASIS','G3MP2LARGE',curREM)
-      ModRem('purecart', '1111', curREM)
-   elif basis.upper()=='DEF2-TZVPPD' or basis.upper() == 'TZVPPD': #Hack! def2-TZVPPD->4-31G
-      ModRem('BASIS','4-31G',curREM)
-      ModRem('purecart', '1111', curREM)
-   elif basis.upper()=='DEF2-QZVPP' or basis.upper() == 'QZVPP': #Hack! def2-QZVPP->G3large
-      ModRem('BASIS','G3LARGE',curREM)
-      ModRem('purecart', '1111', curREM)
-   elif basis.upper() == 'DEF2-QZVPPD' or basis.upper() == 'QZVPPD': #Hack! def2-QZVPPD->STO-2G
-      ModRem('BASIS','STO-2G',curREM)
-      ModRem('purecart','1111',curREM)
+   if basis.upper() == 'SVPD':
+      ModRem('BASIS','DEF2-SVPD',curREM)
+   elif basis.upper() == 'TZVPP':
+      ModRem('BASIS','DEF2-TZVPP',curREM)
+   elif basis.upper() == 'TZVPPD':
+      ModRem('BASIS','DEF2-TZVPPD',curREM)
+   elif basis.upper() == 'QZVPP':
+      ModRem('BASIS','DEF2-QZVPP',curREM)
+   elif basis.upper() == 'QZVPPD':
+      ModRem('BASIS','DEF2-QZVPPD',curREM)
    elif basis.upper() == 'DP': #double-zeta Pople: 6-31+G(d)
       ModRem('BASIS','6-31+G(d)', curREM)
    elif basis.upper() == 'TP': #triple-zeta Pople: 6-311++G(2df,2pd)
       ModRem('BASIS','6-311++G(2df,2pd)',curREM)
    elif basis.upper() == 'LP':
       ModRem('BASIS','6-311++G(3df,3pd)', curREM)
-   elif basis.upper()=='DEF2-TZVPP' or basis.upper() == 'TZVPP': #Hack! def2-TZVPP->G3MP2large
-      ModRem('BASIS','G3MP2LARGE',curREM)
-      ModRem('purecart', '1111', curREM)
-   else:
+   else: #copy the name of standard basis
       ModRem('BASIS', basis, curREM)
    ModRem('MEM_TOTAL', '8000', curREM)
    ModRem('MEM_STATIC','2000', curREM)
    ModRem('SCF_GUESS', 'SAD', curREM)
-   ModRem('EXCHANGE', method, curREM)	
+   ModRem('METHOD', method, curREM)	
    if (method != 'HF'):
-      ModRem ('XC_GRID', '000075000302', curREM)		
+      ModRem ('XC_GRID', '000099000590', curREM)		
       ModRem ('NL_GRID', '1', curREM)
-   if (method == 'PBE'):
-      ModRem('CORRELATION', 'PBE', curREM)
-   if (method == 'PBE-D3'):
-      ModRem('EXCHANGE', 'PBE', curREM)
-      ModRem('CORRELATION', 'PBE', curREM)
-      ModRem('DFT_D','EMPIRICAL_GRIMME3', curREM)
-   if (method == 'B3LYP-D3'):
-      ModRem('EXCHANGE', 'B3LYP', curREM)
-      ModRem('DFT_D','EMPIRICAL_GRIMME3', curREM)
-   if (method == 'BLYP'):
-      ModRem('EXCHANGE','B', curREM)
-      ModRem('CORRELATION','LYP', curREM)
-   if (method == 'TPSS'):
-      ModRem('CORRELATION','TPSS', curREM)
-   if (method == 'M06-L' or method == 'M06L'):
-      ModRem('EXCHANGE','M06L', curREM)
-   if (method == 'M06-2X' or method == 'M062X'):
-      ModRem('EXCHANGE','M062X', curREM) 
+   #deal with -D3 in the method
+   if "-D3" in method.upper():
+      add_d3_tail(method, curREM)
+
+def add_d3_tail(method, curREM):
+   if method.upper() == 'WB97X-D3' or method.upper() == 'B97-D3':
+      return
+   l = re.search('(\S+)-(D3\S*)', method)
+   parent_func = l.group(1)
+   tail = l.group(2)
+   ModRem('METHOD', parent_func, curREM)
+   if 'BJ' in tail.upper():
+      ModRem('DFT_D', 'D3_BJ', curREM)
+   elif 'OP' in tail.upper():
+      ModRem('DFT_D', 'D3_OP', curREM)
+   elif 'CSO' in tail.upper():
+      ModRem('DFT_D', 'D3_CSO', curREM)
+   else:
+      ModRem('DFT_D', 'EMPIRICAL_GRIMME3', curREM)
    
 def XYZ_to_Input(XYZ, inputfile, FRGM, curREM, doCP):
    #print "generate %s" %inputfile

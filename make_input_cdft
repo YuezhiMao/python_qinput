@@ -17,14 +17,10 @@ def ParseInput(ArgsIn):
    parser.add_option('-b','--basis',dest='basis',action='callback',callback=string_sp_callback, type='string', default='aug-cc-pvtz',help='The target basis (default is aug-cc-pVTZ)')
    parser.add_option('-m','--method',dest='method',action='callback',type='string', default=None, callback=string_sp_callback,help='The methods (density functionals) to use')
    parser.add_option('-i','--input_path',dest='input_path',action='store',type='string', default='input/',help='The directory storing the generated inputs')
-   parser.add_option('--op',dest='eda_option',action='store',type='int',default=2,help='EDA option; default is 2 (almo-pol)')
-   parser.add_option('--bsse',dest='bsse',action='store_true',default=False,help='set EDA_BSSE to true')
-   parser.add_option('--skip_ortho_decomp', dest='skip_ortho_decomp',action='store_true',default=False,help='skip the orthogonal decomposition of frozen interaction')
-   parser.add_option('--dfxc',dest='dfxc',action='store',type='string',default=None, help='choose the DFXC to use')
-   parser.add_option('--mbe',dest='mbe',action='store_true',default=False,help='do many body expansion (limited to 3-body systems for now)')
-   parser.add_option('--snap_range', dest='snap_range', action='callback', type='string', default=None, callback=string_sp_callback, help='Only run snapshots in the given range')
+   parser.add_option('--pop',dest='pop_scheme',action='store',type='string',default='both',help='CDFT population scheme to use [default is doing both 1 (Becke) and 5 (FBH)]')
+   parser.add_option('--cdft_only', dest='cdft_only', action='store_true',default=False,help='DO CDFT only; no full SCF')
    options, args = parser.parse_args(ArgsIn)
-  
+
    if not options.onsite:
       if len(args) < 4:
          parser.print_help()
@@ -33,11 +29,12 @@ def ParseInput(ArgsIn):
       if len(args) < 3:
          parser.print_help()
          sys.exit(1)
-   
+
    if not options.all and options.target==None and options.keyword==None:
       print "The target directory must be specified: one or some or all"
       parser.print_help()
       sys.exit(1)
+
    return options, args
 
 def string_sp_callback(option, opt, value, parser):
@@ -45,16 +42,6 @@ def string_sp_callback(option, opt, value, parser):
 
 def string_sp_callback_space(option, opt, value, parser):
    setattr(parser.values, option.dest, value.split(' '))
-
-def snapshot_in_range(xyz_file, options):
-   #the local snap_range is a 2-tuple of int
-   range_lower = int(options.snap_range[0])
-   range_upper = int(options.snap_range[1])+1
-   snap_index = int(re.search("(\d+).xyz", xyz_file).group(1))
-   if snap_index in range(range_lower, range_upper):
-      return True
-   else:
-      return False
 
 class XYZ:
    def __init__(self, xyz_file):
@@ -67,12 +54,11 @@ class XYZ:
          l = re.search('^\s*(\d+)\s*$', line)
          if l!=None:
             self.NAtom = int(l.group(1))
-         if len(line.split()) == 4:
-            l = re.search('(\S+)\s+(\S+)\s+(\S+)\s+(\S+)', line)
-            if l!=None:
-               self.AtomList.append(l.group(1))
-               coord = float(l.group(2)), float(l.group(3)), float(l.group(4))
-               self.CoordList.append(coord)
+         l = re.search('(\S+)\s+(\S+)\s+(\S+)\s+(\S+)', line)
+         if l!=None:
+            self.AtomList.append(l.group(1))
+            coord = float(l.group(2)), float(l.group(3)), float(l.group(4))
+            self.CoordList.append(coord)
 
       if(len(self.AtomList)!=self.NAtom):
          print "Error in number of atoms"
@@ -143,20 +129,15 @@ def ParseFRGM(FRGMFile, debug = False):
       print "did not parse the expected number of lines in "+FRGMFile 
    return FRGM
 
-def ParseRems(RemFile): #section marks like "$rem", "$end" are needed for this function to work
+def ParseRems(RemFile):
    f = open(RemFile,'r')
    REMS = {}
    REMS["name"] = RemFile[4:]
    REMS["nrems"] = 0
-   REMS["nrems_frgm"] = 0
    currem = 0
    REMS["the_rem"] = {}
-   currem_frgm = 0
-   REMS["rem_frgm"] = {}
    line = f.readline()
-   #parse the main rem seciton first
-   while not re.search('end',line):
-      #print line
+   while line!='':
       l=re.search("(\S+)\s+(\S+)",line) #rem and value
       if (not l==None):
          REMS["the_rem"][str(currem)] = {}
@@ -165,19 +146,8 @@ def ParseRems(RemFile): #section marks like "$rem", "$end" are needed for this f
          currem += 1
          REMS["nrems"] = currem
       line = f.readline()
-   #then, parse the rem_frgm section
-   line = f.readline()
-   while not re.search('end',line):
-      l=re.search("(\S+)\s+(\S+)",line) #rem and value
-      if (not l==None):
-         REMS["rem_frgm"][str(currem_frgm)] = {}
-         REMS["rem_frgm"][str(currem_frgm)]["name"] = l.group(1).upper()
-         REMS["rem_frgm"][str(currem_frgm)]["value"] = l.group(2).upper()
-         currem_frgm += 1
-         REMS["nrems_frgm"] = currem_frgm
-      line = f.readline()
    f.close()
-   return REMS 
+   return REMS
 
 def ModRem(r_name,r_value,MyREMS):
 	#see if the rem is already set
@@ -197,87 +167,34 @@ def ModRem(r_name,r_value,MyREMS):
       MyREMS["nrems"] = currem + 1
    return
 
-def ModRem_Frgm(r_name, r_value, MyREMS):
-   REM_NAME = r_name.upper()
-   REM_VALUE = r_value.upper()
-   done = False
-   for rem_frgm in range(MyREMS["nrems_frgm"]):
-      if (MyREMS["rem_frgm"][str(rem_frgm)]["name"] == REM_NAME):
-	     #found in the rem already set up
-         MyREMS["rem_frgm"][str(rem_frgm)]["value"] = REM_VALUE
-         done = True
-   if (not done):	#not find, add this new rem
-      currem_frgm = MyREMS["nrems_frgm"]
-      MyREMS["rem_frgm"][str(currem_frgm)] = {}
-      MyREMS["rem_frgm"][str(currem_frgm)]["name"] = REM_NAME
-      MyREMS["rem_frgm"][str(currem_frgm)]["value"] = REM_VALUE
-      MyREMS["nrems_frgm"] = currem_frgm + 1
-
-def AppendRem(fh, MyREMS):
-   # write the main rem
+def AppendRem(fh,MyREMS):
    fh.write('$rem\n')
    for rem in range(MyREMS["nrems"]):
       fh.write(MyREMS["the_rem"][str(rem)]["name"]+'  '+MyREMS["the_rem"][str(rem)]["value"]+'\n')
    fh.write('$end\n')
-   fh.write('\n')
-   # write the rem_frgm
-   fh.write('$rem_frgm\n')
-   for rem_frgm in range(MyREMS["nrems_frgm"]):
-      fh.write(MyREMS["rem_frgm"][str(rem_frgm)]["name"]+'  '+ MyREMS["rem_frgm"][str(rem_frgm)]["value"]+'\n')
-   fh.write('$end\n')
-   fh.close()
    return
 
-def WriteMolecule_Frgm(fw, XYZ, FRGM, skipfrgm=0):
+def WriteMolecule_Frgm(fw, XYZ, FRGM):
    fw.write('$molecule\n')
-   if not skipfrgm:
-      #total charge and mult
-      fw.write("%d %d\n" %(FRGM["total_charge"], FRGM["total_mult"]))
-      for ifrgm in range(0, FRGM["NFrgm"]):
-         fw.write('--\n')
-         fw.write("%d %d\n" %(FRGM["charge_frgm"][ifrgm], FRGM["mult_frgm"][ifrgm]))
-         natom_frgm = FRGM["atoms_frgm"][ifrgm]
-         index_start = FRGM["atoms_offset"][ifrgm]
-         for iatom in range(index_start, index_start+natom_frgm):
-            atomic_symbol = XYZ.AtomList[iatom]
-            x, y, z = XYZ.CoordList[iatom]
-            fw.write("%-4s %-10.5f %-10.5f %-10.5f\n" %(atomic_symbol, x, y, z))
-
-   else:
-      if skipfrgm not in [1, 2, 3]:
-         print "invalid skipfrgm index: %d" %skipfrgm
-         sys.exit(0)
-      #recalculate charge and mult (both open-shell not allowed for now)
-      total_charge = 0
-      max_mult = 1
-      n_openshell = 0
-      for ifrgm in range(0, FRGM["NFrgm"]):
-         if ifrgm == skipfrgm-1:
-            continue
-         total_charge += FRGM["charge_frgm"][ifrgm]
-         if max_mult < FRGM["mult_frgm"][ifrgm]:
-            max_mult = FRGM["mult_frgm"][ifrgm]
-         if FRGM["mult_frgm"][ifrgm] > 1:
-            n_openshell += 1
-      if n_openshell > 1:
-         print "multiple open-shell fragments not allowed for now"
-         sys.exit(0)
-
-      fw.write("%d %d\n" %(total_charge, max_mult))
-      for ifrgm in range(0, FRGM["NFrgm"]):
-         if ifrgm == skipfrgm-1:
-            continue
-         fw.write('--\n')
-         fw.write("%d %d\n" %(FRGM["charge_frgm"][ifrgm], FRGM["mult_frgm"][ifrgm]))
-         natom_frgm = FRGM["atoms_frgm"][ifrgm]
-         index_start = FRGM["atoms_offset"][ifrgm]
-         for iatom in range(index_start, index_start+natom_frgm):
-            atomic_symbol = XYZ.AtomList[iatom]
-            x, y, z = XYZ.CoordList[iatom]
-            fw.write("%-4s %-10.5f %-10.5f %-10.5f\n" %(atomic_symbol, x, y, z))
-
+   #total charge and mult
+   fw.write("%d %d\n" %(FRGM["total_charge"], FRGM["total_mult"]))
+   #loop over fragments
+   for ifrgm in range(0, FRGM["NFrgm"]):
+      fw.write('--\n')
+      fw.write("%d %d\n" %(FRGM["charge_frgm"][ifrgm], FRGM["mult_frgm"][ifrgm]))
+      natom_frgm = FRGM["atoms_frgm"][ifrgm]
+      index_start = FRGM["atoms_offset"][ifrgm]
+      for iatom in range(index_start, index_start+natom_frgm):
+         atomic_symbol = XYZ.AtomList[iatom]
+         x, y, z = XYZ.CoordList[iatom]
+         fw.write("%-4s %-10.5f %-10.5f %-10.5f\n" %(atomic_symbol, x, y, z))
    fw.write('$end\n')
-   fw.write("\n")
+   fw.write('\n')
+
+def WriteMolecule_Read(fw):
+   fw.write('$molecule\n')
+   fw.write('read\n')
+   fw.write('$end\n\n')
 
 def basis_abbr(BasName):    #generating abbreviated name for basis sets, using for input file names
    fullname = BasName.lower()
@@ -287,16 +204,12 @@ def basis_abbr(BasName):    #generating abbreviated name for basis sets, using f
       return 'tz'
    elif fullname == 'cc-pvqz':
       return 'qz'
-   elif fullname == 'cc-pv5z':
-      return '5z'
    elif fullname == 'aug-cc-pvdz':
       return 'adz'
    elif fullname == 'aug-cc-pvtz':
       return 'atz'
    elif fullname == 'aug-cc-pvqz':
       return 'aqz'
-   elif fullname == 'aug-cc-pv5z':
-      return 'a5z'
    elif fullname == 'def2-svpd' or fullname == 'svpd':
       return 'svpd'
    elif fullname == 'def2-tzvpp' or fullname == 'tzvpp':
@@ -325,26 +238,7 @@ def basis_abbr(BasName):    #generating abbreviated name for basis sets, using f
       print "unrecognized basis choice"
       sys.exit(1)
 
-def Set_rems_common(curREM, method, basis, options):
-   ModRem('JOBTYPE', 'EDA', curREM)
-   ModRem('EDA2', str(options.eda_option), curREM)
-   if options.bsse:
-      ModRem('EDA_BSSE', 'TRUE', curREM)
-   if options.skip_ortho_decomp:
-      ModRem('FRZ_ORTHO_DECOMP', '-1', curREM)
-   if options.dfxc!=None:
-      if options.dfxc.upper()=='HF':  #should be handled by default
-         ModRem('DISP_FREE_X', 'HF', curREM)
-         ModRem('DISP_FREE_C', '0', curREM) 
-      elif options.dfxc.upper()=='DLDF':
-         ModRem('DISP_FREE_X', 'DLDF', curREM)
-         ModRem('DISP_FREE_C', '0', curREM) 
-      elif options.dfxc.upper()=='REVPBE':
-         ModRem('DISP_FREE_X', 'REVPBE', curREM)
-         ModRem('DISP_FREE_C', 'PBE', curREM)
-      else:
-         print "Requested DFXC: %s is not recognized" %options.dfxc
-
+def set_rems_common(curREM, method, basis):
    if basis.upper() == 'SVPD':
       ModRem('BASIS','DEF2-SVPD',curREM)
    elif basis.upper() == 'TZVPP':
@@ -367,18 +261,18 @@ def Set_rems_common(curREM, method, basis, options):
    ModRem('MEM_STATIC','2000', curREM)
    ModRem('SCF_GUESS', 'FRAGMO', curREM)
    ModRem('METHOD', method, curREM)	
-   if (method.upper() != 'HF'):
+   if (method != 'HF'):
       ModRem ('XC_GRID', '000099000590', curREM)		
       ModRem ('NL_GRID', '1', curREM)
    #deal with -D3 in the method
    if "-D3" in method.upper():
       add_d3_tail(method, curREM)
 
-   #default rem_frgm
-   ModRem_Frgm('MEM_TOTAL', '8000', curREM)
-   ModRem_Frgm('MEM_STATIC', '2000', curREM)
-   ModRem_Frgm('SCF_GUESS', 'SAD', curREM)
-   ModRem_Frgm('SKIP_GESMAN', 'FALSE', curREM)
+def set_rems_cdft(curREM, pop_scheme):
+   ModRem('CDFT', 'TRUE', curREM)
+   ModRem('CDFT_THRESH', '7', curREM)
+   ModRem('CDFT_POP_SCHEME', str(pop_scheme), curREM)
+   ModRem('CDFT_BECKE_POP', 'TRUE', curREM) 
 
 def add_d3_tail(method, curREM):
    if method.upper() == 'WB97X-D3' or method.upper() == 'B97-D3':
@@ -395,26 +289,68 @@ def add_d3_tail(method, curREM):
       ModRem('DFT_D', 'D3_CSO', curREM)
    else:
       ModRem('DFT_D', 'EMPIRICAL_GRIMME3', curREM)
+   
+def AppendCDFTSection(fw, FRGM):
+   if FRGM["NFrgm"] > 2:
+      print "Can only support jobs with two fragments for now"
+      sys.exit(0)
 
-def XYZ_to_Input(XYZ, inputfile, FRGM, curREM, skipfrgm=0):
-   #print "generate %s" %inputfile
-   fw = open(inputfile, 'w')
+   fw.write('\n$cdft\n')
+   #let's write first fragment's charge (note: if non-zero, the sign needs to be changed)
+
+   if FRGM["charge_frgm"][0] != 0:
+      charge = -1.0*float(FRGM["charge_frgm"][0])
+   else:
+      charge = 0.0
+   fw.write("%.1f\n" %charge)
+   fw.write("1.0  1  %d\n" %FRGM["atoms_frgm"][0])
+   fw.write("$end\n")
+
+
+def XYZ_to_Input(fw, XYZ, FRGM, curREM, pop_scheme=-1, read_mol=False):
    #check if unrestricted (any open-shell fragment?)
    unrestricted=False
    for ifrgm in range(0, FRGM["NFrgm"]):
-      if ifrgm == skipfrgm-1:
-         continue
       if FRGM["mult_frgm"][ifrgm] > 1:
          unrestricted=True
          break
    if unrestricted:
-      ModRem('UNRESTRICTED','TRUE',curREM)
+      print "Unrestricted system not allowed yet"
+      sys.exit(0)
+   if not read_mol:
+      WriteMolecule_Frgm(fw, XYZ, FRGM)
+   else:
+      WriteMolecule_Read(fw)
 
-   WriteMolecule_Frgm(fw, XYZ, FRGM, skipfrgm)
    AppendRem(fw, curREM)
-   fw.close()
+   if pop_scheme > 0:
+      AppendCDFTSection(fw, FRGM)
 
+def XYZ_to_Input_Integrated(fw, XYZ, FRGM, method, basis, options):
+   if options.pop_scheme.lower() == 'fbh':
+      pop_scheme = 5
+   else:
+      pop_scheme = 1   #if do both, do becke first
+   curREM = ParseRems('rems/rem_cdft')
+   set_rems_common(curREM, method, basis)
+   set_rems_cdft(curREM, pop_scheme)
+   XYZ_to_Input(fw, XYZ, FRGM, curREM, pop_scheme)
 
+   if options.pop_scheme.lower() == 'both':
+      pop_scheme = 5
+      #reuse the rems
+      set_rems_cdft(curREM, pop_scheme)
+      fw.write('\n@@@\n')
+      XYZ_to_Input(fw, XYZ, FRGM, curREM, pop_scheme, True) #read_mol=true
+   
+   if not options.cdft_only: #standard SCF job
+      pop_scheme = -1
+      curREM = ParseRems('rems/rem_stdscf')
+      set_rems_common(curREM, method, basis)
+      fw.write('\n@@@\n')
+      XYZ_to_Input(fw, XYZ, FRGM, curREM, pop_scheme, True)
+      
+      
 #the script 
 options, args = ParseInput(sys.argv)
 xyz_path = args[1]
@@ -437,7 +373,7 @@ if options.target!=None:
       if xyz_file not in xyzfile_list:
          xyzfile_list.append(xyz_file)
 
-#check the existence of input_path
+#check the input_path
 input_path = options.input_path
 if input_path[-1:] != '/':
    input_path += '/'
@@ -449,38 +385,15 @@ FRGM = ''
 if not options.onsite:   #all xyz files share the common frgm file: parse it beforehand
    FRGM = ParseFRGM(frgm_partition)
 
-#create the input file in the input_path
+#create the input file, and move it into the input_path
 for method in options.method:
    for basis in options.basis: 
-      basis_short = basis_abbr(basis)
-      curREM = ParseRems(rem_file)
-      Set_rems_common(curREM, method, basis, options) 
       for xyz_file in xyzfile_list:
-         if(options.snap_range!=None):
-            if (not snapshot_in_range(xyz_file, options)):
-               continue
          parsed_XYZ = XYZ(xyz_file)
          if options.onsite:
             frgm_file = xyz_file[:-4]+'.frgm'
             FRGM = ParseFRGM(frgm_file)
-
-         #supersystem job
-         inputfile = input_path+parsed_XYZ.Name+'_eda2_op'+str(options.eda_option)+'_'+method+'_'+basis_short+'.in'
-         XYZ_to_Input(parsed_XYZ, inputfile, FRGM, curREM)
-
-         #run 3 more jobs if do MBE
-         if options.mbe:
-            #do 1,2, skip 3
-            inputfile12 = input_path+parsed_XYZ.Name+'_eda2_op'+str(options.eda_option)+'_mbe12_'+method+'_'+basis_short+'.in'
-            XYZ_to_Input(parsed_XYZ, inputfile12, FRGM, curREM, 3) 
-
-            #do 2,3, skip 1
-            inputfile23 = input_path+parsed_XYZ.Name+'_eda2_op'+str(options.eda_option)+'_mbe23_'+method+'_'+basis_short+'.in'
-            XYZ_to_Input(parsed_XYZ, inputfile23, FRGM, curREM, 1) 
-
-            #do 1,3, skip 2
-            inputfile13 = input_path+parsed_XYZ.Name+'_eda2_op'+str(options.eda_option)+'_mbe13_'+method+'_'+basis_short+'.in'
-            XYZ_to_Input(parsed_XYZ, inputfile13, FRGM, curREM, 2) 
-
-
-
+         inputfile = input_path+parsed_XYZ.Name+'_cdft_'+method+'_'+basis_abbr(basis)+'.in'
+         fw = open(inputfile, 'w')
+         XYZ_to_Input_Integrated(fw, parsed_XYZ, FRGM, method, basis, options)
+         fw.close()

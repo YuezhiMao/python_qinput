@@ -16,6 +16,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--noCT',dest='noCT',action='store_true',default=False,help='Do not parse the CT related results (required by the EDA_noCT jobs)')
    parser.add_option('--fullavail',dest='fullavail',action='store_true',default=False,help='full SCF data for evaluating CT (for noCT jobs only)')
    parser.add_option('--mp2',dest='mp2',action='store_true',default=False,help='Parse the total binding energy (only) evaluated by MP2 or double hybrid DFT (T-Q extrapolation presumed') #this should ignore a lot of other options
+   parser.add_option('--cdft',dest='cdft',action='store_true',default=False,help='Parse CDFT CT energies; require each job has at least one CDFT and one full SCF calculation')
    parser.add_option('--single_atom',dest='single_atom',action='store',default=None, help="When parsing the total binding curve, enable the special case in which one monomer is a single atom so one job covers everything. Recognizable options: mon1(monA,1), mon2(monB,2), both")
    parser.add_option('--old',dest='oldeda',action='store_true',default=False,help='Parsing EDA jobs using the old ALMO-EDA code')
    parser.add_option('--modified',dest='modified',action='store_true',default=False,help='Modified frozen decomposition: E_cls_elec, E_mod_pauli, E_disp')
@@ -352,6 +353,79 @@ def parse_neweda_pes(options, output_dir, keyword=None):
    os.chdir(curdir)
    return
  
+#for parsing a PES scan of CDFT jobs
+def parse_cdft_pes(options, output_dir, keyword=None):
+   hart_to_kj = 2625.5311584660003
+   hart_to_kcal = 627.5095
+   curdir = os.getcwd()
+   os.chdir(output_dir)
+
+   placeholder = ''  #little trick to get the geom_param
+   if re.search('dist',output_dir):
+      placeholder = 'dist'
+   elif re.search('angle',output_dir):
+      placeholder = 'angle'
+   elif options.placeholder!=None:
+      placeholder = options.placeholder
+   else:
+      print "Neither \"dist\" nor \"angle\", the placeholder got confused"
+      sys.exit(1)
+
+   DataPoints = {}
+   outlist = glob.glob('*.out')
+   for out in outlist:
+      name_parser = re.search(placeholder+'_([^_]+)_', out)
+      geom_param = name_parser.group(1)
+      DataPoints[geom_param] = {}
+      DataPoints[geom_param]["basic_energies"] = []
+      DataPoints[geom_param]["ct_energies"] = []
+
+   #collect the SCF energies
+   tmp_filename = 'grep.tmp'
+   if not keyword:
+      os.system('grep \"ion met\" *.out > '+tmp_filename)
+   else:
+      os.system('grep \"ion met\" *'+keyword+'*.out > '+tmp_filename)
+   f = open(tmp_filename, 'r')
+   for line in f.readlines():
+      l = line.split()
+      geom_param = re.search(placeholder+'_([^_]+)_', l[0]).group(1)
+      value = float(l[2])
+      if geom_param not in DataPoints:
+         print "geom_param: %s is not in DataPoints dictionary. Something is very wrong" %geom_param
+         sys.exit(1)
+      DataPoints[geom_param]["basic_energies"].append(value)
+   f.close()
+
+   #evaluate the CT energies
+   for geom_param in DataPoints:
+      n_ct = len(DataPoints[geom_param])
+      for i in range(0, n_ct):
+         ct_energy = DataPoints[geom_param]["basic_energies"][-1] - DataPoints[geom_param]["basic_energies"][i]
+         if options.kcal:
+            ct_energy *= hart_to_kcal
+         else:
+            ct_energy *= hart_to_kj
+         DataPoints[geom_param]["ct_energies"].append(ct_energy)
+
+
+   #generate output
+   if not keyword:
+      csvfile_basic = 'CDFT.csv'
+   else:
+      csvfile_basic = 'CDFT_'+keyword+'.csv'
+   f = open(csvfile_basic,'w')
+   for geom_param in sorted(DataPoints, key=lambda geom_param:float(geom_param)):
+      f.write("%s" %geom_param)
+      for ct_energy in DataPoints[geom_param]["ct_energies"]:
+         f.write(",%.4f" %ct_energy)
+      f.write("\n")
+   f.close()
+
+   sp.call(['rm', tmp_filename])
+   os.chdir(curdir)
+   return
+
 
 #parse generic EDA jobs (using full jobname to specify each data point)
 def parse_neweda_generic(options, output_dir, keyword=None): #TODO: make this the update-to-date parser for new EDA jobs
@@ -819,6 +893,12 @@ for outdir in outdir_list:
       parse_mp2(options, outdir)
    elif options.oldeda:
       parse_oldeda(options, outdir)
+   elif options.cdft:
+      if options.pes:
+         parse_cdft_pes(options, outdir)
+      else:
+         print "Parsing option not available for CDFT yet"
+         sys.exit(0) 
    else:
       if options.pes:
          parse_neweda_pes(options, outdir)
