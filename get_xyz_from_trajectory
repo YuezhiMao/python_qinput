@@ -1,0 +1,64 @@
+#! /usr/bin/env python
+
+import os, sys, re, glob
+import subprocess as sp
+from optparse import OptionParser
+
+def ParseInput(ArgsIn):
+   UseMsg = "get_xyz_from_trajectory [options] [traj_file] [dest_dir]"
+   parser = OptionParser(usage=UseMsg)
+   parser.add_option('-n', '--natoms', dest='natoms', action='store', type='int', default=-100, help='Number of atoms that are reserved in the xyz files')
+   parser.add_option('-o', '--offset', dest='offset', action='store', type='int', default=0, help='Number of snapshots in the trajectory to skip')
+   parser.add_option('-i', '--interval', dest='interval', action='store', type='int', default=1, help='interval (#steps) between two chosen snapshots')
+   parser.add_option('--nameroot', dest='nameroot', action='store', type='string', default=None, help='Name root for the output xyz files (by default it is using the name of the dest_dir')
+   options, args = parser.parse_args(ArgsIn)
+
+   if len(args) < 3:
+      parser.print_help()
+      sys.exit(0)
+
+   return options, args
+
+
+def parse_one_trajectory(traj_file, dest_dir, options):
+   fr = open(traj_file, 'r')
+   counter_in = 0
+   counter_out = 0
+   atom_idx = 0
+   fw = None
+   for line in fr.readlines():
+      l = line.split()
+      #this piece may not be general enough
+      if len(l) == 1:
+         counter_in += 1
+         if counter_in > options.offset and counter_in % options.interval == 0:
+            counter_out += 1
+            if fw != None:
+               fw.close()
+            if options.nameroot!=None:
+               nameroot = options.nameroot
+            else:
+               nameroot = dest_dir
+            new_file = dest_dir+'/'+nameroot+'_'+str(counter_out)+'.xyz'
+            fw = open(new_file, 'w')
+            #this is not automated enough; think about how to get this better
+            fw.write("%d\n\n" %options.natoms)
+            atom_idx = 0
+      elif len(l) == 4:
+         if counter_in > options.offset and counter_in % options.interval == 0:
+            atom_idx += 1
+            if options.natoms <= 0: #write all atoms for a snapshot
+               fw.write(line)
+            else:
+               if atom_idx <= options.natoms:
+                  fw.write(line)
+   fr.close()
+
+#the script
+options, args = ParseInput(sys.argv)
+traj_file = args[1]
+dest_dir = args[2]
+if not os.path.exists(dest_dir):
+   sp.call(['mkdir', dest_dir])
+
+parse_one_trajectory(traj_file, dest_dir, options)

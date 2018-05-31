@@ -342,6 +342,9 @@ def Set_rems_common(curREM, method, basis, options):
       elif options.dfxc.upper()=='REVPBE':
          ModRem('DISP_FREE_X', 'REVPBE', curREM)
          ModRem('DISP_FREE_C', 'PBE', curREM)
+      elif options.dfxc.upper()=='BLYP':
+         ModRem('DISP_FREE_X', 'B', curREM)
+         ModRem('DISP_FREE_C', 'LYP', curREM)
       else:
          print "Requested DFXC: %s is not recognized" %options.dfxc
 

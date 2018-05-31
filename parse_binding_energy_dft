@@ -9,11 +9,13 @@ def ParseInput(ArgsIn):
    parser = OptionParser(usage=UseMsg)
 
    parser.add_option('--number_only',dest='numonly',action='store_true',default=False,help='use the serial number as the name of the job')
+   parser.add_option('--placeholder',dest='placeholder',action='store',type='string',default=None,help='placeholder for the serial number of each job')
    parser.add_option('-a','--all',dest='all',action='store_true',default=False, help='parse all the output directories under the specified directory')
    parser.add_option('-t','--target',dest='target',action='callback',callback=string_sp_callback,type='string',default=None,help='the output directories to parse (separated by \",\")')
    parser.add_option('-k','--keyword',dest='keyword',action='store',type='string',default=None,help='parse all the output dirs containing the keyword')
    parser.add_option('-n','--nfrgm',dest='nfrgm',action='store',type='int',default=2,help='Number of fragments')
    parser.add_option('--bsse',dest='bsse',action='store_true',default=False,help='calculate both CP and noCP results')
+   parser.add_option('--modelchem',dest='modelchem',action='store_true',default=False,help='print out the model chemistry used for each data point')
    options, args = parser.parse_args(ArgsIn)
    if len(args) < 2:
       if options.all or options.keyword:
@@ -48,7 +50,11 @@ def Parse_Single_Dir(options, nfrag):
       if not options.numonly:
          jobname = name_parser.group(1)
       else:
-         jobname = re.search('(\d+)',name_parser.group(1)).group(1)
+         if options.placeholder != None:
+            jobname = re.search(options.placeholder+'_(\d+)',name_parser.group(1)).group(1)
+         else:
+            jobname = re.search('(\d+)',name_parser.group(1)).group(1)
+
       if jobname not in AllEnergy:
          AllEnergy[jobname]={}
          #count = 0
@@ -74,39 +80,14 @@ def Parse_Single_Dir(options, nfrag):
    fw = open(outfile, 'w')
    if options.numonly:
       for jobname in sorted(AllEnergy,key=lambda jobname:float(jobname)):
-         compute_binding_energy(fw, AllEnergy, jobname, nfrag, options.bsse)
-         #for method in AllEnergy[jobname]:
-         #   functional, basis = method
-         #   E_super = AllEnergy[jobname][method][2*nfrag]
-         #   E_monomers_nocp = 0.0
-         #   E_monomers_cp = 0.0
-         #   for i in range(0, nfrag):
-         #      E_monomers_nocp += AllEnergy[jobname][method][2*i]
-         #      E_monomers_cp += AllEnergy[jobname][method][2*i+1]
-         #   E_bind_nocp = E_super - E_monomers_nocp
-         #   E_bind_cp = E_super - E_monomers_cp
-         #   BSSE = E_bind_nocp - E_bind_cp #define BSSE to be positive
-         #   fw.write("%s,%s,%s,%.4f,%.4f,%.4f\n" %(jobname,functional,basis,hart_to_kcal*E_bind_nocp, hart_to_kcal*E_bind_cp, hart_to_kcal*BSSE))
+         compute_binding_energy(fw, AllEnergy, jobname, nfrag, options.bsse, options.modelchem)
    else:
       for jobname in sorted(AllEnergy):
-         compute_binding_energy(fw, AllEnergy, jobname, nfrag, options.bsse)
-         #for method in sorted(AllEnergy[jobname]):
-         #   functional, basis = method
-         #   #print jobname,method
-         #   E_super = AllEnergy[jobname][method][2*nfrag]
-         #   E_monomers_nocp = 0.0
-         #   E_monomers_cp = 0.0
-         #   for i in range(0, nfrag):
-         #      E_monomers_nocp += AllEnergy[jobname][method][2*i]
-         #      E_monomers_cp += AllEnergy[jobname][method][2*i+1]
-         #   E_bind_nocp = E_super - E_monomers_nocp
-         #   E_bind_cp = E_super - E_monomers_cp
-         #   BSSE = E_bind_nocp - E_bind_cp #define BSSE to be positive
-         #   fw.write("%s,%s,%s,%.4f,%.4f,%.4f\n" %(jobname,functional,basis,hart_to_kcal*E_bind_nocp, hart_to_kcal*E_bind_cp, hart_to_kcal*BSSE))
+         compute_binding_energy(fw, AllEnergy, jobname, nfrag, options.bsse, options.modelchem)
 
    fw.close()
 
-def compute_binding_energy(fw, AllEnergy, jobname, nfrag, doCP):
+def compute_binding_energy(fw, AllEnergy, jobname, nfrag, doCP, modelchem=False):
    hart_to_kcal = 627.5095
    for method in AllEnergy[jobname]:
       functional, basis = method
@@ -120,14 +101,22 @@ def compute_binding_energy(fw, AllEnergy, jobname, nfrag, doCP):
          E_bind_nocp = E_super - E_monomers_nocp
          E_bind_cp = E_super - E_monomers_cp
          BSSE = E_bind_nocp - E_bind_cp #define BSSE to be positive
-         fw.write("%s,%s,%s,%.4f,%.4f,%.4f\n" %(jobname,functional,basis,hart_to_kcal*E_bind_nocp, hart_to_kcal*E_bind_cp, hart_to_kcal*BSSE))
+         if modelchem:
+            fw.write("%s,%s,%s,%.4f,%.4f,%.4f\n" %(jobname,functional,basis,hart_to_kcal*E_bind_nocp, hart_to_kcal*E_bind_cp, hart_to_kcal*BSSE))
+         else:
+            fw.write("%s,%.4f,%.4f,%.4f\n" %(jobname,hart_to_kcal*E_bind_nocp, hart_to_kcal*E_bind_cp, hart_to_kcal*BSSE))
+
       else:
          E_super = AllEnergy[jobname][method][nfrag] 
          E_monomers = 0.0
          for i in range(0, nfrag):
             E_monomers += AllEnergy[jobname][method][i]
          E_bind = E_super - E_monomers
-         fw.write("%s,%s,%s,%.4f\n" %(jobname,functional,basis,hart_to_kcal*E_bind))
+         if modelchem:
+            fw.write("%s,%s,%s,%.4f\n" %(jobname,functional,basis,hart_to_kcal*E_bind))
+         else:
+            fw.write("%s,%.4f\n" %(jobname,hart_to_kcal*E_bind))
+
 
 #the main script
 options, args = ParseInput(sys.argv)

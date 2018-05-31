@@ -4,6 +4,7 @@ import os, glob, re, sys
 import subprocess as sp
 import numpy as np
 from optparse import OptionParser
+import qrems
 
 def ParseInput(ArgsIn):
    UseMsg = '''
@@ -18,6 +19,7 @@ def ParseInput(ArgsIn):
    parser.add_option('-b','--basis',dest='basis',action='callback',callback=string_sp_callback, type='string', default='aug-cc-pvtz',help='The target basis (default is aug-cc-pVTZ)')
    parser.add_option('-m','--method',dest='method',action='callback',type='string', default=None, callback=string_sp_callback,help='The methods (density functionals) to use')
    parser.add_option('-i','--input_path',dest='input_path',action='store',type='string', default='input/',help='The directory storing the generated inputs')
+   parser.add_option('--pcm',dest='pcm',action='store',type='string',default=None,help='turn on pcm and specify the file for pcm')
    options, args = parser.parse_args(ArgsIn)
 
    if not options.onsite:
@@ -294,7 +296,7 @@ def add_d3_tail(method, curREM):
    else:
       ModRem('DFT_D', 'EMPIRICAL_GRIMME3', curREM)
    
-def XYZ_to_Input(XYZ, inputfile, FRGM, curREM, doCP):
+def XYZ_to_Input(XYZ, inputfile, FRGM, curREM, doCP, pcm_file=None):
    #print "generate %s" %inputfile
    fw = open(inputfile, 'w')
    #write isolated frgm jobs 
@@ -306,10 +308,14 @@ def XYZ_to_Input(XYZ, inputfile, FRGM, curREM, doCP):
          ModRem('UNRESTRICTED','FALSE',curREM)
       WriteMolecule(fw, XYZ, FRGM, index_frgm+1)
       AppendRem(fw, curREM)
+      if pcm_file != None:
+         qrems.copy_section_over(fw, pcm_file)
       fw.write('\n@@@\n')
       if doCP:  #do CP correction
          WriteMolecule(fw, XYZ, FRGM, index_frgm+1,ghost=True)
          AppendRem(fw, curREM)
+         if pcm_file != None:
+            qrems.copy_section_over(fw, pcm_file)
          fw.write('\n@@@\n')
    #write the supersystem job
    if FRGM["total_mult"] > 1:
@@ -318,6 +324,8 @@ def XYZ_to_Input(XYZ, inputfile, FRGM, curREM, doCP):
       ModRem('UNRESTRICTED', 'FALSE', curREM)
    WriteMolecule(fw, XYZ, FRGM)
    AppendRem(fw, curREM)
+   if pcm_file != None:
+      qrems.copy_section_over(fw, pcm_file)
    fw.close()
 
 
@@ -361,10 +369,12 @@ for method in options.method:
       basis_short = basis_abbr(basis)
       curREM = ParseRems(rem_file)
       Set_rems_common(curREM, method, basis) 
+      if options.pcm != None:
+         ModRem('SOLVENT_METHOD', 'PCM', curREM)
       for xyz_file in xyzfile_list:
          parsed_XYZ = XYZ(xyz_file)
          if options.onsite:
             frgm_file = xyz_file[:-4]+'.frgm'
             FRGM = ParseFRGM(frgm_file)
          inputfile = input_path+parsed_XYZ.Name+'_'+method+'_'+basis_short+'.in'
-         XYZ_to_Input(parsed_XYZ, inputfile, FRGM, curREM, not(options.nocp))
+         XYZ_to_Input(parsed_XYZ, inputfile, FRGM, curREM, not(options.nocp), options.pcm)

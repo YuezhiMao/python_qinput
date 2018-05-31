@@ -46,3 +46,9 @@ def AppendRem(fh,MyREMS):
       fh.write(MyREMS["the_rem"][str(rem)]["name"]+'  '+MyREMS["the_rem"][str(rem)]["value"]+'\n')
    fh.write('$end\n')
    return
+
+def copy_section_over(fw, filename):
+   fr = open(filename, 'r')
+   for line in fr.readlines():
+      fw.write(line)
+   fr.close()
