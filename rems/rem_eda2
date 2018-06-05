@@ -1,0 +1,23 @@
+$rem
+JOBTYPE eda
+eda2    1
+METHOD  wB97X-V
+BASIS aug-cc-pvtz
+symmetry false
+sym_ignore true
+mem_total 8000
+mem_static 2000
+MAX_SUB_FILE_NUM 16000
+BASIS_LIN_DEP_THRESH 6
+thresh 14
+SCF_CONVERGENCE 8
+GEN_SCFMAN TRUE
+maxscf 200
+FD_MAT_VEC_PROD FALSE
+$end
+
+$rem_frgm
+scf_guess sad
+mem_total 8000
+mem_static 2000
+$end
