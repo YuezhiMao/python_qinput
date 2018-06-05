@@ -67,6 +67,8 @@ if not os.path.exists(input_path):
 
 rem_file = os.path.expandvars('$QREMPATH')+'/rem_stdscf'
 myrems = qrems.ParseRems(rem_file)
+if options.opt:
+   qrems.ModRem('JOBTYPE', 'OPT', myrems)
 for method in options.method:
    for basis in options.basis:
       qrems.set_rems_common(myrems, method, basis)
