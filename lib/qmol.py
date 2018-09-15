@@ -13,20 +13,20 @@ class XYZ:  #class for XYZ coordinates
          l = re.search('^\s*(\d+)\s*$', line)
          if l!=None:
             self.NAtom = int(l.group(1))
-         l = re.search('(\S+)\s+(\S+)\s+(\S+)\s+(\S+)', line)
+         l = re.search('^\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*$', line)
          if l!=None:
             self.AtomList.append(l.group(1))
             coord = float(l.group(2)), float(l.group(3)), float(l.group(4))
             self.CoordList.append(coord)
 
       if(len(self.AtomList)!=self.NAtom):
-         print "Error in number of atoms"
+         print "Error in number of atoms: "+xyzfile
          sys.exit(1)
 
 class FRGM: #class for fragment partition information
    def __init__(self, frgm_file):
       fr = open(frgm_file, 'r')
-      line = f.readline()
+      line = fr.readline()
       counter = 0
       while line != '':
          counter = counter + 1
@@ -62,7 +62,7 @@ class FRGM: #class for fragment partition information
             
          else:
             print "skip the unexpected lines in " + frgm_file 
-         line = f.readline()
+         line = fr.readline()
 
       self.atoms_offset = np.zeros(self.n_frgm, dtype=int)
       offset = 0
@@ -82,6 +82,7 @@ def WriteMolecule(fw, XYZ, charge, mult):
    fw.write('\n')
 
 def WriteMolecule_Frgm(fw, XYZ, FRGM):
+   #print "Working on "+XYZ.Name
    fw.write('$molecule\n')
    #total charge and mult
    fw.write("%d %d\n" %(FRGM.total_charge, FRGM.total_mult))
@@ -102,3 +103,10 @@ def WriteMolecule_Read(fw):
    fw.write('$molecule\n')
    fw.write('read\n')
    fw.write('$end\n\n')
+
+def detect_unrestricted_frgm(FRGM):
+    for ifrgm in range(0, FRGM.n_frgm):
+        if FRGM.mult_frgm[ifrgm] > 1:
+            return True
+            break
+    return False

@@ -1,0 +1,21 @@
+#! /usr/bin/env python
+
+import os, re, glob, sys
+import subprocess as sp
+
+if len(sys.argv) < 2:
+    print "Usage: python extract_csv.py [target_dir]"
+    sys.exit(0)
+
+target_dir = sys.argv[1]
+curdir = os.getcwd()
+os.chdir(target_dir)
+if os.path.exists("csvfiles"):
+    print "Previous csvfiles are removed"
+    os.system('rm -rf csvfiles')
+outdir_list = glob.glob('*/')
+sp.call(['mkdir', 'csvfiles'])
+for outdir in outdir_list:
+    sp.call(['mkdir', 'csvfiles/'+outdir])
+    command = 'cp '+outdir+'*.csv '+'csvfiles/'+outdir
+    os.system(command)

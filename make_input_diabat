@@ -1,0 +1,115 @@
+#! /usr/bin/env python
+
+import os, glob, re, sys
+import subprocess as sp
+import numpy as np
+from optparse import OptionParser
+import qrems, qmol
+
+def ParseInput(ArgsIn):
+    UseMsg = '''
+    make_input_diabat [options] [xyz_path] [frgm_path]
+    '''
+    parser = OptionParser(usage=UseMsg)
+    parser.add_option('-a','--all',dest='all',action='store_true',default=False,help='run all the xyz files under the xyz_path')
+    parser.add_option('-b','--basis',dest='basis',action='callback',callback=string_sp_callback, type='string', default='aug-cc-pvtz',help='The target basis (default is aug-cc-pVTZ)')
+    parser.add_option('-m','--method',dest='method',action='callback',type='string', default=None, callback=string_sp_callback,help='The methods (density functionals) to use')
+    parser.add_option('-i','--input_path',dest='input_path',action='store',type='string', default='input/',help='The directory storing the generated inputs')
+    parser.add_option('--diabat', dest='diabat', action='store', type='string', default=None, help='Specify the diabatization method')
+    parser.add_option('--fodft_method', dest='fodft_method', action='store', type='int', default=1, help='Specify the flavor of FODFT')
+    parser.add_option('--et', dest='do_ET', action='store_true', default=False, help='doing electron transfer')
+    options, args = parser.parse_args(ArgsIn)
+
+    if len(args) < 3:
+        parser.print_help()
+        sys.exit(0)
+    if options.diabat==None:
+        print("The diabatization method has to be specified")
+        parser.print_help()
+        sys.exit(0)
+
+    return options, args
+
+def string_sp_callback(option, opt, value, parser):
+   setattr(parser.values, option.dest, value.split(','))
+
+def Append_Dev_Section(fw, options):
+    fw.write('\n')
+    fw.write('$development\n')
+    if options.diabat.upper() == 'POD':
+        fw.write('postscf_diabat  1\n')
+    elif options.diabat.upper() == 'ESID':
+        fw.write('postscf_diabat  2\n')
+    elif options.diabat.upper() == 'FODFT':
+        fw.write('fragmo_diabat  1\n')
+        fw.write('fodft_method  %d\n' %options.fodft_method)
+    else:
+        print "Unrecognized diabat method"
+        sys.exit(0)
+    if options.do_ET:
+        fw.write('electron_transfer 1\n')
+    fw.write('$end\n')
+
+def XYZ_to_Input(fw, XYZ, FRGM, curREM, options):
+    qmol.WriteMolecule_Frgm(fw, XYZ, FRGM)
+    qrems.AppendRem(fw, curREM)
+    Append_Dev_Section(fw, options)
+     
+def locate_frgm_file(xyz_file, frgm_dir):
+    nameroot = re.search('/([^/]+)_dist', xyz_file).group(1)
+    return frgm_dir+nameroot+'.frgm'
+    
+#The script
+options, args = ParseInput(sys.argv)
+xyz_path = args[1]
+frgm_path = args[2]
+if xyz_path[-1] != '/':
+    xyz_path += '/'
+if frgm_path[-1] != '/':
+    frgm_path += '/'
+
+curdir = os.getcwd()
+xyzfile_list = []
+if options.all:
+    xyzfile_list = glob.glob(xyz_path+'*.xyz')
+
+input_path = options.input_path
+if input_path[-1:] != '/':
+    input_path += '/'
+if not os.path.exists(input_path):
+    sp.call(['mkdir', input_path])
+
+rem_file = os.path.expandvars('$QREMPATH')+'/'+'rem_stdscf'
+myrems = qrems.ParseRems(rem_file)
+for method in options.method:
+    for basis in options.basis:
+        qrems.set_rems_common(myrems, method, basis)
+        if options.diabat.upper() == 'ESID':
+            qrems.ModRem('SCF_GUESS', 'FRAGMO', myrems)
+        for xyz_file in xyzfile_list:
+            parsed_XYZ = qmol.XYZ(xyz_file)
+            FRGM = qmol.FRGM(locate_frgm_file(xyz_file, frgm_path))
+            if qmol.detect_unrestricted_frgm(FRGM):
+                qrems.ModRem('UNRESTRICTED', 'TRUE', myrems)
+            inputfile = input_path+parsed_XYZ.Name
+            if options.diabat.upper() == 'POD':
+                inputfile += '_pod_'
+            elif options.diabat.upper() == 'ESID':
+                inputfile += '_esid_'
+            elif options.diabat.upper() == 'FODFT':
+                if options.fodft_method == 1:
+                    if options.do_ET:
+                        inputfile += '_fodft2n+1_'
+                    else:
+                        inputfile += '_fodft2n-1_'
+                elif options.fodft_method == 2:
+                    inputfile += '_fodft2n_'
+                elif options.fodft_method == 3:
+                    if options.do_ET:
+                        inputfile += '_fodft-2n+1_'
+                    else:
+                        inputfile += '_fodft+2n-1_'
+            inputfile += method + '_' + qrems.basis_abbr(basis)+'.in'
+            fw = open(inputfile, 'w')
+            XYZ_to_Input(fw, parsed_XYZ, FRGM, myrems, options)
+            fw.close()

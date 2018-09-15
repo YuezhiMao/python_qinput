@@ -6,7 +6,7 @@ from optparse import OptionParser
 
 def ParseInput(ArgsIn):
    UseMsg = '''
-   large_submission [options] [output_dir]
+   sort_output [options] [output_dir]
    '''
    parser = OptionParser(usage=UseMsg)
    parser.add_option('-k', '--key', dest='keywords', type='string', action='callback', callback=string_sp_callback, default=None, help='keywords used to sort output files (also as subdirectory names)')
@@ -31,6 +31,6 @@ os.chdir(outdir)
 for keyword in options.keywords:
    if not os.path.exists(keyword):
       sp.call(['mkdir', keyword])
-   os.system('mv *'+keyword+'*.out '+keyword)
+   os.system('mv *_'+keyword+'_*.out '+keyword)
 
 os.chdir(curdir)    

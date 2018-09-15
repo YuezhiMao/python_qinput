@@ -1,0 +1,296 @@
+#! /usr/bin/env python
+
+import os, glob, re, sys
+import subprocess as sp
+from optparse import OptionParser
+import numpy as np
+
+def ParseInput(ArgsIn):
+    UseMsg = "parse_diabat [options] [result_dir]"
+    parser = OptionParser(usage=UseMsg)
+
+    parser.add_option('--placeholder',dest='placeholder',action='store',type='string',default=None,help='placeholder for the serial number of each job')
+    parser.add_option('-a','--all',dest='all',action='store_true',default=False, help='parse all the output directories under the specified directory')
+    parser.add_option('-t','--target',dest='target',action='callback',callback=string_sp_callback,type='string',default=None,help='the output directories to parse (separated by \",\")')
+    parser.add_option('-k','--keyword',dest='keyword',action='store',type='string',default=None,help='parse all the output dirs containing the keyword')
+    parser.add_option('--ref',dest='ref',action='store',type='string',default=None,help='file containing ref data for error analysis')
+
+    options, args = parser.parse_args(ArgsIn)
+    if len(args) < 2:
+      if options.all or options.keyword:
+         print "You must specify a result folder for -a and -k mode"
+         parser.print_help()
+         sys.exit(0)
+
+    if not options.all and options.target==None and options.keyword==None:
+      print "The target directory must be specified: one or some or all"
+      parser.print_help()
+      sys.exit(1)
+
+    if options.ref != None:
+        options.ref = os.getcwd()+'/'+options.ref
+    return options, args
+
+def string_sp_callback(option, opt, value, parser):
+    setattr(parser.values, option.dest, value.split(','))
+
+def get_diabat_method_list():
+    #this function should be called only when the CWD contains output files
+    diabat_method_list = []
+    output_list = glob.glob("*.out")
+    for output in output_list:
+        diabat_method = re.search('_([^_]+)_([^_]+)_([^_]+).out', output).group(1).lower()
+        if diabat_method not in diabat_method_list:
+            diabat_method_list.append(diabat_method)
+    print "Diabat schemes:"
+    print diabat_method_list
+    return diabat_method_list
+
+def parse_single_dir(options):
+    diabat_method_list = get_diabat_method_list()
+    for diabat_method in diabat_method_list:
+        if "pod" in diabat_method:
+            parse_pod_results(options)
+        elif "esid" in diabat_method:
+            parse_esid_results(options)
+        elif "fodft" in diabat_method:
+            parse_fodft_results(diabat_method, options)
+        else:
+            print "unknown diabat method"
+            sys.exit(0)
+    summarize_errors()
+
+def parse_pod_results(options):
+    tmpfile = 'pod.tmp'
+    command = "grep \"coupling:\" *pod*.out > "+tmpfile
+    os.system(command)
+    fr = open(tmpfile, 'r')
+    data = {}
+    for line in fr.readlines():
+        l_sp = line.split()
+        nameparser = re.search('(\S+)_dist_(\S+)_pod', l_sp[0])
+        molname = nameparser.group(1) 
+        if molname not in data:
+            data[molname] = {}
+        geom_param = float(nameparser.group(2))
+        coupling = float(re.search('\((\S+)', l_sp[-2]).group(1))
+        data[molname][geom_param] = coupling
+    fr.close()
+    sp.call(['rm', tmpfile])
+    result_file = 'pod.csv'
+    print_diabat_coupling_test_data(result_file, data, options)
+
+
+def parse_esid_results(options):
+    tmpfile = 'esid.tmp'
+    command = "grep \"Results computed using the frozen Fock matrix:\" -A 2 *esid*.out > "+tmpfile
+    os.system(command)
+    fr = open(tmpfile, 'r')
+    data = {}
+    for line in fr.readlines():
+        if re.search('meV\)', line) == None:
+            continue
+        l_sp = line.split()
+        nameparser = re.search('(\S+)_dist_(\S+)_esid', l_sp[0])
+        molname = nameparser.group(1) 
+        if molname not in data:
+            data[molname] = {}
+        geom_param = float(nameparser.group(2))
+        coupling = float(re.search('\((\S+)', l_sp[-2]).group(1))
+        data[molname][geom_param] = coupling
+    fr.close()
+    sp.call(['rm', tmpfile])
+    result_file = 'esid.csv'
+    print_diabat_coupling_test_data(result_file, data, options)
+
+def parse_fodft_results(fodft_method, options):
+    tmpfile = fodft_method+'.tmp'
+    command = "grep \"The average:\" *"+fodft_method+"*.out > "+tmpfile
+    os.system(command)
+    fr = open(tmpfile, 'r')
+    data = {}
+    for line in fr.readlines():
+        l_sp = line.split()
+        nameparser = re.search('(\S+)_dist_(\S+)_fodft', l_sp[0])
+        molname = nameparser.group(1) 
+        if molname not in data:
+            data[molname] = {}
+        geom_param = float(nameparser.group(2))
+        coupling = float(re.search('\((\S+)', l_sp[-2]).group(1))
+        data[molname][geom_param] = coupling
+    fr.close()
+    sp.call(['rm', tmpfile])
+    result_file = fodft_method+'.csv'
+    print_diabat_coupling_test_data(result_file, data, options)
+
+
+def extract_beta(dist, Hab):
+    X = np.vstack([np.ones(len(dist)), np.array(dist)]).T
+    Y = np.transpose(np.log(np.array(Hab)))
+    c, k = np.linalg.lstsq(X, Y, rcond=None)[0]
+    beta = -2.0*k
+    return beta
+
+def print_diabat_coupling_test_data(result_file, data, options):
+    fw = open(result_file, 'w')
+    for molname in data:
+        fw.write(molname+'\n')
+        dist = []
+        Hab = []
+        for geom_param in sorted(data[molname]):
+            if data[molname][geom_param] > 0.1: #prevent unrealistic small values
+                fw.write("%.2f,%.3f\n" %(geom_param, data[molname][geom_param]))
+                dist.append(geom_param)
+                Hab.append(data[molname][geom_param])
+            else:
+                fw.write("%.2f,NA\n" %geom_param)
+        if len(Hab) > 1:
+            beta = extract_beta(dist, Hab)
+            data[molname][1000] = beta #1000 is a placeholder
+            fw.write("beta,%.3f\n" %beta)
+        else:
+            data[molname][1000] = 0.0
+            fw.write("beta,NA\n")
+
+    if options.ref != None:
+        #print "path for the ref file: "+options.ref
+        ref_values = load_ref_values(options.ref)
+        perform_error_analysis(fw, data, ref_values)
+        perform_error_analysis_separate_dist(fw, data, ref_values)    
+
+    fw.close()
+
+def load_ref_values(ref_file):
+    ref_values = {}
+    fr = open(ref_file, 'r')
+    molname = None
+    for line in fr.readlines():
+        l_sp = line.split()
+        if len(l_sp) == 1:
+            molname = l_sp[0]
+            ref_values[molname] = {}
+        elif len(l_sp) == 2:
+            geom_params = float(l_sp[0])
+            value = float(l_sp[1])
+            ref_values[molname][geom_params] = value
+        else:
+            print("invalid line in ref file")
+            sys.exit(0)
+    #get beta
+    for molname in ref_values:
+        dist = []
+        Hab = []
+        for geom_param in sorted(ref_values[molname]):
+            dist.append(geom_param)
+            Hab.append(ref_values[molname][geom_param])
+        beta = extract_beta(dist, Hab)
+        ref_values[molname][1000] = beta
+    return ref_values
+
+def perform_error_analysis(fw, data, ref_values):
+    signed_errors = []
+    signed_rel_errors = []
+    signed_errors_beta = []
+    signed_rel_errors_beta = []
+    for molname in data:
+        for geom_param in data[molname]:
+            if data[molname][geom_param] > 0.1: 
+                error = data[molname][geom_param] - ref_values[molname][geom_param]
+                rel_error = error/ref_values[molname][geom_param]
+                if geom_param == 1000:
+                    signed_errors_beta.append(error)
+                    signed_rel_errors_beta.append(rel_error)
+                else:
+                    signed_errors.append(error)
+                    signed_rel_errors.append(rel_error)
+    signed_errors = np.array(signed_errors)
+    signed_rel_errors = np.array(signed_rel_errors)
+    signed_errors_beta = np.array(signed_errors_beta)
+    signed_rel_errors_beta = np.array(signed_rel_errors_beta)
+    #errors in Hab
+    fw.write("\n")
+    fw.write("errors in Hab:\n")
+    MSE = np.average(signed_errors)
+    MRSE = np.average(signed_rel_errors)
+    MUE = np.average(np.absolute(signed_errors))
+    MRUE = np.average(np.absolute(signed_rel_errors))
+    fw.write("MSE,%.2f\nMUE,%.2f\nMRSE,%.3f\nMRUE,%.3f\n" %(MSE, MUE, MRSE, MRUE))
+    #errors in beta
+    fw.write("errors in beta:\n")
+    MSE = np.average(signed_errors_beta)
+    MRSE = np.average(signed_rel_errors_beta)
+    MUE = np.average(np.absolute(signed_errors_beta))
+    MRUE = np.average(np.absolute(signed_rel_errors_beta))
+    fw.write("MSE,%.2f\nMUE,%.2f\nMRSE,%.3f\nMRUE,%.3f\n" %(MSE, MUE, MRSE, MRUE))
+
+def perform_error_analysis_separate_dist(fw, data, ref_values):
+    signed_errors = {}
+    signed_rel_errors = {}
+    fw.write("\nerror analysis for Hab at each distance:\n")
+    for molname in data:
+        for geom_param in data[molname]:
+            if geom_param == 1000:
+                continue #"1000" stands for beta, which has no distance dependence
+            signed_errors[geom_param] = []
+            signed_rel_errors[geom_param] = []
+            if data[molname][geom_param] > 0.1:
+                error = data[molname][geom_param] - ref_values[molname][geom_param]
+                rel_error = error/ref_values[molname][geom_param]
+                signed_errors[geom_param].append(error)
+                signed_rel_errors[geom_param].append(rel_error)
+    for geom_param in sorted(signed_errors):
+        fw.write("%.1f A:\n" %geom_param)
+        SE = np.array(signed_errors[geom_param])
+        SRE = np.array(signed_rel_errors[geom_param])
+        MSE = np.average(SE)
+        MRSE = np.average(SRE)
+        MUE = np.average(np.absolute(SE))
+        MRUE = np.average(np.absolute(SRE))
+        fw.write("MSE,%.2f\nMUE,%.2f\nMRSE,%.3f\nMRUE,%.3f\n" %(MSE, MUE, MRSE, MRUE))
+        fw.write('\n')
+
+
+def summarize_errors():
+    csvfile_list = glob.glob('*.csv')
+    summary_file = 'summary.csv'
+    fw = open(summary_file, 'w')
+    for csvfile in csvfile_list:
+        if "summary" in csvfile:
+            continue
+        method = re.search('(\S+).csv', csvfile).group(1)
+        fw.write(method+'\n')
+        fr = open(csvfile, 'r')
+        do_copy = False
+        for line in fr.readlines():
+            if "errors" in line:
+                do_copy = True
+            if (do_copy):
+                fw.write(line)
+        fr.close()
+        fw.write('\n')
+    fw.close()
+     
+
+#the main script
+options, args = ParseInput(sys.argv)
+result_dir = None
+if len(args) > 1:
+   result_dir = args[1]
+   if result_dir[-1:]!='/':
+      result_dir += '/'
+outdir_list = []
+if options.all:
+   outdir_list = glob.glob(result_dir+'*/')
+elif options.keyword!=None:
+   outdir_list = glob.glob(result_dir+'*'+options.keyword+'*/')
+if options.target!=None:
+   for target_dir in options.target:
+      if target_dir not in outdir_list:
+         outdir_list.append(target_dir)
+print "parse the following output dirs:"
+print outdir_list
+curdir = os.getcwd()
+for outdir in outdir_list:
+   os.chdir(outdir)
+   parse_single_dir(options)
+   os.chdir(curdir)
