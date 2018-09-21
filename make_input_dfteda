@@ -21,6 +21,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--bsse',dest='bsse',action='store_true',default=False,help='set EDA_BSSE to true')
    parser.add_option('--skip_ortho_decomp', dest='skip_ortho_decomp',action='store_true',default=False,help='skip the orthogonal decomposition of frozen interaction')
    parser.add_option('--dfxc',dest='dfxc',action='store',type='string',default=None, help='choose the DFXC to use')
+   parser.add_option('--rehyb',dest='rehyb',action='store_true',default=False,help='do fragment spin alignment and calculate E_rehyb')
    parser.add_option('--mbe',dest='mbe',action='store_true',default=False,help='do many body expansion (limited to 3-body systems for now)')
    parser.add_option('--snap_range', dest='snap_range', action='callback', type='string', default=None, callback=string_sp_callback, help='Only run snapshots in the given range')
    options, args = parser.parse_args(ArgsIn)

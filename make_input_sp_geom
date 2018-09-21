@@ -11,6 +11,7 @@ def ParseInput(ArgsIn):
    make_input_sp_geom [options] [xyz_path]
    '''
    parser = OptionParser(usage=UseMsg)
+   parser.add_option('--opt',dest='opt',action='store_true',default=False,help='doing geom opt instead of single-point energy')
    parser.add_option('-a','--all',dest='all',action='store_true',default=False,help='run all the xyz files under the xyz_path')
    parser.add_option('-k','--keyword',dest='keyword',action='store',type='string',default=None,help='create inputs for xyz files containing the keyword')
    parser.add_option('-t','--target',dest='target',action='callback',callback=string_sp_callback,type='string',default=None,help='create input for certain xyz files')
@@ -19,7 +20,8 @@ def ParseInput(ArgsIn):
    parser.add_option('-i','--input_path',dest='input_path',action='store',type='string', default='input/',help='The directory storing the generated inputs')
    parser.add_option('--charge',dest='charge',action='store',type='int',default=0,help='total charge of the system')
    parser.add_option('--mult',dest='mult',action='store',type='int',default=1,help='total multiplicity of the system') 
-   parser.add_option('--opt',dest='opt',action='store_true',default=False,help='doing geom opt instead of single-point energy')
+   parser.add_option('--sol',dest='sol',action='store',type='string',default=None,help='specify the solvent model to use')
+   parser.add_option('--sol_file', dest='sol_file', action='store', type='string', default=None, help='file for the solvent model input section')
 
    options, args = parser.parse_args(ArgsIn)
    if len(args) < 2 and (options.all or options.keyword!=None):
@@ -29,7 +31,9 @@ def ParseInput(ArgsIn):
       print "The target directory must be specified: one or some or all"
       parser.print_help()
       sys.exit(1)
-
+   if options.sol_file != None and options.sol == None:
+      print "Solvent method must be specified when sol_file is given"
+      sys.exit(0)
    return options, args
 
 def string_sp_callback(option, opt, value, parser):
@@ -38,6 +42,12 @@ def string_sp_callback(option, opt, value, parser):
 def XYZ_to_Input(fw, XYZ, curREM, options):
    qmol.WriteMolecule(fw, XYZ, options.charge, options.mult)
    qrems.AppendRem(fw, curREM)
+   if options.sol_file != None:
+      if not os.path.exists(options.sol_file):
+         print "specified pcm file does not exist"
+         sys.exit(0)
+      else:
+         qrems.copy_section_over(fw, options.sol_file)
 
 options, args = ParseInput(sys.argv)
 xyz_path =''
@@ -69,6 +79,9 @@ rem_file = os.path.expandvars('$QREMPATH')+'/rem_stdscf'
 myrems = qrems.ParseRems(rem_file)
 if options.opt:
    qrems.ModRem('JOBTYPE', 'OPT', myrems)
+if options.sol != None:
+   qrems.ModRem('SOLVENT_METHOD', options.sol, myrems)
+
 for method in options.method:
    for basis in options.basis:
       qrems.set_rems_common(myrems, method, basis)
