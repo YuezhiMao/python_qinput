@@ -1,0 +1,16 @@
+$rem
+jobtype sp
+method  cam-b3lyp
+basis   6-31g(d)
+unrestricted true
+max_scf_cycles 100
+scf_algorithm diis
+scf_convergence 8
+thresh 14
+symmetry false
+sym_ignore true
+scf_final_print 1
+cdftci true
+cdftci_print 2
+cdft_thresh 7
+$end

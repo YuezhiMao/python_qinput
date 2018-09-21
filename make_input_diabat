@@ -50,15 +50,76 @@ def Append_Dev_Section(fw, options):
         fw.write('electron_transfer 1\n')
     fw.write('$end\n')
 
+def Append_CDFT_Section(fw, FRGM, do_ET): 
+    #Note: CDFT jobs use the same frgm files as FODFT(2n-1)@D^+A
+    #      or FODFT(2n+1)@D^-A
+    #Focus on constraints on fragment 1
+    fw.write('\n')
+    fw.write('$cdft\n')
+    if not do_ET: 
+        #D^+A
+        fw.write('-1.0\n')
+        fw.write('1.0  1  %d\n' %FRGM.natoms_frgm[0])
+        fw.write('1.0\n')
+        fw.write('1.0  1  %d  s\n' %FRGM.natoms_frgm[0])
+        fw.write('----------\n')
+        #DA^+
+        fw.write('0.0\n')
+        fw.write('1.0  1  %d\n' %FRGM.natoms_frgm[0])
+        fw.write('0.0\n')
+        fw.write('1.0  1  %d  s\n' %FRGM.natoms_frgm[0])
+    else:
+        #D^-A
+        fw.write('1.0\n')
+        fw.write('1.0  1  %d\n' %FRGM.natoms_frgm[0])
+        fw.write('1.0\n')
+        fw.write('1.0  1  %d  s\n' %FRGM.natoms_frgm[0])
+        fw.write('----------\n')
+        #DA^+
+        fw.write('0.0\n')
+        fw.write('1.0  1  %d\n' %FRGM.natoms_frgm[0])
+        fw.write('0.0\n')
+        fw.write('1.0  1  %d  s\n' %FRGM.natoms_frgm[0])
+    fw.write('$end\n\n')
+
 def XYZ_to_Input(fw, XYZ, FRGM, curREM, options):
-    qmol.WriteMolecule_Frgm(fw, XYZ, FRGM)
-    qrems.AppendRem(fw, curREM)
-    Append_Dev_Section(fw, options)
+    if options.diabat.upper() == "CDFT":
+        qmol.WriteMolecule(fw, XYZ, FRGM.total_charge, FRGM.total_mult)
+        qrems.ModRem('UNRESTRICTED', 'TRUE', curREM)
+        qrems.AppendRem(fw, curREM)
+        Append_CDFT_Section(fw, FRGM, options.do_ET)
+    else:
+        qmol.WriteMolecule_Frgm(fw, XYZ, FRGM)
+        qrems.AppendRem(fw, curREM)
+        Append_Dev_Section(fw, options)
+
      
 def locate_frgm_file(xyz_file, frgm_dir):
     nameroot = re.search('/([^/]+)_dist', xyz_file).group(1)
     return frgm_dir+nameroot+'.frgm'
     
+def add_diabat_scheme_to_inputname(inputname, options):
+    if options.diabat.upper() == 'POD':
+        inputname += '_pod_'
+    elif options.diabat.upper() == 'ESID':
+        inputname += '_esid_'
+    elif options.diabat.upper() == 'CDFT':
+        inputname += '_cdft_'
+    elif options.diabat.upper() == 'FODFT':
+        if options.fodft_method == 1:
+            if options.do_ET:
+                inputname += '_fodft2n+1_'
+            else:
+                inputname += '_fodft2n-1_'
+        elif options.fodft_method == 2:
+            inputname += '_fodft2n_'
+        elif options.fodft_method == 3:
+            if options.do_ET:
+                inputname += '_fodft-2n+1_'
+            else:
+                inputname += '_fodft+2n-1_'
+    return inputname
+
 #The script
 options, args = ParseInput(sys.argv)
 xyz_path = args[1]
@@ -79,7 +140,10 @@ if input_path[-1:] != '/':
 if not os.path.exists(input_path):
     sp.call(['mkdir', input_path])
 
-rem_file = os.path.expandvars('$QREMPATH')+'/'+'rem_stdscf'
+if options.diabat.upper() == 'CDFT':
+    rem_file = os.path.expandvars('$QREMPATH')+'/'+'rem_cdftci'
+else:
+    rem_file = os.path.expandvars('$QREMPATH')+'/'+'rem_stdscf'
 myrems = qrems.ParseRems(rem_file)
 for method in options.method:
     for basis in options.basis:
@@ -92,24 +156,9 @@ for method in options.method:
             if qmol.detect_unrestricted_frgm(FRGM):
                 qrems.ModRem('UNRESTRICTED', 'TRUE', myrems)
             inputfile = input_path+parsed_XYZ.Name
-            if options.diabat.upper() == 'POD':
-                inputfile += '_pod_'
-            elif options.diabat.upper() == 'ESID':
-                inputfile += '_esid_'
-            elif options.diabat.upper() == 'FODFT':
-                if options.fodft_method == 1:
-                    if options.do_ET:
-                        inputfile += '_fodft2n+1_'
-                    else:
-                        inputfile += '_fodft2n-1_'
-                elif options.fodft_method == 2:
-                    inputfile += '_fodft2n_'
-                elif options.fodft_method == 3:
-                    if options.do_ET:
-                        inputfile += '_fodft-2n+1_'
-                    else:
-                        inputfile += '_fodft+2n-1_'
+            inputfile = add_diabat_scheme_to_inputname(inputfile, options)
             inputfile += method + '_' + qrems.basis_abbr(basis)+'.in'
+            #print "generating "+inputfile
             fw = open(inputfile, 'w')
             XYZ_to_Input(fw, parsed_XYZ, FRGM, myrems, options)
             fw.close()

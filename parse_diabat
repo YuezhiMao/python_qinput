@@ -14,6 +14,8 @@ def ParseInput(ArgsIn):
     parser.add_option('-t','--target',dest='target',action='callback',callback=string_sp_callback,type='string',default=None,help='the output directories to parse (separated by \",\")')
     parser.add_option('-k','--keyword',dest='keyword',action='store',type='string',default=None,help='parse all the output dirs containing the keyword')
     parser.add_option('--ref',dest='ref',action='store',type='string',default=None,help='file containing ref data for error analysis')
+    parser.add_option('--set_dist',dest='set_dist',action='store_true',default=False,help='check the hard-coded distances')
+
 
     options, args = parser.parse_args(ArgsIn)
     if len(args) < 2:
@@ -55,6 +57,8 @@ def parse_single_dir(options):
             parse_esid_results(options)
         elif "fodft" in diabat_method:
             parse_fodft_results(diabat_method, options)
+        elif "cdft" in diabat_method:
+            parse_cdft_results(options)
         else:
             print "unknown diabat method"
             sys.exit(0)
@@ -123,6 +127,25 @@ def parse_fodft_results(fodft_method, options):
     result_file = fodft_method+'.csv'
     print_diabat_coupling_test_data(result_file, data, options)
 
+def parse_cdft_results(options):
+    tmpfile = 'cdft.tmp'
+    command = "grep \"Diabatic coupling between two states\" *cdft*.out > "+tmpfile
+    os.system(command)
+    fr = open(tmpfile, 'r')
+    data = {}
+    for line in fr.readlines():
+        l_sp = line.split()
+        nameparser = re.search('(\S+)_dist_(\S+)_cdft', l_sp[0])
+        molname = nameparser.group(1) 
+        if molname not in data:
+            data[molname] = {}
+        geom_param = float(nameparser.group(2))
+        coupling = float(re.search('\((\S+)', l_sp[-2]).group(1))
+        data[molname][geom_param] = coupling
+    fr.close()
+    sp.call(['rm', tmpfile])
+    result_file = 'cdft.csv'
+    print_diabat_coupling_test_data(result_file, data, options)
 
 def extract_beta(dist, Hab):
     X = np.vstack([np.ones(len(dist)), np.array(dist)]).T
@@ -137,20 +160,39 @@ def print_diabat_coupling_test_data(result_file, data, options):
         fw.write(molname+'\n')
         dist = []
         Hab = []
-        for geom_param in sorted(data[molname]):
-            if data[molname][geom_param] > 0.1: #prevent unrealistic small values
-                fw.write("%.2f,%.3f\n" %(geom_param, data[molname][geom_param]))
-                dist.append(geom_param)
-                Hab.append(data[molname][geom_param])
+        if not options.set_dist:
+            for geom_param in sorted(data[molname]):
+                if data[molname][geom_param] > 0.1: #prevent unrealistic small values
+                    fw.write("%.2f,%.3f\n" %(geom_param, data[molname][geom_param]))
+                    dist.append(geom_param)
+                    Hab.append(data[molname][geom_param])
+                else:
+                    fw.write("%.2f,NA\n" %geom_param)
+            if len(Hab) > 1:
+                beta = extract_beta(dist, Hab)
+                data[molname][1000] = beta #1000 is a placeholder
+                fw.write("beta,%.3f\n" %beta)
             else:
-                fw.write("%.2f,NA\n" %geom_param)
-        if len(Hab) > 1:
-            beta = extract_beta(dist, Hab)
-            data[molname][1000] = beta #1000 is a placeholder
-            fw.write("beta,%.3f\n" %beta)
+                data[molname][1000] = 0.0
+                fw.write("beta,NA\n")
         else:
-            data[molname][1000] = 0.0
-            fw.write("beta,NA\n")
+            geom_param_list = [3.5, 4.0, 4.5, 5.0]
+            for geom_param in sorted(geom_param_list):
+                if geom_param in data[molname] and data[molname][geom_param] > 0.1:
+                    fw.write("%.2f,%.3f\n" %(geom_param, data[molname][geom_param]))
+                    dist.append(geom_param)
+                    Hab.append(data[molname][geom_param])
+                else:
+                    #fill in the missing data (use -1.0 so error analysis is skipped)
+                    data[molname][geom_param] = -1.0
+                    fw.write("%.2f,NA\n" %geom_param)
+            if len(dist) < len(geom_param_list):
+                data[molname][1000] = 0.0
+                fw.write("beta,NA\n")
+            else:
+                beta = extract_beta(dist, Hab)
+                data[molname][1000] = beta
+                fw.write("beta,%.3f\n" %beta)
 
     if options.ref != None:
         #print "path for the ref file: "+options.ref
@@ -249,7 +291,6 @@ def perform_error_analysis_separate_dist(fw, data, ref_values):
         fw.write("MSE,%.2f\nMUE,%.2f\nMRSE,%.3f\nMRUE,%.3f\n" %(MSE, MUE, MRSE, MRUE))
         fw.write('\n')
 
-
 def summarize_errors():
     csvfile_list = glob.glob('*.csv')
     summary_file = 'summary.csv'
@@ -270,6 +311,21 @@ def summarize_errors():
         fw.write('\n')
     fw.close()
      
+def extract_csv(target_dir):
+    curdir = os.getcwd()
+    os.chdir(target_dir)
+    if os.path.exists("csvfiles"):
+        print "Previous csvfiles are removed"
+        os.system('rm -rf csvfiles')
+    outdir_list = glob.glob('*/')
+    sp.call(['mkdir', 'csvfiles'])
+    for outdir in outdir_list:
+        sp.call(['mkdir', 'csvfiles/'+outdir])
+        command = 'cp '+outdir+'*.csv '+'csvfiles/'+outdir
+        os.system(command)
+    os.chdir(curdir)
+
+
 
 #the main script
 options, args = ParseInput(sys.argv)
@@ -294,3 +350,5 @@ for outdir in outdir_list:
    os.chdir(outdir)
    parse_single_dir(options)
    os.chdir(curdir)
+
+extract_csv(result_dir)

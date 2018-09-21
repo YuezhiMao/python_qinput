@@ -19,3 +19,4 @@ for outdir in outdir_list:
     sp.call(['mkdir', 'csvfiles/'+outdir])
     command = 'cp '+outdir+'*.csv '+'csvfiles/'+outdir
     os.system(command)
+oc.chdir(curdir)
