@@ -49,6 +49,7 @@ def AppendRem(fh,MyREMS):
 
 def copy_section_over(fw, filename):
    fr = open(filename, 'r')
+   fw.write('\n')
    for line in fr.readlines():
       fw.write(line)
    fr.close()

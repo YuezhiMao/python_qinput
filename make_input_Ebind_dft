@@ -54,7 +54,7 @@ class XYZ:
          l = re.search('^\s*(\d+)\s*$', line)
          if l!=None:
             self.NAtom = int(l.group(1))
-         l = re.search('(\S+)\s+(\S+)\s+(\S+)\s+(\S+)', line)
+         l = re.search('^\*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*$', line)
          if l!=None:
             self.AtomList.append(l.group(1))
             coord = float(l.group(2)), float(l.group(3)), float(l.group(4))

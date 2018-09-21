@@ -217,6 +217,13 @@ def WriteMolecule_Read(fw):
    fw.write('read\n')
    fw.write('$end\n\n')
 
+def copy_section_over(fw, filename):
+   fr = open(filename, 'r')
+   fw.write('\n')
+   for line in fr.readlines():
+      fw.write(line)
+   fr.close()
+
 def basis_abbr(BasName):    #generating abbreviated name for basis sets, using for input file names
    fullname = BasName.lower()
    if fullname == 'cc-pvdz':
@@ -255,6 +262,8 @@ def basis_abbr(BasName):    #generating abbreviated name for basis sets, using f
       return 'tp' 
    elif fullname == 'lp':
       return 'lp'
+   elif fullname == 'gen':
+      return 'gen'
    else:
       print "unrecognized basis choice"
       sys.exit(1)
@@ -345,7 +354,7 @@ def add_aux_basis(basis, curREM):
    else:
       print "No corresponding auxiliary basis for "+basis
 
-def XYZ_to_Input(fw, XYZ, FRGM, curREM, read_mol=False, do_freq=False, do_ferf=False):
+def XYZ_to_Input(fw, XYZ, FRGM, curREM, read_mol=False, do_freq=False, do_ferf=False, genbas=False):
    #print "generate %s" %inputfile
    #check if unrestricted (any open-shell fragment?)
    unrestricted=False
@@ -363,7 +372,10 @@ def XYZ_to_Input(fw, XYZ, FRGM, curREM, read_mol=False, do_freq=False, do_ferf=F
       WriteMolecule_Frgm(fw, XYZ, FRGM)
    else:
       WriteMolecule_Read(fw) 
+
    AppendRem(fw, curREM)
+   if genbas:
+      copy_section_over(fw, 'genbas')
 
    #if frequency is desired, append a second job
    if do_freq:
@@ -372,23 +384,26 @@ def XYZ_to_Input(fw, XYZ, FRGM, curREM, read_mol=False, do_freq=False, do_ferf=F
       #Use the current rem but modify the jobtype to freq
       ModRem('JOBTYPE', 'FREQ', curREM)
       AppendRem(fw, curREM)
+      if genbas:
+         copy_section_over(fw, 'genbas')
 
 #Generate an integrated adiabatic EDA job
 def XYZ_to_Input_Integrated(fw, XYZ, FRGM, method, basis, options):
+   use_genbas = basis.lower() == 'gen'
    #Fully relaxed PES first 
    curREM = ParseRems('rems/rem_scfgeom')
    set_common_rems(curREM, method, basis, options)
-   XYZ_to_Input(fw, XYZ, FRGM, curREM, read_mol=False, do_freq=options.do_freq)
+   XYZ_to_Input(fw, XYZ, FRGM, curREM, read_mol=False, do_freq=options.do_freq, genbas=use_genbas)
    fw.write('\n@@@\n\n')
    #Polarized PES
    curREM = ParseRems('rems/rem_polgeom')
    set_common_rems(curREM, method, basis, options)
-   XYZ_to_Input(fw, XYZ, FRGM, curREM, read_mol=True, do_freq=options.do_freq, do_ferf=options.do_ferf)
+   XYZ_to_Input(fw, XYZ, FRGM, curREM, read_mol=True, do_freq=options.do_freq, do_ferf=options.do_ferf, genbas=use_genbas)
    fw.write('\n@@@\n\n')
    #Frozen PES
    curREM = ParseRems('rems/rem_frzgeom')
    set_common_rems(curREM, method, basis, options)
-   XYZ_to_Input(fw, XYZ, FRGM, curREM, read_mol=True, do_freq=options.do_freq)
+   XYZ_to_Input(fw, XYZ, FRGM, curREM, read_mol=True, do_freq=options.do_freq, genbas=use_genbas)
 
 #the script
 options, args = ParseInput(sys.argv)
@@ -452,7 +467,7 @@ for method in options.method:
             fw = open(inputfile, 'w')
             curREM = ParseRems('rems/rem_frzgeom')
             set_common_rems(curREM, method, basis, options)
-            XYZ_to_Input(fw, parsed_XYZ, FRGM, curREM, do_freq=options.do_freq)
+            XYZ_to_Input(fw, parsed_XYZ, FRGM, curREM, do_freq=options.do_freq, genbas=(basis.lower()=='gen'))
             fw.close()
 
          elif options.pestype.lower()=='pol' or options.pestype.lower()=='polarized': #separated calculation on the polarized PES
@@ -476,7 +491,7 @@ for method in options.method:
             fw = open(inputfile, 'w')
             curREM = ParseRems('rems/rem_polgeom')
             set_common_rems(curREM, method, basis, options)
-            XYZ_to_Input(fw, parsed_XYZ, FRGM, curREM, do_freq=options.do_freq, do_ferf=options.do_ferf)
+            XYZ_to_Input(fw, parsed_XYZ, FRGM, curREM, do_freq=options.do_freq, do_ferf=options.do_ferf, genbas=(basis.lower()=='gen'))
             fw.close()
             
          elif options.pestype.lower()=='scf' or options.pestype.lower()=='full': #separated calculation on the fully relaxed PES
@@ -489,7 +504,7 @@ for method in options.method:
             fw = open(inputfile, 'w')
             curREM = ParseRems('rems/rem_scfgeom')
             set_common_rems(curREM, method, basis, options)
-            XYZ_to_Input(fw, parsed_XYZ, FRGM, curREM, do_freq=options.do_freq)
+            XYZ_to_Input(fw, parsed_XYZ, FRGM, curREM, do_freq=options.do_freq, genbas=(basis.lower()=='gen'))
             fw.close()
 
          else:
