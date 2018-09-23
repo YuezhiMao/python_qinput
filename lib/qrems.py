@@ -2,7 +2,7 @@ import os, glob, re, sys
 import subprocess as sp
 import numpy as np
 
-def ParseRems(RemFile):
+def ParseRems(RemFile, do_rem_frgm=False):
    f = open(RemFile,'r')
    REMS = {}
    REMS["name"] = RemFile[4:]
@@ -10,7 +10,7 @@ def ParseRems(RemFile):
    currem = 0
    REMS["the_rem"] = {}
    line = f.readline()
-   while line!='':
+   while not re.search('end', line):
       l=re.search("(\S+)\s+(\S+)",line) #rem and value
       if (not l==None):
          REMS["the_rem"][str(currem)] = {}
@@ -19,6 +19,21 @@ def ParseRems(RemFile):
          currem += 1
          REMS["nrems"] = currem
       line = f.readline()
+   if do_rem_frgm:
+      #then, parse the rem_frgm section
+      currem_frgm = 0
+      REMS["nrems_frgm"] = 0
+      REMS["rem_frgm"] = {}
+      line = f.readline()
+      while not re.search('end',line):
+         l=re.search("(\S+)\s+(\S+)",line) #rem and value
+         if (not l==None):
+            REMS["rem_frgm"][str(currem_frgm)] = {}
+            REMS["rem_frgm"][str(currem_frgm)]["name"] = l.group(1).upper()
+            REMS["rem_frgm"][str(currem_frgm)]["value"] = l.group(2).upper()
+            currem_frgm += 1
+            REMS["nrems_frgm"] = currem_frgm
+         line = f.readline()
    f.close()
    return REMS
 
@@ -40,10 +55,34 @@ def ModRem(r_name,r_value,MyREMS):
       MyREMS["nrems"] = currem + 1
    return
 
+def ModRem_Frgm(r_name, r_value, MyREMS):
+   REM_NAME = r_name.upper()
+   REM_VALUE = r_value.upper()
+   done = False
+   for rem_frgm in range(MyREMS["nrems_frgm"]):
+      if (MyREMS["rem_frgm"][str(rem_frgm)]["name"] == REM_NAME):
+	     #found in the rem already set up
+         MyREMS["rem_frgm"][str(rem_frgm)]["value"] = REM_VALUE
+         done = True
+   if (not done):	#not find, add this new rem
+      currem_frgm = MyREMS["nrems_frgm"]
+      MyREMS["rem_frgm"][str(currem_frgm)] = {}
+      MyREMS["rem_frgm"][str(currem_frgm)]["name"] = REM_NAME
+      MyREMS["rem_frgm"][str(currem_frgm)]["value"] = REM_VALUE
+      MyREMS["nrems_frgm"] = currem_frgm + 1
+
+
 def AppendRem(fh,MyREMS):
    fh.write('$rem\n')
    for rem in range(MyREMS["nrems"]):
       fh.write(MyREMS["the_rem"][str(rem)]["name"]+'  '+MyREMS["the_rem"][str(rem)]["value"]+'\n')
+   fh.write('$end\n')
+   return
+
+def AppendRemFrgm(fh,MyREMS):
+   fh.write('\n$rem_frgm\n')
+   for rem_frgm in range(MyREMS["nrems_frgm"]):
+      fh.write(MyREMS["rem_frgm"][str(rem_frgm)]["name"]+'  '+ MyREMS["rem_frgm"][str(rem_frgm)]["value"]+'\n')
    fh.write('$end\n')
    return
 
@@ -68,14 +107,24 @@ def basis_abbr(BasName):    #generating abbreviated name for basis sets, using f
       return 'atz'
    elif fullname == 'aug-cc-pvqz':
       return 'aqz'
+   elif fullname == 'def2-svp' or fullname == 'svp':
+      return 'svp'
    elif fullname == 'def2-svpd' or fullname == 'svpd':
       return 'svpd'
+   elif fullname == 'def2-tzvp' or fullname == 'tzvp':
+      return 'tzvp'
    elif fullname == 'def2-tzvpp' or fullname == 'tzvpp':
       return 'tzvpp'
+   elif fullname == 'def2-tzvpd' or fullname == 'tzvpd':
+      return 'tzvpd'
    elif fullname == 'def2-tzvppd' or fullname == 'tzvppd':
       return 'tzvppd'
+   elif fullname == 'def2-qzvp' or fullname == 'qzvp':
+      return 'qzvp'
    elif fullname == 'def2-qzvpp' or fullname == 'qzvpp':
       return 'qzvpp'
+   elif fullname == 'def2-qzvpd' or fullname == 'qzvpd':
+      return 'qzvpd'
    elif fullname == 'def2-qzvppd' or fullname == 'qzvppd':
       return 'qzvppd'
    elif fullname == 'pc-2':
@@ -97,14 +146,24 @@ def basis_abbr(BasName):    #generating abbreviated name for basis sets, using f
       sys.exit(1)
 
 def set_rems_common(curREM, method, basis):
-   if basis.upper() == 'SVPD':
+   if basis.upper() == 'SVP':
+      ModRem('BASIS','DEF2-SVP',curREM)
+   elif basis.upper() == 'SVPD':
       ModRem('BASIS','DEF2-SVPD',curREM)
+   elif basis.upper() == 'TZVP':
+      ModRem('BASIS', 'DEF2-TZVP', curREM)
    elif basis.upper() == 'TZVPP':
       ModRem('BASIS','DEF2-TZVPP',curREM)
+   elif basis.upper() == 'TZVPD':
+      ModRem('BASIS','DEF2-TZVPD',curREM)
    elif basis.upper() == 'TZVPPD':
       ModRem('BASIS','DEF2-TZVPPD',curREM)
+   elif basis.upper() == 'QZVP':
+      ModRem('BASIS','DEF2-QZVP',curREM)
    elif basis.upper() == 'QZVPP':
       ModRem('BASIS','DEF2-QZVPP',curREM)
+   elif basis.upper() == 'QZVPD':
+      ModRem('BASIS','DEF2-QZVPD',curREM)
    elif basis.upper() == 'QZVPPD':
       ModRem('BASIS','DEF2-QZVPPD',curREM)
    elif basis.upper() == 'DP': #double-zeta Pople: 6-31+G(d)
@@ -141,3 +200,19 @@ def add_d3_tail(method, curREM):
       ModRem('DFT_D', 'D3_CSO', curREM)
    else:
       ModRem('DFT_D', 'EMPIRICAL_GRIMME3', curREM)
+
+def add_aux_basis(basis, curREM):
+   if basis.upper() == 'CC-PVTZ':
+      ModRem('AUX_BASIS', 'RIMP2-CC-PVTZ', curREM)
+   elif basis.upper() == 'AUG-CC-PVTZ':
+      ModRem('AUX_BASIS', 'RIMP2-AUG-CC-PVTZ', curREM)
+   elif basis.upper() == 'CC-PVDZ':
+      ModRem('AUX_BASIS', 'RIMP2-CC-PVDZ', curREM)
+   elif basis.upper() == 'AUG-CC-PVDZ':
+      ModRem('AUX_BASIS', 'RIMP2-AUG-CC-PVDZ', curREM)
+   elif basis.upper() == 'CC-PVQZ':
+      ModRem('AUX_BASIS', 'RIMP2-CC-PVQZ', curREM)
+   elif basis.upper() == 'AUG-CC-PVQZ':
+      ModRem('AUX_BASIS', 'RIMP2-AUG-CC-PVQZ', curREM)
+   else:
+      print "No corresponding auxiliary basis for "+basis+" yet"

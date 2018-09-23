@@ -99,6 +99,41 @@ def WriteMolecule_Frgm(fw, XYZ, FRGM):
    fw.write('$end\n')
    fw.write('\n')
 
+def WriteMolecule_supersub(fw, XYZ, FRGM, monomer=0, ghost=False):
+   fw.write('$molecule\n')
+   if monomer == 0:   #supersystem
+      if ghost:
+         print "Can't add ghost atoms for the supersystem calculation"
+         sys.exit(0)
+      else:
+         fw.write("%d %d\n" %(FRGM.total_charge, FRGM.total_mult))
+         for index in range(0, XYZ.NAtom):
+            atomic_symbol = XYZ.AtomList[index]
+            x, y, z = XYZ.CoordList[index]
+            fw.write("%-4s %-10.5f %-10.5f %-10.5f\n" %(atomic_symbol, x, y, z)) 
+   else:   #monomer job
+      index_frgm = monomer - 1   #start from zero
+      index_start = FRGM.atoms_offset[index_frgm]
+      index_end = index_start+FRGM.natoms_frgm[index_frgm]
+      fw.write("%d %d\n" %(FRGM.charge_frgm[index_frgm], FRGM.mult_frgm[index_frgm]))
+      if not ghost:   #isolated monomer
+         for index in range(index_start, index_end):
+            atomic_symbol = XYZ.AtomList[index]
+            x, y, z = XYZ.CoordList[index]
+            fw.write("%-4s %-10.5f %-10.5f %-10.5f\n" %(atomic_symbol, x, y, z)) 
+
+      else:  #monomer with ghost
+         for index in range(0, XYZ.NAtom):
+            atomic_symbol = XYZ.AtomList[index]
+            x, y, z = XYZ.CoordList[index]
+            if index in range(index_start, index_end):
+               fw.write("%-4s %-10.5f %-10.5f %-10.5f\n" %(atomic_symbol, x, y, z)) 
+            else:  #ghost atoms
+               fw.write("@%-4s %-10.5f %-10.5f %-10.5f\n" %(atomic_symbol, x, y, z)) 
+   fw.write("$end\n")
+   fw.write("\n")
+
+
 def WriteMolecule_Read(fw):
    fw.write('$molecule\n')
    fw.write('read\n')

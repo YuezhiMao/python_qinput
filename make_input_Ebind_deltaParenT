@@ -4,10 +4,11 @@ import os, glob, re, sys
 import subprocess as sp
 import numpy as np
 from optparse import OptionParser
+import qrems, qmol
 
 def ParseInput(ArgsIn):
    UseMsg = '''
-   python make_input_E_bind_deltaParenT.py [options] [xyz_path] [rem_file] [frgm_partition]
+   python make_input_E_bind_deltaParenT.py [options] [xyz_path] [frgm_partition]
    ''' 
    parser = OptionParser(usage=UseMsg)
    parser.add_option('-a','--all',dest='all',action='store_true',default=False,help='run all the xyz files under the xyz_path')
@@ -15,10 +16,11 @@ def ParseInput(ArgsIn):
    parser.add_option('-t','--target',dest='target',action='callback',callback=string_sp_callback_space,type='string',default=None,help='create input for certain xyz files')
    parser.add_option('--nocp',dest='nocp',action='store_true',default=False,help='skip counterpoise corrections')
    parser.add_option('--fc',dest='fc',action='store_true',default=False,help='frozen core approximation')
+   parser.add_option('--onsite',dest='onsite',action='store_true',default=False,help='frgm file and xyz file under the same dir and sharing the same nameroot')
    parser.add_option('-i','--input_path',dest='input_path',action='store',type='string', default='input/',help='The directory storing the generated inputs')
    options, args = parser.parse_args(ArgsIn)
 
-   if len(args) < 4:
+   if len(args) < 3:
       parser.print_help()
       sys.exit(1)
 
@@ -39,145 +41,14 @@ def string_sp_callback(option, opt, value, parser):
 def string_sp_callback_space(option, opt, value, parser):
    setattr(parser.values, option.dest, value.split(' '))
 
-class XYZ:
-   def __init__(self, xyz_file):
-      self.Name = re.search("/([^/]+).xyz$", xyz_file).group(1)
-      print self.Name
-      f = open(xyz_file, 'r')
-      self.AtomList = []
-      self.CoordList = []
-      for line in f.readlines():
-         l = re.search('^\s*(\d+)\s*$', line)
-         if l!=None:
-            self.NAtom = int(l.group(1))
-         l = re.search('(\S+)\s+(\S+)\s+(\S+)\s+(\S+)', line)
-         if l!=None:
-            self.AtomList.append(l.group(1))
-            coord = float(l.group(2)), float(l.group(3)), float(l.group(4))
-            self.CoordList.append(coord)
-
-      if(len(self.AtomList)!=self.NAtom):
-         print "Error in number of atoms"
-         sys.exit(1)
-
-
-def ParseFRGM(FRGMFile, debug = False):
-   FRGM = {}
-   counter = 0
-   f = open(FRGMFile,'r')
-   line = f.readline()
-   while line!='':
-      l=re.search("(\#)",line) 
-      if (l==None):
-         counter = counter + 1
-         if counter == 1:
-            l=re.search("(\S+)",line) 
-            if (not l==None):
-               FRGM["total_charge"] = int(l.group(1)) 
-               if debug:
-                  print "supersystem charge is "+ str(FRGM["total_charge"])
-            else:
-               print "error parsing frgm file"
-         if counter == 2:
-            l=re.search("(\S+)",line) 
-            if (not l==None):
-               FRGM["total_mult"] = int(l.group(1)) 
-               if debug:
-                  print "supersystem multiplicity is "+ str(FRGM["total_mult"])
-            else:
-               print "error parsing frgm file"
-         if counter == 3:
-            l=re.search("(\S+)",line) 
-            if (not l==None):
-               FRGM["charge_frgm"] = [int(i) for i in line.split()]
-               if debug:
-                  print "printing fragment charges"
-                  print FRGM["charge_frgm"]
-            else:
-               print "error parsing frgm file"
-         if counter == 4:
-            l=re.search("(\S+)",line) 
-            if (not l==None):
-               FRGM["mult_frgm"] = [int(i) for i in line.split()]
-               if debug:
-                  print "printing fragment multiplicites"
-                  print FRGM["mult_frgm"]
-            else:
-               print "error parsing frgm file"
-         if counter == 5:
-            l=re.search("(\S+)",line) 
-            if (not l==None):
-               FRGM["atoms_frgm"] = [int(i) for i in line.split()]
-               if debug:
-                  print "printing number of atoms in each fragment"
-                  print FRGM["atoms_frgm"]
-            else:
-               print "error parsing frgm file"
-            #make a list for number of atoms prior to each fragment (offset)
-            FRGM["NFrgm"] = len(FRGM["atoms_frgm"])
-            FRGM["atoms_offset"] = np.zeros(FRGM["NFrgm"],dtype=int)
-            offset = 0
-            for index in range(0,FRGM["NFrgm"]):
-               FRGM["atoms_offset"][index] = offset
-               offset += FRGM["atoms_frgm"][index]
-      line = f.readline()
-   if counter != 5:
-      print "did not parse the expected number of lines in "+FRGMFile 
-   return FRGM
-
-def ParseRems(RemFile):
-   f = open(RemFile,'r')
-   REMS = {}
-   REMS["name"] = RemFile[4:]
-   REMS["nrems"] = 0
-   currem = 0
-   REMS["the_rem"] = {}
-   line = f.readline()
-   while line!='':
-      l=re.search("(\S+)\s+(\S+)",line) #rem and value
-      if (not l==None):
-         REMS["the_rem"][str(currem)] = {}
-         REMS["the_rem"][str(currem)]["name"] = l.group(1).upper()
-         REMS["the_rem"][str(currem)]["value"] = l.group(2).upper()
-         currem += 1
-         REMS["nrems"] = currem
-      line = f.readline()
-   f.close()
-   return REMS
-
-def ModRem(r_name,r_value,MyREMS):
-	#see if the rem is already set
-   REM_NAME = r_name.upper()
-   REM_VALUE = r_value.upper()
-   done = False
-   for rem in range(MyREMS["nrems"]):
-      if (MyREMS["the_rem"][str(rem)]["name"] == REM_NAME):
-	#found in the rem already set up
-         MyREMS["the_rem"][str(rem)]["value"] = REM_VALUE
-         done = True
-   if (not done):	#not find, add this new rem
-      currem = MyREMS["nrems"]
-      MyREMS["the_rem"][str(currem)] = {}
-      MyREMS["the_rem"][str(currem)]["name"] = REM_NAME
-      MyREMS["the_rem"][str(currem)]["value"] = REM_VALUE
-      MyREMS["nrems"] = currem + 1
-   return
-
-def AppendRem(fh,MyREMS):
-   fh.write('$rem\n')
-   for rem in range(MyREMS["nrems"]):
-      fh.write(MyREMS["the_rem"][str(rem)]["name"]+'  '+MyREMS["the_rem"][str(rem)]["value"]+'\n')
-   fh.write('$end\n')
-   return
-
 def AppendBasis(fh, corr):
+   #this function works for hard-coded correlation method list and hard-coded basis files
+   #TODO: make this more flexible
    basisfile = ''
    if corr.upper() == 'MP2':
-      basisfile = 'basis/6zfull.bas'
-      #basisfile = 'basis/aCV5Z.bas' 
+      basisfile = 'basis/aCV5Z.bas' 
    elif corr.upper() == 'CCSD(T)':
-      basisfile = 'basis/5zfull.bas'
-      #basisfile = 'basis/aCVQZ.bas'
+      basisfile = 'basis/aCVQZ.bas'
    else:
       print "Unknown correlation method"
       sys.exit(1)
@@ -188,82 +59,7 @@ def AppendBasis(fh, corr):
    fh.write('$end\n')
    fr.close()
 
-
-def WriteMolecule(fw, XYZ, FRGM, monomer=0, ghost=False):
-   fw.write('$molecule\n')
-   if monomer == 0:   #supersystem
-      if ghost:
-         print "Can't add ghost atoms for the supersystem calculation"
-         sys.exit(0)
-      else:
-         fw.write("%d %d\n" %(FRGM["total_charge"], FRGM["total_mult"]))
-         for index in range(0, XYZ.NAtom):
-            atomic_symbol = XYZ.AtomList[index]
-            x, y, z = XYZ.CoordList[index]
-            fw.write("%-4s %-10.5f %-10.5f %-10.5f\n" %(atomic_symbol, x, y, z))
-   else:   #monomer job
-      index_frgm = monomer - 1   #start from zero
-      index_start = FRGM["atoms_offset"][index_frgm]
-      index_end = index_start+FRGM["atoms_frgm"][index_frgm]
-      fw.write("%d %d\n" %(FRGM["charge_frgm"][index_frgm], FRGM["mult_frgm"][index_frgm]))
-      if not ghost:   #isolated monomer
-         for index in range(index_start, index_end):
-            atomic_symbol = XYZ.AtomList[index]
-            x, y, z = XYZ.CoordList[index]
-            fw.write("%-4s %-10.5f %-10.5f %-10.5f\n" %(atomic_symbol, x, y, z))
-
-      else:  #monomer with ghost
-         for index in range(0, XYZ.NAtom):
-            atomic_symbol = XYZ.AtomList[index]
-            x, y, z = XYZ.CoordList[index]
-            if index in range(index_start, index_end):
-               fw.write("%-4s %-10.5f %-10.5f %-10.5f\n" %(atomic_symbol, x, y, z))
-            else:  #ghost atoms
-               fw.write("@%-4s %-10.5f %-10.5f %-10.5f\n" %(atomic_symbol, x, y, z))
-   fw.write("$end\n")
-   fw.write("\n")
-
-def basis_abbr(BasName):    #generating abbreviated name for basis sets, using for input file names
-   fullname = BasName.lower()
-   if fullname == 'cc-pvdz':
-      return 'dz'
-   elif fullname == 'cc-pvtz':
-      return 'tz'
-   elif fullname == 'cc-pvqz':
-      return 'qz'
-   elif fullname == 'aug-cc-pvdz':
-      return 'adz'
-   elif fullname == 'aug-cc-pvtz':
-      return 'atz'
-   elif fullname == 'aug-cc-pvqz':
-      return 'aqz'
-   elif fullname == 'def2-tzvpp' or fullname == 'tzvpp':
-      return 'tzvpp'
-   elif fullname == 'def2-tzvppd' or fullname == 'tzvppd':
-      return 'tzvppd'
-   elif fullname == 'def2-qzvpp' or fullname == 'qzvpp':
-      return 'qzvpp'
-   elif fullname == 'def2-qzvppd' or fullname == 'qzvppd':
-      return 'qzvppd'
-   elif fullname == 'pc-2':
-      return 'pc2'
-   elif fullname == 'pc-3':
-      return 'pc3'
-   elif fullname == 'aug-pc-2':
-      return 'apc2'
-   elif fullname == 'aug-pc-3':
-      return 'apc3'
-   elif fullname == 'dp':
-      return 'dp'
-   elif fullname == 'tp':
-      return 'tp' 
-   elif fullname == 'lp':
-      return 'lp'
-   else:
-      print "unrecognized basis choice"
-      sys.exit(1)
-
-def Set_rems_common(curREM, corr, fc=False):
+def set_rems_posthf(curREM, corr, fc=False):
    ModRem('MEM_TOTAL', '12000', curREM)
    ModRem('MEM_STATIC','8000', curREM)
    ModRem('SCF_GUESS', 'SAD', curREM)
@@ -279,45 +75,49 @@ def Set_rems_common(curREM, corr, fc=False):
       ModRem('CORRELATION', 'MP2', curREM) 
       ModRem('AO2MO_DISK', '100000', curREM)
    
-def XYZ_to_Input(XYZ, inputfile, FRGM, curREM, doCP, corr, fc):
-   fw = open(inputfile, 'w')
+def XYZ_to_Input(fw, XYZ, FRGM, curREM, doCP, corr, fc):
    #write isolated frgm jobs 
    #Order: Frag A, Frag A (with ghost); Frag B, Frag B (with ghost)
-   for index_frgm in range(0,FRGM["NFrgm"]):
-      if FRGM["mult_frgm"][index_frgm] > 1:
-         ModRem('UNRESTRICTED','TRUE',curREM)
+   for index_frgm in range(0,FRGM.n_frgm):
+      if FRGM.mult_frgm[index_frgm] > 1:
+         qrems.ModRem('UNRESTRICTED','TRUE',curREM)
       else:
-         ModRem('UNRESTRICTED','FALSE',curREM)
-      WriteMolecule(fw, XYZ, FRGM, index_frgm+1)
-      AppendRem(fw, curREM)
+         qrems.ModRem('UNRESTRICTED','FALSE',curREM)
+      qmol.WriteMolecule_supersub(fw, XYZ, FRGM, index_frgm+1)
+      qrems.AppendRem(fw, curREM)
       if not fc:
          AppendBasis(fw, corr)
       fw.write('\n@@@\n')
       if doCP:  #do CP correction
-         WriteMolecule(fw, XYZ, FRGM, index_frgm+1,ghost=True)
-         AppendRem(fw, curREM)
+         qmol.WriteMolecule_supersub(fw, XYZ, FRGM, index_frgm+1,ghost=True)
+         qrems.AppendRem(fw, curREM)
          if not fc:
             AppendBasis(fw, corr)
          fw.write('\n@@@\n')
    #write the supersystem job
-   if FRGM["total_mult"] > 1:
-      ModRem('UNRESTRICTED', 'TRUE', curREM)
+   if FRGM.total_mult > 1:
+      qrems.ModRem('UNRESTRICTED', 'TRUE', curREM)
    else:
-      ModRem('UNRESTRICTED', 'FALSE', curREM)
-   WriteMolecule(fw, XYZ, FRGM)
-   AppendRem(fw, curREM)
+      qrems.ModRem('UNRESTRICTED', 'FALSE', curREM)
+   WriteMolecule_supersub(fw, XYZ, FRGM)
+   qrems.AppendRem(fw, curREM)
    if not fc:
       AppendBasis(fw, corr)
-   fw.close()
-
 
 #the script 
 options, args = ParseInput(sys.argv)
 xyz_path = args[1]
-rem_file = args[2]
-frgm_partition = args[3]
+frgm_partition = args[2]
 if xyz_path[-1:] != '/':
    xyz_path += '/'
+
+rem_file = os.path.expandvars('$QREMPATH')+'/'+'rem_posthf'
+curREM = qrems.ParseRems(rem_file)
+
+#check if the "basis" folder exists
+if not os.path.exists('basis/'):
+   print "Need a \"basis\" folder under CWD"
+   sys.exit(0)
 
 #determine xyz_file list
 curdir = os.getcwd()
@@ -339,13 +139,14 @@ if not os.path.exists(input_path):
    sp.call(['mkdir', input_path])
 
 #parse the fragment file
-FRGM = ParseFRGM(frgm_partition)
+FRGM = ''
+if not options.onsite:
+   FRGM = qmol.FRGM(frgm_partition)
 
 #create the input file, and move it into the input_path
 corr_method_list = ['MP2','CCSD(T)'] #hard-coded
 for corr in corr_method_list:
-   curREM = ParseRems(rem_file)
-   Set_rems_common(curREM, corr, options.fc) 
+   set_rems_posthf(curREM, corr, options.fc) 
    for xyz_file in xyzfile_list:
       parsed_XYZ = XYZ(xyz_file)
       suffix = ''
@@ -354,4 +155,6 @@ for corr in corr_method_list:
       elif corr == 'CCSD(T)':
          suffix = 'parenT'
       inputfile = input_path+parsed_XYZ.Name+'_'+suffix+'.in'
-      XYZ_to_Input(parsed_XYZ, inputfile, FRGM, curREM, not(options.nocp), corr, options.fc)
+      fw = open(inputfile, 'w')
+      XYZ_to_Input(parsed_XYZ, FRGM, curREM, not(options.nocp), corr, options.fc)
+      fw.close()
