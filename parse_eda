@@ -525,6 +525,7 @@ def parse_neweda_generic(options, output_dir, keyword=None): #TODO: make this th
                E_elec = DataPoints[system]["E_elec"]
                E_pauli = DataPoints[system]["E_pauli"]
                E_disp = DataPoints[system]["E_disp"]
+               E_cls_elec = DataPoints[system]["E_cls_elec"]
                f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(system,E_frz,E_pol,E_vct,E_int,E_elec,E_pauli,E_disp,E_cls_elec))
             elif not options.cls_disp:
                E_cls_elec = DataPoints[system]["E_cls_elec"]
@@ -547,6 +548,7 @@ def parse_neweda_generic(options, output_dir, keyword=None): #TODO: make this th
                   E_elec = DataPoints[system][method]["E_elec"]
                   E_pauli = DataPoints[system][method]["E_pauli"]
                   E_disp = DataPoints[system][method]["E_disp"]
+                  E_cls_elec = DataPoints[system][method]["E_cls_elec"]
                   f.write("%s,%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(system,method,E_frz,E_pol,E_vct,E_int,E_elec,E_pauli,E_disp,E_cls_elec))
                elif not options.cls_disp:
                   E_cls_elec = DataPoints[system][method]["E_cls_elec"]

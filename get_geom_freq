@@ -19,6 +19,8 @@ def ParseInput(ArgsIn):
    parser.add_option('--n_imag',dest='n_imag',action='store_true',default=False,help='count the number of imaginary frequencies')
    parser.add_option('--sorted',dest='sorted',action='store',type='string',default=None,help='sort the output based on a given criteria: [given_str]_[sort_key]_')
    parser.add_option('--modelchem',dest='modelchem',action='store_true',default=False,help='parse the model chemistry')
+   parser.add_option('--multigeom',dest='multigeom',action='store',type='int',default=None,help='get multiple geometries')
+   parser.add_option('--adiab_eda',dest='adiab_eda',action='store_true',default=False,help='split output as adiabatic eda results')
    options, args=parser.parse_args(ArgsIn)
    if len(args) < 2 and options.target==None:
       print "Specify the directory that stores all the results"
@@ -40,6 +42,9 @@ def ParseInput(ArgsIn):
       print "Can't figure out the number of imaginary frequencies without parsing frequency"
       parser.print_help()
       sys.exit()
+   if options.adiab_eda and options.multigeom!=3:
+      print "Warning: set multigeom = 3 for adiabatic EDA"
+      options.multigeom = 3
 
    return options, args
 
@@ -58,8 +63,13 @@ def manipulate_one_folder(target_path, options):
       sp.call(['mkdir', 'geometry'])
    for out in out_list:
       if options.format.lower()=='xyz':
-         xyz_file = get_xyz(out)
-         sp.call(['mv',xyz_file,'geometry/'])
+         if not options.adiab_eda:
+            xyz_file = get_xyz(out, options)
+            sp.call(['mv',xyz_file,'geometry/'])
+         else:
+            xyz_files = get_xyz_adiab_eda(out, options)
+            for xyz_file in xyz_files:
+               sp.call(['mv', xyz_file, 'geometry/'])
       
       elif options.format.lower()=='gzmat':
          gzmat_file = get_gzmat(out)
@@ -82,32 +92,85 @@ def manipulate_folder_modelchem(target_path, options):
    modelchem_based_print(datapoint, options)
    modelchem_sorted_geometry(datapoint)
 
-def get_xyz(output_file):
+def get_xyz(output_file, options):
    name = output_file[:-4]
    tmp_file = name+'.tmp'
    xyz_file = name+'.xyz'
-   #os.system('grep -B 100 "OPTIMIZATION CONVERGED" '+output_file+' | grep -A 1000 "Coordinates (Angstroms)" | grep -B 1000 Point | grep -A 1000 ATOM | grep -v ATOM | grep -v Point | awk \'{print $2, $3, $4, $5}\' > '+tmp_file)   
-   os.system('grep -A 500 "OPTIMIZATION CONVERGED" '+output_file+' | grep -B 500 "Z-matrix" | grep -A 500 "ATOM" | grep -v "ATOM" | grep -v "Print" > '+tmp_file)
+   #os.system('grep -B 100 "OPTIMIZATION CONVERGED" '+output_file+' | grep -A 1000 "Coordinates (Angstroms)" | grep -B 1000 Point | grep -A 1000 ATOM | grep -v ATOM | grep -v Point | awk \'{print $2, $3, $4, $5}\' > '+tmp_file)   
+   #os.system('grep -A 100 "OPTIMIZATION CONVERGED" '+output_file+' | grep -B 100 "Z-matrix" | grep -A 500 "ATOM" | grep -v "ATOM" | grep -v "Print" > '+tmp_file)
+   command = "sed -n " + "'/OPTIMIZATION CONVERGED/,/Z-matrix/p' " + output_file + " > "+tmp_file
+   os.system(command)
    fr = open(tmp_file, 'r')
    AtomList =  []
    CoordList = []
    all_lines = fr.readlines()
    for line in all_lines:
-      l = re.search('(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)', line)
+      l = re.search('^\s*(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*$', line)
       if l!=None:
          AtomList.append(l.group(2))
          CoordList.append((float(l.group(3)), float(l.group(4)), float(l.group(5))))
    fr.close()
    sp.call(['rm', tmp_file])
    fw = open(xyz_file, 'w')
-   NAtom = len(AtomList)
-   fw.write("%d\n\n" %NAtom) #NAtom
-   for index in range(0, NAtom):
-      atomic_symbol = AtomList[index]
-      x,y,z = CoordList[index]
-      fw.write("%-2s %14.10f %14.10f %14.10f\n" %(atomic_symbol,x,y,z))
-   fw.close()
+   if not options.multigeom:
+      NAtom = len(AtomList)
+      fw.write("%d\n\n" %NAtom) #NAtom
+      for index in range(0, NAtom):
+         atomic_symbol = AtomList[index]
+         x,y,z = CoordList[index]
+         fw.write("%-2s %14.10f %14.10f %14.10f\n" %(atomic_symbol,x,y,z))
+      fw.close()
+   else:
+      n_geom = options.multigeom
+      NAtom = len(AtomList) / n_geom
+      for i in range(0, n_geom):
+         fw.write("%d\n\n" %NAtom)
+         for index in range(0, NAtom):
+            offset = i*NAtom
+            atomic_symbol = AtomList[index+offset]
+            x,y,z = CoordList[index+offset]
+            fw.write("%-2s %14.10f %14.10f %14.10f\n" %(atomic_symbol,x,y,z))
+         fw.write("\n")
+      fw.close()
+           
    return xyz_file #return the file name
+
+def get_xyz_adiab_eda(output_file, options):
+   nameroot = re.search('(\S+)_adiabatic_eda', output_file).group(1)
+   tmp_file = nameroot+'.tmp'
+   xyz_files = []
+   command = "sed -n " + "'/OPTIMIZATION CONVERGED/,/Z-matrix/p' " + output_file + " > "+tmp_file
+   os.system(command)
+   fr = open(tmp_file, 'r')
+   AtomList =  []
+   CoordList = []
+   all_lines = fr.readlines()
+   for line in all_lines:
+      l = re.search('^\s*(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*$', line)
+      if l!=None:
+         AtomList.append(l.group(2))
+         CoordList.append((float(l.group(3)), float(l.group(4)), float(l.group(5))))
+   fr.close()
+   sp.call(['rm', tmp_file])
+   n_geom = options.multigeom
+   NAtom = len(AtomList) / n_geom
+   for i in range(0, n_geom):
+      if i == 0:
+         filename = nameroot+'_scfgeom.xyz'
+      elif i == 1:
+         filename = nameroot+'_polgeom.xyz'
+      else:
+         filename = nameroot+'_frzgeom.xyz'
+      xyz_files.append(filename)
+      fw = open(filename, 'w')
+      fw.write("%d\n\n" %NAtom)
+      for index in range(0, NAtom):
+         offset = i*NAtom
+         atomic_symbol = AtomList[index+offset]
+         x,y,z = CoordList[index+offset]
+         fw.write("%-2s %14.10f %14.10f %14.10f\n" %(atomic_symbol,x,y,z))
+   fw.close()
+   return xyz_files
 
 def get_gzmat(output_file):
    print "\"get_gzmat\" is not implemented yet"
@@ -160,9 +223,11 @@ def get_frequency(options):
       jobname = re.search('(\S+).out', l[0]).group(1)
       if jobname not in freq_data:
          freq_data[jobname] = {}
+         freq_data[jobname]["n_freq"] = 0
          freq_data[jobname]["freq"]=[]
       for data in l[2:]:
          freq_data[jobname]["freq"].append(float(data))
+         freq_data[jobname]["n_freq"] += 1
    fr.close()
    sp.call(['rm', tmpfile])
 
@@ -179,27 +244,52 @@ def get_frequency(options):
             sys.exit(0)
          if "intens" not in freq_data[jobname]:
             freq_data[jobname]["intens"]=[]
+            freq_data[jobname]["n_intens"] = 0
          for data in l[3:]:
             freq_data[jobname]["intens"].append(float(data))
+            freq_data[jobname]["n_intens"] += 1
       fr.close()
       sp.call(['rm', tmpfile])
 
    freq_data_file = 'frequency.csv'
    fw = open(freq_data_file, 'w')
    for jobname in sorted(freq_data, key=lambda jobname:get_sorting_key(jobname, options)):
-      fw.write('%s,' %jobname)
-      for freq in freq_data[jobname]["freq"]:
-         fw.write('%.2f,' %freq)
-      fw.write('\n')
+      if not options.multigeom:
+         fw.write('%s,' %jobname)
+         for freq in freq_data[jobname]["freq"]:
+            fw.write('%.2f,' %freq)
+         fw.write('\n')
+      else:
+         n_geom = options.multigeom
+         n_freq_per_geom = freq_data[jobname]["n_freq"] / n_geom
+         offset = 0
+         for igeom in range(0, n_geom):
+            fw.write('%s,' %jobname)
+            for ifreq in range(0, n_freq_per_geom):
+               fw.write('%.2f,' %freq_data[jobname]["freq"][offset+ifreq])
+            fw.write('\n')
+            offset += n_freq_per_geom
    fw.close()
+
    if options.intensity:
       intens_data_file = 'intensity.csv'
       fw = open(intens_data_file, 'w')
       for jobname in sorted(freq_data, key=lambda jobname:get_sorting_key(jobname, options)):
-         fw.write('%s,' %jobname)
-         for intens in freq_data[jobname]["intens"]:
-            fw.write('%.3f,' %intens)
-         fw.write('\n')
+         if not options.multigeom:
+            fw.write('%s,' %jobname)
+            for intens in freq_data[jobname]["intens"]:
+               fw.write('%.3f,' %intens)
+            fw.write('\n')
+         else:
+            n_geom = options.multigeom
+            n_intens_per_geom = freq_data[jobname]["n_intens"] / n_geom
+            offset = 0
+            for igeom in range(0, n_geom):
+               fw.write('%s,' %jobname)
+               for i_intens in range(0, n_intens_per_geom):
+                  fw.write('%.2f,' %freq_data[jobname]["intens"][offset+i_intens])
+               fw.write('\n')
+               offset += n_intens_per_geom
       fw.close()
 
 def get_sorting_key(jobname, options):
@@ -260,7 +350,7 @@ def get_xyz_modelchem(datapoint, options):
          datapoint[modelchem][jobname]["AtomList"] = []
          datapoint[modelchem][jobname]["CoordList"] = []
          for line in fr.readlines():
-            l = re.search('(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)', line)
+            l = re.search('^\s*(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*$', line)
             if l!=None:
                datapoint[modelchem][jobname]["AtomList"].append(l.group(2))
                datapoint[modelchem][jobname]["CoordList"].append((float(l.group(3)), float(l.group(4)), float(l.group(5))))

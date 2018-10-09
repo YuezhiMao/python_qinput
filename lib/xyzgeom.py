@@ -25,7 +25,20 @@ def compute_angle(Coords, idx1, idx2, idx3):
    vec_21 /= np.linalg.norm(vec_21)
    vec_23 = Coords[idx3-1] - Coords[idx2-1]
    vec_23 /= np.linalg.norm(vec_23)
-   theta = np.arccos(np.dot(vec_21, vec_23))
+   theta = np.arccos(np.dot(vec_21, vec_23)) * 180.0/np.pi
+   return theta
+
+def compute_tilt_angle(Coords, idx1, idx2, idx3, idx4):
+   #the angle between idx1-idx2 and the bisector of \angle idx3-idx2-idx4
+   vec_21 = Coords[idx1-1] - Coords[idx2-1]
+   vec_21 /= np.linalg.norm(vec_21)
+   vec_23 = Coords[idx3-1] - Coords[idx2-1]
+   vec_23 /= np.linalg.norm(vec_23)
+   vec_24 = Coords[idx4-1] - Coords[idx2-1]
+   vec_24 /= np.linalg.norm(vec_24)
+   vec_bisec = vec_23 + vec_24
+   vec_bisec /= np.linalg.norm(vec_bisec)
+   theta = np.arccos(np.dot(vec_bisec, vec_21)) * 180.0/np.pi
    return theta
 
 def compute_diheral(Coords, idx1, idx2, idx3, idx4):

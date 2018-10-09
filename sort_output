@@ -31,6 +31,6 @@ os.chdir(outdir)
 for keyword in options.keywords:
    if not os.path.exists(keyword):
       sp.call(['mkdir', keyword])
-   os.system('mv *_'+keyword+'_*.out '+keyword)
+   os.system('mv *_'+keyword+'*.out '+keyword)
 
 os.chdir(curdir)    

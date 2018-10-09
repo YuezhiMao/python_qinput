@@ -64,14 +64,24 @@ def Parse_Single_Dir(options, nfrag):
          count = 0
       AllEnergy[jobname][method][count] = energy
       count += 1
+      #crash if we got too many results from one job
+      #also, record if it didn't manage to collect enough energies
       if options.bsse:
          if count > (2*nfrag + 1):
             print "I got too many (%d) energies for job %s" %(count, jobname)
             sys.exit(0)
+         if count < (2*nfrag + 1):
+            AllEnergy[jobname][method]["failed"] = True
+         else:
+            AllEnergy[jobname][method]["failed"] = False
       else:
          if count > (nfrag + 1):
             print "I got too many (%d) energies for job %s" %(count, jobname)
             sys.exit(0)
+         if count < (nfrag + 1):
+            AllEnergy[jobname][method]["failed"] = True
+         else:
+            AllEnergy[jobname][method]["failed"] = False
 
    fr.close()
    sp.call(['rm', tmpfile])
@@ -92,6 +102,13 @@ def compute_binding_energy(fw, AllEnergy, jobname, nfrag, doCP, modelchem=False)
    for method in AllEnergy[jobname]:
       functional, basis = method
       if doCP:
+         if AllEnergy[jobname][method]["failed"]:
+            if modelchem:
+               fw.write("%s,%s,%s,NA,NA,NA\n" %(jobname,functional,basis))
+            else:
+               fw.write("%s,NA,NA,NA\n" %jobname)
+            continue
+
          E_super = AllEnergy[jobname][method][2*nfrag]
          E_monomers_nocp = 0.0
          E_monomers_cp = 0.0
@@ -107,6 +124,12 @@ def compute_binding_energy(fw, AllEnergy, jobname, nfrag, doCP, modelchem=False)
             fw.write("%s,%.4f,%.4f,%.4f\n" %(jobname,hart_to_kcal*E_bind_nocp, hart_to_kcal*E_bind_cp, hart_to_kcal*BSSE))
 
       else:
+         if AllEnergy[jobname][method]["failed"]:
+            if modelchem:
+               fw.write("%s,%s,%s,NA\n" %(jobname,functional,basis))
+            else:
+               fw.write("%s,NA\n" %jobname)
+            continue
          E_super = AllEnergy[jobname][method][nfrag] 
          E_monomers = 0.0
          for i in range(0, nfrag):

@@ -161,7 +161,7 @@ if not os.path.exists(input_path):
 #parse the fragment file
 FRGM = ''
 if not options.onsite:   #all xyz files share the common frgm file: parse it beforehand
-   FRGM = qmol.ParseFRGM(frgm_partition)
+   FRGM = qmol.FRGM(frgm_partition)
 
 #create the input file(s), and put it into the input_path
 specify_method = False
