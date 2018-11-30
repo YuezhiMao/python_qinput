@@ -59,6 +59,8 @@ def parse_single_dir(options):
             parse_fodft_results(diabat_method, options)
         elif "cdft" in diabat_method:
             parse_cdft_results(options)
+        elif "msdft" in diabat_method:
+            parse_msdft_results(options)
         else:
             print "unknown diabat method"
             sys.exit(0)
@@ -147,10 +149,105 @@ def parse_cdft_results(options):
     result_file = 'cdft.csv'
     print_diabat_coupling_test_data(result_file, data, options)
 
+def parse_msdft_results(options):
+    tmpfile = 'msdft.tmp'
+    command = "grep \"Coupling between diabats\" *msdft*.out > "+tmpfile
+    os.system(command)
+    fr = open(tmpfile, 'r')
+    data1 = {}
+    data2 = {}   #two results in one output
+    counter = 1
+    for line in fr.readlines():
+        l_sp = line.split()
+        nameparser = re.search('(\S+)_dist_(\S+)_msdft', l_sp[0])
+        molname = nameparser.group(1) 
+        if molname not in data1:
+            data1[molname] = {}
+        if molname not in data2:
+            data2[molname] = {}
+        geom_param = float(nameparser.group(2))
+        coupling = float(re.search('\((\S+)', l_sp[-2]).group(1))
+        if counter == 1:
+            data1[molname][geom_param] = coupling
+            counter = 2
+        elif counter == 2:
+            data2[molname][geom_param] = coupling
+            counter = 1
+    fr.close()
+    sp.call(['rm', tmpfile])
+    result_file1 = 'msdft1.csv'
+    result_file2 = 'msdft2.csv'
+    print_diabat_coupling_test_data(result_file1, data1, options)
+    print_diabat_coupling_test_data(result_file2, data2, options)
+    parse_msdft_hamil_overlap()
+
+def parse_msdft_hamil_overlap():
+    tmpfile = 'msdft.tmp'
+    #parse H12
+    command = "grep -A 2 \"Hamiltonian\" *msdft*.out > " + tmpfile
+    os.system(command)
+    fr = open(tmpfile, 'r')
+    data = {}
+    for line in fr.readlines():
+        l_sp = line.split()
+        if len(l_sp) == 4:
+            nameparser = re.search('(\S+)_dist_(\S+)_msdft', l_sp[0])
+            molname = nameparser.group(1)
+            if molname not in data:
+                data[molname] = {}
+            geom_param = float(nameparser.group(2))
+            if geom_param not in data[molname]:
+                data[molname][geom_param] = {}
+            data[molname][geom_param]["h12"] = abs(float(l_sp[-1]))
+    fr.close()
+
+    #parse S12
+    command = "grep -A 2 \"overlap\" *msdft*.out > " + tmpfile
+    os.system(command)
+    fr = open(tmpfile, 'r')
+    for line in fr.readlines():
+        l_sp = line.split()
+        if len(l_sp) == 4:
+            nameparser = re.search('(\S+)_dist_(\S+)_msdft', l_sp[0])
+            molname = nameparser.group(1)
+            if molname not in data:
+                data[molname] = {}
+            geom_param = float(nameparser.group(2))
+            if geom_param not in data[molname]:
+                data[molname][geom_param] = {}
+            data[molname][geom_param]["s12"] = abs(float(l_sp[-1]))
+    fr.close()
+    sp.call(['rm', tmpfile])
+    #print data
+    result_file = 'msdft_h12_s12.csv'
+    print_msdft_h12_s12_values(result_file, data)
+
+def print_msdft_h12_s12_values(result_file, data):
+    fw = open(result_file, 'w')
+    for molname in data:
+        fw.write(molname+'\n')
+        dist = []
+        h12 = []
+        s12 = []
+        for geom_param in sorted(data[molname]):
+            fw.write("%.2f,%.3f,%.3f\n" %(geom_param, data[molname][geom_param]["h12"], data[molname][geom_param]["s12"]))
+            dist.append(geom_param)
+            h12.append(data[molname][geom_param]["h12"])
+            s12.append(data[molname][geom_param]["s12"])
+        if len(h12) > 1 and len(s12) > 1:
+            #print "fit h12"
+            beta1 = extract_beta(dist, h12)
+            #print "fit s12"
+            beta2 = extract_beta(dist, s12)
+            fw.write("beta,%.3f,%.3f\n" %(beta1, beta2))
+    fw.close()
+
+
 def extract_beta(dist, Hab):
     X = np.vstack([np.ones(len(dist)), np.array(dist)]).T
     Y = np.transpose(np.log(np.array(Hab)))
     c, k = np.linalg.lstsq(X, Y, rcond=None)[0]
+    #print "k = %.3f, c = %.3f" %(k, c)
     beta = -2.0*k
     return beta
 

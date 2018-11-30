@@ -12,10 +12,12 @@ def ParseInput(ArgsIn):
     '''
     parser = OptionParser(usage=UseMsg)
     parser.add_option('-a','--all',dest='all',action='store_true',default=False,help='run all the xyz files under the xyz_path')
+    parser.add_option('-k','--keyword',dest='keyword',action='store',type='string',default=None,help='create inputs for xyz files containing the keyword')
+    parser.add_option('-t','--target',dest='target',action='callback',callback=string_sp_callback,type='string',default=None,help='create input for certain xyz files')
     parser.add_option('-b','--basis',dest='basis',action='callback',callback=string_sp_callback, type='string', default='aug-cc-pvtz',help='The target basis (default is aug-cc-pVTZ)')
     parser.add_option('-m','--method',dest='method',action='callback',type='string', default=None, callback=string_sp_callback,help='The methods (density functionals) to use')
     parser.add_option('-i','--input_path',dest='input_path',action='store',type='string', default='input/',help='The directory storing the generated inputs')
-    parser.add_option('--diabat', dest='diabat', action='store', type='string', default=None, help='Specify the diabatization method')
+    parser.add_option('--diabat', dest='diabat', action='callback', type='string', callback=string_sp_callback, default=None, help='Specify the diabatization method')
     parser.add_option('--fodft_method', dest='fodft_method', action='store', type='int', default=1, help='Specify the flavor of FODFT')
     parser.add_option('--et', dest='do_ET', action='store_true', default=False, help='doing electron transfer')
     options, args = parser.parse_args(ArgsIn)
@@ -23,7 +25,7 @@ def ParseInput(ArgsIn):
     if len(args) < 3:
         parser.print_help()
         sys.exit(0)
-    if options.diabat==None:
+    if len(options.diabat) == 0:
         print("The diabatization method has to be specified")
         parser.print_help()
         sys.exit(0)
@@ -33,18 +35,21 @@ def ParseInput(ArgsIn):
 def string_sp_callback(option, opt, value, parser):
    setattr(parser.values, option.dest, value.split(','))
 
-def Append_Dev_Section(fw, options):
+def Append_Dev_Section(fw, diabat, options):
     fw.write('\n')
     fw.write('$development\n')
-    if options.diabat.upper() == 'POD':
+    if diabat.upper() == 'POD':
         fw.write('postscf_diabat  1\n')
-    elif options.diabat.upper() == 'ESID':
+    elif diabat.upper() == 'ESID':
         fw.write('postscf_diabat  2\n')
-    elif options.diabat.upper() == 'FODFT':
+    elif diabat.upper() == 'FODFT':
         fw.write('fragmo_diabat  1\n')
         fw.write('fodft_method  %d\n' %options.fodft_method)
+    elif diabat.upper() == 'MSDFT':
+        fw.write('fragmo_diabat 1\n')
+        fw.write('almo_coupling 1\n')
     else:
-        print "Unrecognized diabat method"
+        print "Unrecognized diabat method: " + diabat
         sys.exit(0)
     if options.do_ET:
         fw.write('electron_transfer 1\n')
@@ -82,30 +87,53 @@ def Append_CDFT_Section(fw, FRGM, do_ET):
         fw.write('1.0  1  %d  s\n' %FRGM.natoms_frgm[0])
     fw.write('$end\n\n')
 
-def XYZ_to_Input(fw, XYZ, FRGM, curREM, options):
-    if options.diabat.upper() == "CDFT":
+def Append_MSDFT_Section(fw, FRGM):
+    fw.write('\n')
+    fw.write('$almo_coupling\n')
+    #hard-coded for two states
+    fw.write("%d  %d\n" %(FRGM.charge_frgm[0], FRGM.mult_frgm[0]))
+    fw.write("%d  %d\n" %(FRGM.charge_frgm[1], FRGM.mult_frgm[1]))
+    fw.write("--\n")
+    fw.write("%d  %d\n" %(FRGM.charge_frgm[1], FRGM.mult_frgm[1]))
+    fw.write("%d  %d\n" %(FRGM.charge_frgm[0], FRGM.mult_frgm[0]))
+    fw.write('$end\n')
+
+
+def XYZ_to_Input(fw, XYZ, FRGM, curREM, diabat, options):
+    if diabat.upper() == "CDFT":
         qmol.WriteMolecule(fw, XYZ, FRGM.total_charge, FRGM.total_mult)
         qrems.ModRem('UNRESTRICTED', 'TRUE', curREM)
         qrems.AppendRem(fw, curREM)
         Append_CDFT_Section(fw, FRGM, options.do_ET)
+    elif diabat.upper() == 'MSDFT':
+        qmol.WriteMolecule_Frgm(fw, XYZ, FRGM)
+        qrems.ModRem('SCFMI_MODE', '1', curREM)
+        qrems.ModRem('FRGM_METHOD', 'STOLL', curREM)
+        qrems.AppendRem(fw, curREM)
+        Append_Dev_Section(fw, diabat, options)
+        Append_MSDFT_Section(fw, FRGM)
     else:
         qmol.WriteMolecule_Frgm(fw, XYZ, FRGM)
+        if diabat.upper() == 'ESID':
+            qrems.ModRem('SCF_GUESS', 'FRAGMO', curREM)
         qrems.AppendRem(fw, curREM)
-        Append_Dev_Section(fw, options)
+        Append_Dev_Section(fw, diabat, options)
 
      
 def locate_frgm_file(xyz_file, frgm_dir):
     nameroot = re.search('/([^/]+)_dist', xyz_file).group(1)
     return frgm_dir+nameroot+'.frgm'
     
-def add_diabat_scheme_to_inputname(inputname, options):
-    if options.diabat.upper() == 'POD':
+def add_diabat_scheme_to_inputname(inputname, diabat, options):
+    if diabat.upper() == 'POD':
         inputname += '_pod_'
-    elif options.diabat.upper() == 'ESID':
+    elif diabat.upper() == 'ESID':
         inputname += '_esid_'
-    elif options.diabat.upper() == 'CDFT':
+    elif diabat.upper() == 'CDFT':
         inputname += '_cdft_'
-    elif options.diabat.upper() == 'FODFT':
+    elif diabat.upper() == 'MSDFT':
+        inputname += '_msdft_'
+    elif diabat.upper() == 'FODFT':
         if options.fodft_method == 1:
             if options.do_ET:
                 inputname += '_fodft2n+1_'
@@ -133,6 +161,12 @@ curdir = os.getcwd()
 xyzfile_list = []
 if options.all:
     xyzfile_list = glob.glob(xyz_path+'*.xyz')
+elif options.keyword:
+    xyzfile_list = glob.glob(xyz_path+'*'+options.keyword+'*.xyz')
+if options.target != None:
+    for xyz_file in options.target:
+        if xyz_file not in xyzfile_list:
+            xyzfile_list.append(xyz_file)
 
 input_path = options.input_path
 if input_path[-1:] != '/':
@@ -140,25 +174,28 @@ if input_path[-1:] != '/':
 if not os.path.exists(input_path):
     sp.call(['mkdir', input_path])
 
-if options.diabat.upper() == 'CDFT':
-    rem_file = os.path.expandvars('$QREMPATH')+'/'+'rem_cdftci'
-else:
-    rem_file = os.path.expandvars('$QREMPATH')+'/'+'rem_stdscf'
-myrems = qrems.ParseRems(rem_file)
-for method in options.method:
-    for basis in options.basis:
-        qrems.set_rems_common(myrems, method, basis)
-        if options.diabat.upper() == 'ESID':
-            qrems.ModRem('SCF_GUESS', 'FRAGMO', myrems)
-        for xyz_file in xyzfile_list:
-            parsed_XYZ = qmol.XYZ(xyz_file)
-            FRGM = qmol.FRGM(locate_frgm_file(xyz_file, frgm_path))
-            if qmol.detect_unrestricted_frgm(FRGM):
-                qrems.ModRem('UNRESTRICTED', 'TRUE', myrems)
-            inputfile = input_path+parsed_XYZ.Name
-            inputfile = add_diabat_scheme_to_inputname(inputfile, options)
-            inputfile += method + '_' + qrems.basis_abbr(basis)+'.in'
-            #print "generating "+inputfile
-            fw = open(inputfile, 'w')
-            XYZ_to_Input(fw, parsed_XYZ, FRGM, myrems, options)
-            fw.close()
+print "list of diabatization method: "+str(options.diabat)
+
+for diabat in options.diabat: #loop over diabat schemes
+    if diabat.upper() == 'CDFT':
+        rem_file = os.path.expandvars('$QREMPATH')+'/'+'rem_cdftci'
+    elif diabat.upper() == 'MSDFT':
+        rem_file = os.path.expandvars('$QREMPATH')+'/'+'rem_scfmi'
+    else:
+        rem_file = os.path.expandvars('$QREMPATH')+'/'+'rem_stdscf'
+    myrems = qrems.ParseRems(rem_file)
+    for method in options.method:
+        for basis in options.basis:
+            qrems.set_rems_common(myrems, method, basis)
+            for xyz_file in xyzfile_list:
+                parsed_XYZ = qmol.XYZ(xyz_file)
+                FRGM = qmol.FRGM(locate_frgm_file(xyz_file, frgm_path))
+                if qmol.detect_unrestricted_frgm(FRGM):
+                    qrems.ModRem('UNRESTRICTED', 'TRUE', myrems)
+                inputfile = input_path+parsed_XYZ.Name
+                inputfile = add_diabat_scheme_to_inputname(inputfile, diabat, options)
+                inputfile += method + '_' + qrems.basis_abbr(basis)+'.in'
+                #print "generating "+inputfile
+                fw = open(inputfile, 'w')
+                XYZ_to_Input(fw, parsed_XYZ, FRGM, myrems, diabat, options)
+                fw.close()
