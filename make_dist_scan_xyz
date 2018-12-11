@@ -4,7 +4,7 @@ import os, glob, re, sys
 import subprocess as sp
 from optparse import OptionParser
 import numpy as np
-import qmol
+import qmol, xyzgeom
 
 def ParseInput(ArgsIn):
    UseMsg = "python make_dist_scan_xyz.py [options] [xyz_seed] [frgm_file]"
@@ -12,12 +12,13 @@ def ParseInput(ArgsIn):
    parser.add_option('--name_root',dest='name_root',action='store',type='str',default=None,help='The name root for the input files generated. Default name_root.frgm->name_root_coordvalue.in')
    parser.add_option('--dest_path',dest='dest_path',action='store',type='str',default='new_dist_scan_xyz',help='The relative path to the directory where the generated files should be dumped.')
    parser.add_option('--type',dest='type',action='store',type='str',default='absolute',help='Type of scan. Options are "absolute" and "percent". An absolut scan goes from --start_abs to --end_abs with the specified increment. A percent scan goes from --start_pct*dist to --end_pct*dist with the specified increment.')
+   parser.add_option('--bond',dest='bond',action='store_true',default=False,help='scan a specific bond length')
    parser.add_option('--increment',dest='increment',action='store',type='float',default=0.05,help='Set the increment of the scan. Default 0.05 Angs or 5%')
    parser.add_option('--start_absolute',dest='start_absolute',action='store',type='float',default=1.0,help='Set the smallest value for coord. Relevant for the scan option "absolute". Default 1.0')
    parser.add_option('--end_absolute',dest='end_absolute',action='store',type='float',default=6.0,help='Set the largest value for coord. Relevant for the scan option "absolute". Default 6.0')
    parser.add_option('--start_percent',dest='start_percent',action='store',type='float',default=0.7,help='Set the smallest value for coord to this percent of the initial value. Relevant for the scan option "percent". Default 0.7')
    parser.add_option('--end_percent',dest='end_percent',action='store',type='float',default=3.0,help='Set the largest value for coord to this percent of the initial value. Relevant for the scan option "percent". Default 3.0')
-   parser.add_option('--scan_coord',dest='scan_coord',action='callback',type='string', callback=string_sp_callback, default=None, help='specify the intermolecular distance')
+   parser.add_option('--scan_coord',dest='scan_coord',action='callback',type='string', callback=string_sp_callback, default=None, help='specify the distance to scan')
    #parser.add_option('--log',dest='logrithm',action='store_true',default=False,help='use the logrithm(10) scale for distance: 10^x')
 
    options, args = parser.parse_args(ArgsIn)
@@ -25,10 +26,14 @@ def ParseInput(ArgsIn):
       print "specify the distance we are going to scan (given by a pair of atom indices)"
       parser.print_help()
       sys.exit(0)
-
-   if len(args) < 2:
-      parser.print_help()
-      sys.exit(0)
+   if not options.bond:
+      if len(args) < 3:
+         parser.print_help()
+         sys.exit(0)
+   else:
+      if len(args) < 2:
+         parser.print_help()
+         sys.exit(0)
 
    return options, args
         
@@ -59,7 +64,7 @@ def fragment_translate_abs(XYZ, FRGM, name_root, atom1_idx, atom2_idx, shifted_f
       Coords[offset+iatom] += trans_vector
 
    outfile = dest_path + '/'+name_root+'_dist_'+format(dist_abs, '.2f')+'.xyz'
-   write_xyz_file(outfile, Coords, XYZ.AtomList)
+   xyzgeom.write_xyz_file(outfile, XYZ.AtomList, Coords)
 
 
 #set the distance between the two specified atoms to a certain ratio of the eql distance
@@ -75,7 +80,7 @@ def fragment_translate_rel(XYZ, FRGM, name_root, atom1_idx, atom2_idx, shifted_f
       Coords[offset+iatom] += trans_vector
 
    outfile = dest_path + '/' + name_root+'_rel_dist_'+format(dist_abs, '.2f')+'.xyz'
-   write_xyz_file(outfile, Coords, XYZ.AtomList)
+   xyzgeom.write_xyz_file(outfile, XYZ.AtomList, Coords)
 
 def fragment_translate_log(XYZ, FRGM, name_root, atom1_idx, atom2_idx, shifted_frgm, dist_log, dest_path): 
    #compute the shift vector
@@ -90,77 +95,94 @@ def fragment_translate_log(XYZ, FRGM, name_root, atom1_idx, atom2_idx, shifted_f
       Coords[offset+iatom] += trans_vector
 
    outfile = dest_path + '/'+name_root+'_logdist_'+format(dist_log, '.2f')+'.xyz'
-   write_xyz_file(outfile, Coords, XYZ.AtomList)
+   xyzgeom.write_xyz_file(outfile, XYZ.AtomList, Coords)
 
-def write_xyz_file(outfile, Coords, AtomList):
-   fw = open(outfile, 'w')
-   fw.write("%d\n" %len(AtomList))
-   fw.write("\n")
-   for iAtom in range(0, len(AtomList)):
-      x, y, z = Coords[iAtom][0], Coords[iAtom][1], Coords[iAtom][2]
-      fw.write("%-3s %15.10f %15.10f %15.10f\n" %(AtomList[iAtom], x, y, z))
-   fw.close()
-
+def modify_bond_length(XYZ, name_root, anchor_atom, atom2move, displacement, dest_path):
+   Coords = np.copy(XYZ.CoordList)
+   bond_vector = Coords[atom2move-1] - Coords[anchor_atom-1]
+   bond_vector /= np.linalg.norm(bond_vector, 2)
+   #update the position of atom2move
+   Coords[atom2move-1] += displacement * bond_vector
+   outfile = dest_path + '/' + name_root + '_dist_' + format(displacement, '.4f') + '.xyz'
+   xyzgeom.write_xyz_file(outfile, XYZ.AtomList, Coords)
 
 #the script
 curdir = os.getcwd()
 options, args = ParseInput(sys.argv)
 
+#read in xyz seed
 xyz_seed = args[1]
 parse_XYZ = qmol.XYZ(xyz_seed)
-#print XYZ.AtomList
-frgm_file = args[2]
-FRGM = qmol.FRGM(frgm_file)
-
-name_root = options.name_root
-if name_root == None:
-   l = re.search('([^/]+).frgm', frgm_file)
-   if l!=None:
-      name_root = l.group(1)
-   else:
-      print "missing a name root!"
-      sys.exit(1) 
-
+#specify where to dump the generated xyz
 dest_path = options.dest_path
 if dest_path[-1] == '/':
    dest_path = dest_path[:-1]
 if not os.path.exists(dest_path):
    sp.call(['mkdir', dest_path])
-
-atom_to_frgm_list = make_atom_to_frgm_list(parse_XYZ, FRGM)
+#specify the distance to scan
 atom1_idx = int(options.scan_coord[0])
 atom2_idx = int(options.scan_coord[1])
-shifted_frgm = atom_to_frgm_list[atom1_idx-1] 
 
-#absolute
-if options.type == 'absolute':
-   start_value = float(options.start_absolute)
-   end_value = float(options.end_absolute)
-   increment = float(options.increment)
-   dist_abs = start_value
-   while dist_abs <= end_value + 1.0E-4:
-      fragment_translate_abs(parse_XYZ, FRGM, name_root, atom1_idx, atom2_idx, shifted_frgm, dist_abs, dest_path)
-      dist_abs += increment
+if options.bond: #scan a single bond length
+   name_root = options.name_root
+   if name_root == None:
+      l = re.search('([^/]+).xyz', xyz_seed)
+      if l != None:
+         name_root = l.group(1)
+      else:
+         print "missing a name root!"
+         sys.exit(1)
+   if options.type == 'absolute':
+      start_value = float(options.start_absolute)
+      end_value = float(options.end_absolute)
+      increment = float(options.increment)
+      anchor_atom = atom1_idx
+      atom2move = atom2_idx
+      displacement = start_value
+      while displacement < end_value + increment/100.0:
+         modify_bond_length(parse_XYZ, name_root, anchor_atom, atom2move, displacement, dest_path)
+         displacement += increment
 
-#relative
-elif options.type == 'percent':
-   start_percent = float(options.start_percent)
-   end_percent = float(options.end_percent)
-   increment = float(options.increment)
-   ratio = start_percent
-   while ratio <= end_percent + 1.0E-4:
-      fragment_translate_rel(parse_XYZ, FRGM, name_root, atom1_idx, atom2_idx, shifted_frgm, ratio, dest_path)
-      ratio += increment
+else:   #scan intermolecular distance
+   frgm_file = args[2]
+   FRGM = qmol.FRGM(frgm_file)
+   name_root = options.name_root
+   if name_root == None:
+      l = re.search('([^/]+).frgm', frgm_file)
+      if l!=None:
+         name_root = l.group(1)
+      else:
+         print "missing a name root!"
+         sys.exit(1)
 
-elif options.type == 'logrithm':
-   start_value = float(options.start_absolute)
-   end_value = float(options.end_absolute)
-   increment = float(options.increment)
-   dist_log = start_value
-   while dist_log <= end_value + 0.001*increment:
-      fragment_translate_log(parse_XYZ, FRGM, name_root, atom1_idx, atom2_idx, shifted_frgm, dist_log, dest_path)
-      dist_log += increment
-
-else:
-   print "Unsupported type: " +options.type
-   sys.exit(0)
+   atom_to_frgm_list = make_atom_to_frgm_list(parse_XYZ, FRGM)
+   shifted_frgm = atom_to_frgm_list[atom1_idx-1]
+   #absolute
+   if options.type == 'absolute':
+      start_value = float(options.start_absolute)
+      end_value = float(options.end_absolute)
+      increment = float(options.increment)
+      dist_abs = start_value
+      while dist_abs <= end_value + 1.0E-4:
+         fragment_translate_abs(parse_XYZ, FRGM, name_root, atom1_idx, atom2_idx, shifted_frgm, dist_abs, dest_path)
+         dist_abs += increment
+   #relative
+   elif options.type == 'percent':
+      start_percent = float(options.start_percent)
+      end_percent = float(options.end_percent)
+      increment = float(options.increment)
+      ratio = start_percent
+      while ratio <= end_percent + 1.0E-4:
+         fragment_translate_rel(parse_XYZ, FRGM, name_root, atom1_idx, atom2_idx, shifted_frgm, ratio, dest_path)
+         ratio += increment
+   elif options.type == 'logrithm':
+      start_value = float(options.start_absolute)
+      end_value = float(options.end_absolute)
+      increment = float(options.increment)
+      dist_log = start_value
+      while dist_log <= end_value + 0.001*increment:
+         fragment_translate_log(parse_XYZ, FRGM, name_root, atom1_idx, atom2_idx, shifted_frgm, dist_log, dest_path)
+         dist_log += increment
+   else:
+      print "Unsupported type: " +options.type
+      sys.exit(0)

@@ -66,7 +66,6 @@ def write_xyz_file(outfile, AtomList, Coords):
    fw.write("%d\n" %len(AtomList))
    fw.write("\n")
    for iAtom in range(0, len(AtomList)):
-      print Coords[iAtom]
       x, y, z = Coords[iAtom][0], Coords[iAtom][1], Coords[iAtom][2]
       fw.write("%-3s %15.10f %15.10f %15.10f\n" %(AtomList[iAtom], x, y, z))
    fw.close()

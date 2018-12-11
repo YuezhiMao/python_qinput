@@ -63,7 +63,7 @@ def manipulate_one_folder(target_path, options):
       sp.call(['mkdir', 'geometry'])
    for out in out_list:
       if options.format.lower()=='xyz':
-         if not options.adiab_eda:
+         if (not options.adiab_eda) or ('adiabatic_eda' not in out):
             xyz_file = get_xyz(out, options)
             sp.call(['mv',xyz_file,'geometry/'])
          else:
