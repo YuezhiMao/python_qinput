@@ -16,7 +16,6 @@ def ParseInput(ArgsIn):
     parser.add_option('--ref',dest='ref',action='store',type='string',default=None,help='file containing ref data for error analysis')
     parser.add_option('--set_dist',dest='set_dist',action='store_true',default=False,help='check the hard-coded distances')
 
-
     options, args = parser.parse_args(ArgsIn)
     if len(args) < 2:
       if options.all or options.keyword:
@@ -111,7 +110,10 @@ def parse_esid_results(options):
 
 def parse_fodft_results(fodft_method, options):
     tmpfile = fodft_method+'.tmp'
-    command = "grep \"The average:\" *"+fodft_method+"*.out > "+tmpfile
+    if fodft_method.lower() == 'fodft-pol':
+        command = "grep \"H_da =\" *"+fodft_method+"*.out > "+tmpfile
+    else:
+        command = "grep \"The average:\" *"+fodft_method+"*.out > "+tmpfile
     os.system(command)
     fr = open(tmpfile, 'r')
     data = {}
@@ -179,7 +181,7 @@ def parse_msdft_results(options):
     result_file2 = 'msdft2.csv'
     print_diabat_coupling_test_data(result_file1, data1, options)
     print_diabat_coupling_test_data(result_file2, data2, options)
-    parse_msdft_hamil_overlap()
+    #parse_msdft_hamil_overlap()
 
 def parse_msdft_hamil_overlap():
     tmpfile = 'msdft.tmp'
@@ -366,12 +368,15 @@ def perform_error_analysis_separate_dist(fw, data, ref_values):
     signed_errors = {}
     signed_rel_errors = {}
     fw.write("\nerror analysis for Hab at each distance:\n")
+    counter = 0
     for molname in data:
+        counter += 1
         for geom_param in data[molname]:
             if geom_param == 1000:
                 continue #"1000" stands for beta, which has no distance dependence
-            signed_errors[geom_param] = []
-            signed_rel_errors[geom_param] = []
+            if counter == 1:
+                signed_errors[geom_param] = []
+                signed_rel_errors[geom_param] = []
             if data[molname][geom_param] > 0.1:
                 error = data[molname][geom_param] - ref_values[molname][geom_param]
                 rel_error = error/ref_values[molname][geom_param]

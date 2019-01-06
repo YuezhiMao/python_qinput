@@ -48,6 +48,9 @@ def Append_Dev_Section(fw, diabat, options):
     elif diabat.upper() == 'MSDFT':
         fw.write('fragmo_diabat 1\n')
         fw.write('almo_coupling 1\n')
+    elif diabat.upper() == 'FODFT-POL':
+        fw.write('fragmo_diabat 1\n')
+        fw.write('almo_coupling 3\n')
     else:
         print "Unrecognized diabat method: " + diabat
         sys.exit(0)
@@ -112,10 +115,18 @@ def XYZ_to_Input(fw, XYZ, FRGM, curREM, diabat, options):
         qrems.AppendRem(fw, curREM)
         Append_Dev_Section(fw, diabat, options)
         Append_MSDFT_Section(fw, FRGM)
+    elif diabat.upper() == 'FODFT-POL':
+        qmol.WriteMolecule_Frgm(fw, XYZ, FRGM)
+        qrems.ModRem('SCFMI_MODE', '1', curREM)
+        qrems.ModRem('FRGM_METHOD', 'STOLL', curREM)
+        qrems.AppendRem(fw, curREM)
+        Append_Dev_Section(fw, diabat, options)
     else:
         qmol.WriteMolecule_Frgm(fw, XYZ, FRGM)
         if diabat.upper() == 'ESID':
             qrems.ModRem('SCF_GUESS', 'FRAGMO', curREM)
+        if diabat.upper() == 'FODFT':
+            qrems.ModRem('SCFMI_MODE', '1', curREM)
         qrems.AppendRem(fw, curREM)
         Append_Dev_Section(fw, diabat, options)
 
@@ -146,6 +157,8 @@ def add_diabat_scheme_to_inputname(inputname, diabat, options):
                 inputname += '_fodft-2n+1_'
             else:
                 inputname += '_fodft+2n-1_'
+    elif diabat.upper() == 'FODFT-POL':
+        inputname += '_fodft-pol_'
     return inputname
 
 #The script
