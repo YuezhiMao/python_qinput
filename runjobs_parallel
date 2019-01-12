@@ -1,0 +1,102 @@
+#!/usr/bin/env python
+
+import os, glob, re, sys
+import subprocess as sp
+from optparse import OptionParser
+
+def ParseInput(ArgsIn):
+   UseMsg = '''
+   python runjobs_parallel [options] [input_dir]
+   '''
+   parser = OptionParser(usage=UseMsg)
+   parser.add_option('-n', '--ncores', dest='ncores', type='int', action='store', default=4, help='Number of threads to run the jobs')
+   parser.add_option('-k', '--keyword', dest='keywords', type='string', action='callback', callback=string_sp_callback, default=None,help='only run jobs that contain the given keywords')
+   parser.add_option('-u', '--union', dest='union', action='store_true', default=False, help='run the union of jobs that contain the keywords (the default will take the intersection)')
+   parser.add_option('-q', '--queue', dest='queue', action='store', default=None, help='specify the queue you are going to run these jobs')
+   parser.add_option('-v', '--reverse',dest='reverse',action='store',default='nonsense',help='Not running jobs containing this keyword')
+   parser.add_option('-Q', '--qchem', dest='qchem', type='string', action='store',default='.bashrc',help='using -Q in submitSLURM')
+   parser.add_option('--ppn',dest='ppn',action='store',type=int,default=None,help='ppn')
+   parser.add_option('--time',dest='time',type='string',action='store',default='168:00:00',help='wall time')
+   parser.add_option('--exculude',dest='exclude',type='string',action='store',default=None,help='nodes to be excluded (separated by \",\")')
+   options,args = parser.parse_args(ArgsIn)
+   if len(args) < 2:
+      print "Specify the input diretory"
+      parser.print_help()
+      sys.exit(0)
+
+   return options,args
+
+def string_sp_callback(option, opt, value, parser):
+   setattr(parser.values, option.dest, value.split(','))
+
+def Determine_joblist(options, args):
+   joblist = [] 
+   input_dir = args[1]
+   curdir = os.getcwd()
+   os.chdir(input_dir)
+   if options.keywords == None:
+      print "Run all the jobs under the input dir"
+      temp_list = glob.glob('*.in')
+      for temp in temp_list:
+         if options.reverse not in temp:
+            joblist.append(temp)
+
+   elif not options.union:
+      print "Figure out the overlap of all the keywords" 
+      keyword_list = options.keywords
+      print keyword_list
+      temp_list = []
+      temp_list = glob.glob('*'+keyword_list[0]+'*.in')
+      #subtractive approach
+      for temp in temp_list:
+         remove = False
+         for keyword in keyword_list:
+            if keyword not in temp:
+               remove = True
+               break
+         if not remove and options.reverse not in temp:
+            joblist.append(temp)
+
+   elif options.union:
+      print "Figure out the union of all the keywords"
+      keyword_list = options.keywords
+      print keyword_list
+      #additive approach
+      for keyword in keyword_list:
+         temp_list = glob.glob('*'+keyword+'*.in')
+         for temp in temp_list:
+            if temp not in joblist and options.reverse not in temp:
+               joblist.append(temp)
+   os.chdir(curdir)
+   print "%d jobs" %len(joblist)
+   print joblist 
+   return joblist
+
+def run_jobs(joblist, options, args):
+   input_dir = args[1]
+   curdir = os.getcwd()
+   os.chdir(input_dir)
+   ncores = options.ncores
+
+   command = "submitSLURM -q mhg -t openmp -p "+str(ncores)+' -Q '+options.qchem
+   if options.queue != None:
+      command += ' -a '+options.queue
+   if options.time != None:
+      command += ' -l time='+options.time
+   if options.ppn != None:
+      command += ' --ppn='+str(options.ppn)
+   if options.exclude != None:
+      command += ' --exclude='+str(options.exclude) 
+   for jobname in joblist:
+      submit_command = command+' '+jobname
+      os.system(submit_command)
+
+   os.chdir(curdir)
+
+
+
+#the script
+options, args = ParseInput(sys.argv)
+joblist = Determine_joblist(options,args)
+run_jobs(joblist, options,args)
+
