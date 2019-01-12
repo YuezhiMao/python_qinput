@@ -216,3 +216,19 @@ def add_aux_basis(basis, curREM):
       ModRem('AUX_BASIS', 'RIMP2-AUG-CC-PVQZ', curREM)
    else:
       print "No corresponding auxiliary basis for "+basis+" yet"
+
+def apply_single_geom_constraint(fw, geom_param, constraint_template):
+   fr = open(constraint_template, 'r')
+   fw.write('\n$opt\n')
+   for line in fr.readlines():
+      l_split = line.split()
+      if len(l_split) > 2: #constraint line
+         l_split[-1] = str(geom_param)
+         for idx, item in enumerate(l_split, 1):
+            if idx != len(l_split):
+               fw.write('%s\t' %item)
+            else:
+               fw.write('%s\n' %item)
+      else:
+         fw.write(line)
+   fw.write('$end\n')

@@ -23,6 +23,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--do_freq', dest='do_freq', action='store_true', default=False, help='do frequency calculation at the minimum of each PES')
    parser.add_option('--do_ferf', dest='do_ferf', action='store_true', default=False, help='use FERF to construct the polarized PES')
    parser.add_option('--loose', dest='loose', action='store_true', default=False, help='Use looser convergence criterion for geom opt')
+   parser.add_option('--geom_constr', dest='geom_constr', action='store', default=None, type='string', help='specify the template file for adding geometry optimization constraint')
     
    options, args = parser.parse_args(ArgsIn)
 
@@ -84,7 +85,15 @@ def get_nameroot(Name):
       Nameroot = Name
    return Nameroot
 
-def XYZ_to_Input(fw, XYZ, FRGM, curREM, read_mol=False, do_freq=False, do_ferf=False, genbas=False):
+def append_single_geom_constraint(fw, constraint_template, XYZ, placeholder='dist'):
+   l = re.search(placeholder+'_(\S+)', XYZ.Name)
+   if l == None:
+      print("No geom_param specified in xyz file name. Try different placeholder or you are fucked")
+      sys.exit(0)
+   geom_param = float(l.group(1))
+   qrems.apply_single_geom_constraint(fw, geom_param, constraint_template)
+
+def XYZ_to_Input(fw, XYZ, FRGM, curREM, read_mol=False, do_freq=False, do_ferf=False, genbas=False, geom_constr=None):
    #print "generate %s" %inputfile
    #check if unrestricted (any open-shell fragment?)
    unrestricted = qmol.detect_unrestricted_frgm(FRGM)
@@ -102,6 +111,8 @@ def XYZ_to_Input(fw, XYZ, FRGM, curREM, read_mol=False, do_freq=False, do_ferf=F
    qrems.AppendRem(fw, curREM)
    if genbas:
       qrems.copy_section_over(fw, 'genbas')
+   if geom_constr != None:
+      append_single_geom_constraint(fw, geom_constr, XYZ)
 
    #if frequency is desired, append a second job
    if do_freq:
@@ -119,17 +130,17 @@ def XYZ_to_Input_Integrated(fw, XYZ, FRGM, method, basis, options):
    #Fully relaxed PES first 
    curREM = qrems.ParseRems(os.path.expandvars('$QREMPATH')+'/'+'rem_scfgeom')
    set_rems_adiabatic_eda(curREM, method, basis, options)
-   XYZ_to_Input(fw, XYZ, FRGM, curREM, read_mol=False, do_freq=options.do_freq, genbas=use_genbas)
+   XYZ_to_Input(fw, XYZ, FRGM, curREM, read_mol=False, do_freq=options.do_freq, genbas=use_genbas, geom_constr=options.geom_constr)
    fw.write('\n@@@\n\n')
    #Polarized PES
    curREM = qrems.ParseRems(os.path.expandvars('$QREMPATH')+'/'+'rem_polgeom')
    set_rems_adiabatic_eda(curREM, method, basis, options)
-   XYZ_to_Input(fw, XYZ, FRGM, curREM, read_mol=True, do_freq=options.do_freq, do_ferf=options.do_ferf, genbas=use_genbas)
+   XYZ_to_Input(fw, XYZ, FRGM, curREM, read_mol=True, do_freq=options.do_freq, do_ferf=options.do_ferf, genbas=use_genbas, geom_constr=options.geom_constr)
    fw.write('\n@@@\n\n')
    #Frozen PES
    curREM = qrems.ParseRems(os.path.expandvars('$QREMPATH')+'/'+'rem_frzgeom')
    set_rems_adiabatic_eda(curREM, method, basis, options)
-   XYZ_to_Input(fw, XYZ, FRGM, curREM, read_mol=True, do_freq=options.do_freq, genbas=use_genbas)
+   XYZ_to_Input(fw, XYZ, FRGM, curREM, read_mol=True, do_freq=options.do_freq, genbas=use_genbas, geom_constr=options.geom_constr)
 
 #the script
 options, args = ParseInput(sys.argv)
@@ -195,7 +206,7 @@ for method in options.method:
             fw = open(inputfile, 'w')
             curREM = qrems.ParseRems(os.path.expandvars('$QREMPATH')+'/'+'rem_frzgeom')
             set_rems_adiabatic_eda(curREM, method, basis, options)
-            XYZ_to_Input(fw, parsed_XYZ, FRGM, curREM, do_freq=options.do_freq, genbas=(basis.lower()=='gen'))
+            XYZ_to_Input(fw, parsed_XYZ, FRGM, curREM, do_freq=options.do_freq, genbas=(basis.lower()=='gen'), geom_constr=options.geom_constr)
             fw.close()
 
          elif options.pestype.lower()=='pol' or options.pestype.lower()=='polarized': #separated calculation on the polarized PES
@@ -219,7 +230,7 @@ for method in options.method:
             fw = open(inputfile, 'w')
             curREM = qrems.ParseRems(os.path.expandvars('$QREMPATH')+'/'+'rem_polgeom')
             set_rems_adiabatic_eda(curREM, method, basis, options)
-            XYZ_to_Input(fw, parsed_XYZ, FRGM, curREM, do_freq=options.do_freq, do_ferf=options.do_ferf, genbas=(basis.lower()=='gen'))
+            XYZ_to_Input(fw, parsed_XYZ, FRGM, curREM, do_freq=options.do_freq, do_ferf=options.do_ferf, genbas=(basis.lower()=='gen'), geom_constr=options.geom_constr)
             fw.close()
             
          elif options.pestype.lower()=='scf' or options.pestype.lower()=='full': #separated calculation on the fully relaxed PES
@@ -233,7 +244,7 @@ for method in options.method:
             fw = open(inputfile, 'w')
             curREM = qrems.ParseRems(os.path.expandvars('$QREMPATH')+'/'+'rem_scfgeom')
             set_rems_adiabatic_eda(curREM, method, basis, options)
-            XYZ_to_Input(fw, parsed_XYZ, FRGM, curREM, do_freq=options.do_freq, genbas=(basis.lower()=='gen'))
+            XYZ_to_Input(fw, parsed_XYZ, FRGM, curREM, do_freq=options.do_freq, genbas=(basis.lower()=='gen'), geom_constr=options.geom_constr)
             fw.close()
 
          else:
