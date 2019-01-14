@@ -99,15 +99,20 @@ if options.rpa:
 if options.sol != None:
    qrems.ModRem('SOLVENT_METHOD', options.sol, myrems)
 
+ex_method = 'tda'
+if options.rpa:
+   ex_method = 'tddft'
+elif options.spinflip:
+   ex_method = 'sftda'
 for method in options.method:
    for basis in options.basis:
       qrems.set_rems_common(myrems, method, basis)
       for xyz_file in xyzfile_list:
          parsed_XYZ = qmol.XYZ(xyz_file)
          if options.opt:
-            inputfile = input_path+parsed_XYZ.Name+'_geom_'+method+'_'+qrems.basis_abbr(basis)+'.in' 
+            inputfile = input_path+parsed_XYZ.Name+'_'+ex_method+'_geom_'+method+'_'+qrems.basis_abbr(basis)+'.in' 
          else:
-            inputfile = input_path+parsed_XYZ.Name+'_'+method+'_'+qrems.basis_abbr(basis)+'.in' 
+            inputfile = input_path+parsed_XYZ.Name+'_'+ex_method+'_'+method+'_'+qrems.basis_abbr(basis)+'.in' 
          fw = open(inputfile, 'w')
          XYZ_to_Input(fw, parsed_XYZ, myrems, options)
          fw.close()
