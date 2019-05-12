@@ -97,13 +97,17 @@ def fragment_translate_log(XYZ, FRGM, name_root, atom1_idx, atom2_idx, shifted_f
    outfile = dest_path + '/'+name_root+'_logdist_'+format(dist_log, '.2f')+'.xyz'
    xyzgeom.write_xyz_file(outfile, XYZ.AtomList, Coords)
 
-def modify_bond_length(XYZ, name_root, anchor_atom, atom2move, displacement, dest_path):
+def modify_bond_length(XYZ, name_root, anchor_atom, atom2move, displacement, dest_path, show_abs_bondlength=False):
    Coords = np.copy(XYZ.CoordList)
    bond_vector = Coords[atom2move-1] - Coords[anchor_atom-1]
    bond_vector /= np.linalg.norm(bond_vector, 2)
    #update the position of atom2move
    Coords[atom2move-1] += displacement * bond_vector
-   outfile = dest_path + '/' + name_root + '_dist_' + format(displacement, '.4f') + '.xyz'
+   if show_abs_bondlength:
+      new_bond_length = np.linalg.norm(Coords[atom2move-1] - Coords[anchor_atom-1])
+      outfile = dest_path + '/' + name_root + '_bond_' + format(new_bond_length, '.5f') + '.xyz'
+   else:
+      outfile = dest_path + '/' + name_root + '_bond_' + format(displacement, '.4f') + '.xyz'
    xyzgeom.write_xyz_file(outfile, XYZ.AtomList, Coords)
 
 #the script
@@ -140,7 +144,7 @@ if options.bond: #scan a single bond length
       atom2move = atom2_idx
       displacement = start_value
       while displacement < end_value + increment/100.0:
-         modify_bond_length(parse_XYZ, name_root, anchor_atom, atom2move, displacement, dest_path)
+         modify_bond_length(parse_XYZ, name_root, anchor_atom, atom2move, displacement, dest_path, show_abs_bondlength=False)
          displacement += increment
 
 else:   #scan intermolecular distance

@@ -145,3 +145,39 @@ def detect_unrestricted_frgm(FRGM):
             return True
             break
     return False
+
+def ParseMolFile(MoleculeFile):
+   MOLECULE = {}
+   MOLECULE["name"] = re.search('([^\/]+).mol', MoleculeFile).group(1)
+   MOLECULE["nlines"] = 0
+   curline = 0
+   MOLECULE["the_line"] = {}
+   MOLECULE["unrestricted"] = False
+   MOLECULE["fragmented"] = False
+   f = open(MoleculeFile,'r')
+   line = f.readline()
+   mult_checked = False
+   while line!='':
+      MOLECULE["the_line"][str(curline)] = line
+      curline += 1
+      MOLECULE["nlines"] = curline
+      l=re.search("^\s*(\S+)\s+(\S+)\s*$",line) #charge and mult
+      if (l!=None and not mult_checked):
+         if (int(l.group(2)) != 1):	#multiplicity larger than 1
+            MOLECULE["unrestricted"] = True
+         mult_checked=True
+      l=re.search("(--)",line) #fragment indicator
+      if (not l==None):
+         MOLECULE["fragmented"] = True
+      line = f.readline()
+   f.close()
+   return MOLECULE
+				
+def WriteMolSection(fw, MyMOLECULE):
+   fw.write('$molecule\n')
+   for line in range(MyMOLECULE["nlines"]):
+      fw.write(MyMOLECULE["the_line"][str(line)])
+   fw.write('\n')
+   fw.write('$end\n')
+   fw.write('\n')
+   return
