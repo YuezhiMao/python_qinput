@@ -178,7 +178,7 @@ def get_gzmat(output_file):
 
 def get_energy(options): #This function should be called in "manipulate_one_folder"
    tmpfile = 'tmp_energy'
-   data_file = 'energy.csv'
+   data_file = 'energy_of_opt_structures.csv'
    os.system('grep "Final energy is" *.out > '+tmpfile)
    fr = open(tmpfile,'r')
    datapoints = []

@@ -1,0 +1,118 @@
+#!/usr/bin/env python
+#This script is to generate qchem input by merging the MOLECULE and REM part
+#for currently useful JOBTYPES: vdw, block or stripe (for test), large (conventional)
+import os, glob, re, sys
+import subprocess as sp
+from optparse import OptionParser
+import qrems, qmol
+
+def ParseInput(ArgsIn):
+   UseMsg = '''
+   make_input_mab [options] [mol_dir]
+   ''' 
+   parser = OptionParser(usage=UseMsg)
+   parser.add_option('--noexact',dest='noexact',action='store_true',default=False,help='Not running the exact SCF calculations')
+   parser.add_option('-m','--method',dest='method',action='callback',type='string', default=None, callback=string_sp_callback, help='The methods (density functionals) to use')
+   parser.add_option('-b','--basis',dest='basis',action='callback',callback=string_sp_callback, type='string', default='aug-cc-pvqz',help='The target basis (default is aug-cc-pVQZ)')
+   parser.add_option('-r','--ref',dest='ref_basis',action='store', type='string', default='6-31+G(D)',help='The reference basis for MAB')
+   parser.add_option('-i','--input',dest='input_dir',action='store',type='string',default=None,help='The directory storing input files')
+   parser.add_option('--unproj',dest='unproj',action='store_true',default=False,help='Using projected reference basis for MAB fitting')
+   parser.add_option('--incore',dest='incore',action='store_true',default=False,help='use in-core code for MAB-SCF')
+   parser.add_option('--addvec',dest='addvec',action='store_true',default=False,help='turn on the adding vector strategy')
+   parser.add_option('--aux',dest='aux_basis',action='store',default='rimp2-aug-cc-pvtz',type='string',help='set auxiliary basis')
+
+   options,args = parser.parse_args(ArgsIn)
+   if len(args) < 2:
+      print "The directory for .mol files should be specified"
+      parser.print_help()
+      sys.exit(1)
+   elif options.method==None:
+      print "Specify the method (density funcitonals)"
+      parser.print_help()
+      sys.exit(1)
+   elif options.input_dir==None:
+      print "Specify the input_dir"
+      parser.print_help()
+      sys.exit(1)
+
+   return options, args
+
+def string_sp_callback(option, opt, value, parser):
+   setattr(parser.values, option.dest, value.split(','))
+
+def mol_to_input_mabscf(fw, parsed_mol, myrems, options):
+   qmol.WriteMolSection(fw, parsed_mol)
+   qrems.ModRem('MAB_REF_BASIS', options.ref_basis, myrems)
+   qrems.ModRem('MAB_PT_METHOD', '1', myrems)
+   qrems.ModRem('DO_DOUBLE_MIN', 'FALSE', myrems)
+   qrems.ModRem('MAB_CONV', '7', myrems)
+   qrems.ModRem('XC_GRID', '000075000302', myrems)
+   qrems.ModRem('NL_GRID', '1', myrems)
+   if parsed_mol["unrestricted"]:
+      qrems.ModRem('UNRESTRICTED', 'TRUE', myrems)
+   else:
+      qrems.ModRem('UNRESTRICTED', 'FALSE', myrems)
+   if options.unproj:
+      qrems.ModRem('MAB_UNPROJ_REF', 'TRUE', myrems)
+   else:
+      qrems.ModRem('MAB_UNPROJ_REF', 'FALSE', myrems)
+   if options.addvec:
+      qrems.ModRem('MAB_AUG_THRESH', '2', myrems)
+   else:
+      qrems.ModRem('MAB_AUG_THRESH', '0', myrems)
+   if options.incore:
+      qrems.ModRem('MAB_INCORE_FOCK', 'TRUE', myrems)
+      qrems.ModRem('AUX_BASIS', options.aux_basis, myrems)
+   else:
+      qrems.ModRem('MAB_INCORE_FOCK', 'TRUE', myrems)
+      
+   qrems.AppendRem(fw, myrems)
+
+def mol_to_input_stdscf(fw, parsed_mol, myrems, options):
+   qmol.WriteMolSection(fw, parsed_mol)
+   if parsed_mol["unrestricted"]:
+      qrems.ModRem('UNRESTRICTED', 'TRUE', myrems)
+   else:
+      qrems.ModRem('UNRESTRICTED', 'FALSE', myrems)
+   qrems.ModRem('XC_GRID', '000075000302', myrems)
+   qrems.ModRem('NL_GRID', '1', myrems)
+   qrems.AppendRem(fw, myrems)  
+
+
+
+#the script
+options, args = ParseInput(sys.argv) 
+mol_dir = args[1]
+if mol_dir[-1:] != '/':
+   mol_dir += '/'
+molfile_list = glob.glob(mol_dir+'*.mol')
+curdir = os.getcwd()
+
+input_dir = options.input_dir
+if input_dir[-1:] != '/':
+   input_dir += '/'
+if not os.path.exists(input_dir):
+   sp.call(['mkdir', input_dir])
+
+for method in options.method:
+   for basis in options.basis:
+      rem_file = os.path.expandvars('$QREMPATH')+'/rem_mabscf'
+      myrems = qrems.ParseRems(rem_file)
+      qrems.set_rems_common(myrems, method, basis)
+
+      rem_std = os.path.expandvars('$QREMPATH')+'/rem_stdscf'
+      myrems_std = qrems.ParseRems(rem_std)
+      qrems.set_rems_common(myrems_std, method, basis)
+
+      for mol_file in molfile_list:
+         parsed_mol = qmol.ParseMolFile(mol_file)
+         inputfile = input_dir + parsed_mol['name'] + '_mabscf_' + method + '_' + qrems.basis_abbr(basis)+'.in'
+         fw = open(inputfile, 'w')
+         mol_to_input_mabscf(fw, parsed_mol, myrems, options)
+         fw.close()
+         
+         if not options.noexact:
+            inputfile = input_dir + parsed_mol['name'] + '_stdscf_' + method + '_' + qrems.basis_abbr(basis)+'.in'
+            fw = open(inputfile, 'w')
+            mol_to_input_stdscf(fw, parsed_mol, myrems_std, options)
+            fw.close()
