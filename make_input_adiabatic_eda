@@ -24,6 +24,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--do_ferf', dest='do_ferf', action='store_true', default=False, help='use FERF to construct the polarized PES')
    parser.add_option('--loose', dest='loose', action='store_true', default=False, help='Use looser convergence criterion for geom opt')
    parser.add_option('--geom_constr', dest='geom_constr', action='store', default=None, type='string', help='specify the template file for adding geometry optimization constraint')
+   parser.add_option('--lr', dest='lr', action='store_true', default=False, help='turn on special settings for long-range jobs') 
     
    options, args = parser.parse_args(ArgsIn)
 
@@ -61,6 +62,11 @@ def set_rems_adiabatic_eda(curREM, method, basis, options):
    if (method != 'HF'):
       qrems.ModRem ('XC_GRID', '000075000302', curREM)  #not using the too dense grid		
       qrems.ModRem ('NL_GRID', '1', curREM)
+   if options.lr:
+      qrems.ModRem('GEOM_OPT_TOL_GRADIENT', '20', curREM)
+      qrems.ModRem('GEOM_OPT_TOL_DISPLACEMENT', '10', curREM) #prevent immeidate convergence
+      qrems.ModRem('GEOM_OPT_TOL_ENERGY', '10', curREM)
+      qrems.ModRem('XC_GRID', '000250000590', curREM)
    if options.sym_ignore:
       qrems.ModRem('SYM_IGNORE', 'TRUE', curREM)
    else:
@@ -88,7 +94,8 @@ def get_nameroot(Name):
 def append_single_geom_constraint(fw, constraint_template, XYZ, placeholder='dist'):
    l = re.search(placeholder+'_(\S+)', XYZ.Name)
    if l == None:
-      print("No geom_param specified in xyz file name. Try different placeholder or you are fucked")
+      print (XYZ.Name)
+      print ("No geom_param specified in xyz file name. Try different placeholder or you are fucked")
       sys.exit(0)
    geom_param = float(l.group(1))
    qrems.apply_single_geom_constraint(fw, geom_param, constraint_template)
