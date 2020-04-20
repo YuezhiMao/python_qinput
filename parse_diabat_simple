@@ -1,0 +1,131 @@
+#! /usr/bin/env python
+
+import os, glob, re, sys
+import subprocess as sp
+from optparse import OptionParser
+import numpy as np
+
+def ParseInput(ArgsIn):
+    UseMsg = "parse_diabat [options] [result_dir]"
+    parser = OptionParser(usage=UseMsg)
+
+    parser.add_option('-a','--all',dest='all',action='store_true',default=False, help='parse all the output directories under the specified directory')
+    parser.add_option('-t','--target',dest='target',action='callback',callback=string_sp_callback,type='string',default=None,help='the output directories to parse (separated by \",\")')
+    parser.add_option('-k','--keyword',dest='keyword',action='store',type='string',default=None,help='parse all the output dirs containing the keyword')
+    parser.add_option('--placeholder',dest='placeholder',action='store',type='string',default='dist',help='placeholder for the serial number of each job')
+
+    options, args = parser.parse_args(ArgsIn)
+    if len(args) < 2:
+      if options.all or options.keyword:
+         print "You must specify a result folder for -a and -k mode"
+         parser.print_help()
+         sys.exit(0)
+
+    if not options.all and options.target==None and options.keyword==None:
+      print "The target directory must be specified: one or some or all"
+      parser.print_help()
+      sys.exit(1)
+
+    return options, args
+
+def string_sp_callback(option, opt, value, parser):
+    setattr(parser.values, option.dest, value.split(','))
+
+def get_diabat_method_list():
+    #this function should be called only when the CWD contains output files
+    diabat_method_list = []
+    output_list = glob.glob("*.out")
+    for output in output_list:
+        diabat_method = re.search('_([^_]+)_([^_]+)_([^_]+).out', output).group(1).lower()
+        if diabat_method not in diabat_method_list:
+            diabat_method_list.append(diabat_method)
+    print "Diabat schemes:"
+    print diabat_method_list
+    return diabat_method_list
+
+def parse_single_dir(options):
+    data = {}
+    diabat_method_list = get_diabat_method_list()
+    supported_methods = ["pod", "esid", "fodft", "msdft", "cdft"]
+    for diabat_method in diabat_method_list:
+        recognized = False
+        for keyword in supported_methods:
+            if keyword in diabat_method:
+                recognized = True
+                data = parse_frag_diabat_results(data, options)
+                break
+        if not recognized:
+            print "unknown diabat method"
+            sys.exit(0)
+    print_out_couplings(data, options)
+
+def parse_frag_diabat_results(data, options):
+    tmpfile = 'diab.tmp'
+    command = "grep \"meV\" *.out > "+tmpfile
+    os.system(command)
+    fr = open(tmpfile, 'r')
+    data = {}
+    for line in fr.readlines():
+        l_sp = line.split()
+        nameparser = re.search('(\S+)_'+options.placeholder+'_([^_]+)_([^_]+)_([^_]+)_', l_sp[0])
+        molname = nameparser.group(1) 
+        if molname not in data:
+            data[molname] = {}
+        geom_param = float(nameparser.group(2))
+        if geom_param not in data[molname]:
+            data[molname][geom_param] = {}
+        diab = nameparser.group(3)
+        if diab not in data[molname][geom_param]:
+            data[molname][geom_param][diab] = {}
+        func = nameparser.group(4)
+        if func not in data[molname][geom_param][diab]:
+            data[molname][geom_param][diab][func] = {}
+        coupling = float(re.search('\((\S+)', l_sp[-2]).group(1))
+        data[molname][geom_param][diab][func] = coupling
+    fr.close()
+    sp.call(['rm', tmpfile])
+    return data
+
+def print_out_couplings(data, options):
+    fw = open('Hab.csv', 'w')
+    for molname in data:
+        fw.write(molname+'\n')
+        fw.write(options.placeholder)
+        for geom_param in data[molname]:
+            for diab in data[molname][geom_param]:
+                for func in data[molname][geom_param][diab]:
+                    fw.write(','+diab+'/'+func)
+            fw.write('\n')
+            break
+        for geom_param in sorted(data[molname]):
+            fw.write('%.1f' %geom_param)
+            for diab in data[molname][geom_param]:
+                for func in data[molname][geom_param][diab]:
+                    fw.write(',%.2f' %data[molname][geom_param][diab][func])
+            fw.write('\n') 
+    fw.close()
+
+
+#the main script
+options, args = ParseInput(sys.argv)
+result_dir = None
+if len(args) > 1:
+   result_dir = args[1]
+   if result_dir[-1:]!='/':
+      result_dir += '/'
+outdir_list = []
+if options.all:
+   outdir_list = glob.glob(result_dir+'*/')
+elif options.keyword!=None:
+   outdir_list = glob.glob(result_dir+'*'+options.keyword+'*/')
+if options.target!=None:
+   for target_dir in options.target:
+      if target_dir not in outdir_list:
+         outdir_list.append(target_dir)
+print "parse the following output dirs:"
+print outdir_list
+curdir = os.getcwd()
+for outdir in outdir_list:
+   os.chdir(outdir)
+   parse_single_dir(options)
+   os.chdir(curdir)

@@ -60,6 +60,14 @@ def parse_single_dir(options):
             parse_cdft_results(options)
         elif "msdft" in diabat_method:
             parse_msdft_results(options)
+        elif "noci-dft" in diabat_method:
+            parse_noci_dft_results(options)
+        elif "eomip" in diabat_method:
+            parse_eomip_results(options)
+        elif "tddft" in diabat_method:
+            parse_tddft_tda_results(options)
+        elif "sftda" in diabat_method:
+            parse_sftda_results(options)
         else:
             print "unknown diabat method"
             sys.exit(0)
@@ -183,6 +191,35 @@ def parse_msdft_results(options):
     print_diabat_coupling_test_data(result_file2, data2, options)
     #parse_msdft_hamil_overlap()
 
+def parse_noci_dft_results(options):
+    tmpfile = 'noci-dft.tmp'
+    command = "grep \"Coupling between diabats\" *noci-dft*.out > "+tmpfile
+    os.system(command)
+    fr = open(tmpfile, 'r')
+    data1 = {}
+    data2 = {}   #two results in one output
+    counter = 1
+    for line in fr.readlines():
+        l_sp = line.split()
+        nameparser = re.search('(\S+)_dist_(\S+)_noci-dft', l_sp[0])
+        molname = nameparser.group(1) 
+        if molname not in data1:
+            data1[molname] = {}
+        if molname not in data2:
+            data2[molname] = {}
+        geom_param = float(nameparser.group(2))
+        coupling = float(re.search('\((\S+)', l_sp[-2]).group(1))
+        if counter == 1:
+            data1[molname][geom_param] = coupling
+            counter = 2
+        elif counter == 2:
+            data2[molname][geom_param] = coupling
+            counter = 1
+    fr.close()
+    sp.call(['rm', tmpfile])
+    result_file = 'noci-dft.csv'
+    print_diabat_coupling_test_data(result_file, data1, options)
+
 def parse_msdft_hamil_overlap():
     tmpfile = 'msdft.tmp'
     #parse H12
@@ -223,6 +260,144 @@ def parse_msdft_hamil_overlap():
     #print data
     result_file = 'msdft_h12_s12.csv'
     print_msdft_h12_s12_values(result_file, data)
+
+def parse_sftda_results(options):
+    tmpfile = 'sftda.tmp'
+    command = "grep \"Total energy for state\" *sftda*.out > "+tmpfile
+    os.system(command)
+    fr = open(tmpfile, 'r')
+    aux_data = {}
+    #parse state energies first
+    for line in fr.readlines():
+        l_sp = line.split()
+        nameparser = re.search('(\S+)_dist_(\S+)_sftda', l_sp[0])
+        molname = nameparser.group(1)
+        if molname not in aux_data:
+            aux_data[molname] = {}
+        geom_param = float(nameparser.group(2))
+        if geom_param not in aux_data[molname]:
+            aux_data[molname][geom_param] = {}
+        state_idx = int(re.search("(\d+):", l_sp[5]).group(1))
+        state_energy = float(l_sp[-2])
+        aux_data[molname][geom_param][state_idx] = state_energy
+    fr.close()
+    sp.call(['rm', tmpfile])
+    #calculate the diabatic coupling
+    data = {}
+    hartree_to_ev = 27.2114
+    for molname in aux_data:
+        if molname not in data:
+            data[molname] = {}
+        for geom_param in aux_data[molname]:
+            if aux_data[molname][geom_param].get(1) != None and aux_data[molname][geom_param].get(2) != None:
+                data[molname][geom_param] = 27.2114 * (aux_data[molname][geom_param][2] - aux_data[molname][geom_param][1]) * 1000.0/2.0
+            else:
+                data[molname][geom_param] = -1.0 
+    #print data
+    result_file = 'sftda.csv'
+    print_diabat_coupling_test_data(result_file, data, options)
+
+def parse_tddft_tda_results(options):
+    tmpfile = 'tddft.tmp'
+    #parse ground state energies
+    command = "grep \"ion met\" *tddft*.out > "+tmpfile
+    os.system(command)
+    fr = open(tmpfile, 'r')
+    aux_data = {}
+    for line in fr.readlines():
+        l_sp = line.split()
+        nameparser = re.search('(\S+)_dist_(\S+)_tddft', l_sp[0])
+        molname = nameparser.group(1)
+        if molname not in aux_data:
+            aux_data[molname] = {}
+        geom_param = float(nameparser.group(2))
+        if geom_param not in aux_data[molname]:
+            aux_data[molname][geom_param] = {}
+        E_gs = float(l_sp[2])
+        aux_data[molname][geom_param]['gs'] = E_gs 
+    fr.close()
+    #parse the first excited state energy
+    command = "grep \"Total energy for state  1:\" *tddft*.out > "+tmpfile
+    os.system(command)
+    fr = open(tmpfile, 'r')
+    for line in fr.readlines():
+        l_sp = line.split()
+        nameparser = re.search('(\S+)_dist_(\S+)_tddft', l_sp[0])
+        molname = nameparser.group(1)
+        geom_param = float(nameparser.group(2))
+        E_ex = float(l_sp[-2])
+        if aux_data[molname][geom_param].get('ex_tda') == None:
+            aux_data[molname][geom_param]['ex_tda'] = E_ex
+        else:
+            aux_data[molname][geom_param]['ex_tddft'] = E_ex
+    fr.close()
+    sp.call(['rm', tmpfile])
+    #calculate the diabatic coupling
+    data_tda = {}
+    data_tddft = {}
+    hartree_to_ev = 27.2114
+    for molname in aux_data:
+        if molname not in data_tda:
+            data_tda[molname] = {}
+            data_tddft[molname] = {}
+        for geom_param in aux_data[molname]:
+            if aux_data[molname][geom_param].get('gs') != None and aux_data[molname][geom_param].get('ex_tda') != None:
+                data_tda[molname][geom_param] = 27.2114 * (aux_data[molname][geom_param]['ex_tda'] - aux_data[molname][geom_param]['gs']) * 1000.0/2.0
+            else:
+                data_tda[molname][geom_param] = -1.0
+
+            if aux_data[molname][geom_param].get('gs') != None and aux_data[molname][geom_param].get('ex_tddft') != None:
+                data_tddft[molname][geom_param] = 27.2114 * (aux_data[molname][geom_param]['ex_tddft'] - aux_data[molname][geom_param]['gs']) * 1000.0/2.0
+            else:
+                data_tddft[molname][geom_param] = -1.0
+    #print data
+    result_file = 'tda.csv'
+    print_diabat_coupling_test_data(result_file, data_tda, options)
+    result_file = 'tddft.csv'
+    print_diabat_coupling_test_data(result_file, data_tddft, options)
+
+def parse_eomip_results(options):
+    #consider the symmetric case first, not doing gmh
+    tmpfile = "E_ex.txt"
+    command = "grep \"EOMIP transition\" -A 1 *.out > "+tmpfile
+    os.system(command)
+
+    molname = None
+    state_idx = None
+    geom_param = None
+
+    aux_data = {}
+    fr = open(tmpfile, 'r')
+    for line in fr.readlines():
+        l_sp = line.split()
+        if re.search('(\d+)\/A', l_sp[-1]) != None:
+            state_idx = int(re.search('(\d+)\/A', l_sp[-1]).group(1))
+            molname = re.search('(\S+)_dist_(\S+)_eomip', l_sp[0]).group(1)
+            geom_param = float(re.search('(\S+)_dist_(\S+)_eomip', l_sp[0]).group(2)) 
+            if molname not in aux_data:
+                aux_data[molname] = {}
+            if geom_param not in aux_data[molname]:
+                aux_data[molname][geom_param] = {}
+        elif "eV" in l_sp[-1]:
+            aux_data[molname][geom_param][state_idx] = float(l_sp[-2]) #energy in eV
+
+    #calculate the diabatic coupling
+    data_eomip = {}
+    for molname in aux_data:
+        if molname not in data_eomip:
+            data_eomip[molname] = {}
+        for geom_param in sorted(aux_data[molname]):
+            if aux_data[molname][geom_param].get(1) != None and aux_data[molname][geom_param].get(2) != None:
+                data_eomip[molname][geom_param] = (aux_data[molname][geom_param][2] - aux_data[molname][geom_param][1]) * 1000.0/2.0
+            else:
+                data_eomip = -1.0
+    sp.call(['rm', tmpfile])
+    #print data
+    result_file = 'eomip.csv'
+    print_diabat_coupling_test_data(result_file, data_eomip, options)
+
+
+
 
 def print_msdft_h12_s12_values(result_file, data):
     fw = open(result_file, 'w')
@@ -355,7 +530,13 @@ def perform_error_analysis(fw, data, ref_values):
     MRSE = np.average(signed_rel_errors)
     MUE = np.average(np.absolute(signed_errors))
     MRUE = np.average(np.absolute(signed_rel_errors))
+    RMSE = np.linalg.norm(signed_errors, 2) / np.sqrt(signed_errors.shape[0])
+    RMSE_rel = np.linalg.norm(signed_rel_errors, 2) / np.sqrt(signed_rel_errors.shape[0])
+    var_MUE = np.linalg.norm(np.absolute(signed_errors) - MUE, 2)/np.sqrt(signed_errors.shape[0])
+    var_MRUE = np.linalg.norm(np.absolute(signed_rel_errors) - MRUE, 2)/np.sqrt(signed_rel_errors.shape[0])
     fw.write("MSE,%.2f\nMUE,%.2f\nMRSE,%.3f\nMRUE,%.3f\n" %(MSE, MUE, MRSE, MRUE))
+    fw.write("RMSE,%.2f\nRMSE_rel,%.3f\n" %(RMSE, RMSE_rel))
+    fw.write("var_MUE,%.2f\nvar_MRUE,%.3f\n" %(var_MUE, var_MRUE))
     #errors in beta
     fw.write("errors in beta:\n")
     MSE = np.average(signed_errors_beta)
@@ -395,6 +576,8 @@ def perform_error_analysis_separate_dist(fw, data, ref_values):
 
 def summarize_errors():
     csvfile_list = glob.glob('*.csv')
+    print "csvfiles: "
+    print csvfile_list
     summary_file = 'summary.csv'
     fw = open(summary_file, 'w')
     for csvfile in csvfile_list:
@@ -452,5 +635,5 @@ for outdir in outdir_list:
    os.chdir(outdir)
    parse_single_dir(options)
    os.chdir(curdir)
-
-extract_csv(result_dir)
+if options.all:
+   extract_csv(result_dir)

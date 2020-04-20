@@ -15,17 +15,16 @@ def ParseInput(ArgsIn):
    parser.add_option('-k','--keyword',dest='keyword',action='store',type='string',default=None,help='create inputs for xyz files containing the keyword')
    parser.add_option('-t','--target',dest='target',action='callback',callback=string_sp_callback,type='string',default=None,help='create input for certain xyz files')
    parser.add_option('-b','--basis',dest='basis',action='callback',callback=string_sp_callback, type='string', default='aug-cc-pvtz',help='The target basis (default is aug-cc-pVTZ)')
-   parser.add_option('-m','--method',dest='method',action='callback',type='string', default=None, callback=string_sp_callback,help='The methods (density functionals) to use')
    parser.add_option('-i','--input_path',dest='input_path',action='store',type='string', default='input/',help='The directory storing the generated inputs')
-   parser.add_option('--opt',dest='opt',action='store',type='int',default=None,help='specify the state to perform geom opt')
    parser.add_option('--charge',dest='charge',action='store',type='int',default=0,help='total charge of the system')
    parser.add_option('--mult',dest='mult',action='store',type='int',default=1,help='total multiplicity of the system') 
-   parser.add_option('--nroots',dest='nroots',action='store',type='int',default=4,help='number of roots (default 4)')
-   parser.add_option('--triplets',dest='triplets',action='store_true',default=False,help='calculate triplet roots')
-   parser.add_option('--rpa',dest='rpa',action='store_true',default=False,help='use full TDDFT (instead of TDA)')
-   parser.add_option('--spinflip',dest='spinflip',action='store_true',default=False,help='do spin-flip')
-   parser.add_option('--sol',dest='sol',action='store',type='string',default=None,help='specify the solvent model to use')
-   parser.add_option('--sol_file', dest='sol_file', action='store', type='string', default=None, help='file for the solvent model input section')
+   parser.add_option('--ip',dest='eomip',action='store',type='int',default=0,help='number of EOM-IP states')
+   parser.add_option('--sf',dest='eomsf',action='store',type='int',default=0,help='number of EOM-SF states')
+   parser.add_option('--ee',dest='eomee',action='store',type='int',default=0,help='number of EOM-EE states')
+   parser.add_option('--ea',dest='eomea',action='store',type='int',default=0,help='number of EOM-EA states')
+   parser.add_option('--noprop',dest='noprop',action='store_true',default=False,help='turn off excited state property calculations')
+   parser.add_option('--act_virt',dest='act_virt',action='store',type='int',default=0,help='number of active virts')
+   parser.add_option('--tot_virt',dest='tot_virt',action='store',type='int',default=0,help='total number of virts')
 
    options, args = parser.parse_args(ArgsIn)
    if len(args) < 2 and (options.all or options.keyword!=None):
@@ -35,12 +34,15 @@ def ParseInput(ArgsIn):
       print "The target directory must be specified: one or some or all"
       parser.print_help()
       sys.exit(1)
-   if options.spinflip and options.rpa:
-      print "Spin-flip only works with TDA. We turn off RPA forcefully"
-      options.rpa = False
-   if options.sol_file != None and options.sol == None:
-      print "Solvent method must be specified when sol_file is given"
-      sys.exit(0)
+   if not (options.eomip > 0 or options.eomsf > 0 or options.eomee > 0 or options.eomea > 0):
+      print "At least specify one type of excited states"
+      parser.print_help()
+      sys.exit(1)
+   if options.act_virt > 0 and (options.act_virt > options.tot_virt):
+      print "Active virt: %d, Total virt: %d" %(options.act_virt, options.tot_virt)
+      print "Invalid number of active virtuals"
+      sys.exit(1)
+
    return options, args
 
 def string_sp_callback(option, opt, value, parser):
@@ -49,12 +51,6 @@ def string_sp_callback(option, opt, value, parser):
 def XYZ_to_Input(fw, XYZ, curREM, options):
    qmol.WriteMolecule(fw, XYZ, options.charge, options.mult)
    qrems.AppendRem(fw, curREM)
-   if options.sol_file != None:
-      if not os.path.exists(options.sol_file):
-         print "specified pcm file does not exist"
-         sys.exit(0)
-      else:
-         qrems.copy_section_over(fw, options.sol_file)
 
 options, args = ParseInput(sys.argv)
 xyz_path =''
@@ -82,37 +78,51 @@ if input_path[-1:] != '/':
 if not os.path.exists(input_path):
    sp.call(['mkdir', input_path])
 
-rem_file = os.path.expandvars('$QREMPATH')+'/rem_tddft'
+rem_file = os.path.expandvars('$QREMPATH')+'/rem_eomccsd'
 myrems = qrems.ParseRems(rem_file)
-if options.opt != None:
-   qrems.ModRem('JOBTYPE', 'OPT', myrems)
-   qrems.ModRem('CIS_STATE_DERIV', str(options.opt), myrems)
-if options.nroots != None:
-   qrems.ModRem('CIS_N_ROOTS', str(options.nroots), myrems)
-if options.triplets:
-   qrems.ModRem('CIS_TRIPLETS', 'TRUE', myrems)
-if options.spinflip:
-   qrems.ModRem('SPIN_FLIP', 'TRUE', myrems)
-   options.mult += 2
-if options.rpa:
-   qrems.ModRem('RPA', '1', myrems)
-if options.sol != None:
-   qrems.ModRem('SOLVENT_METHOD', options.sol, myrems)
+if options.eomip > 0:
+   qrems.ModRem('IP_STATES', str(options.eomip), myrems)
+if options.eomsf > 0:
+   if options.mult == 1 or options.mult == 2: #not specified, not suitable for SF
+      options.mult += 2
+   qrems.ModRem('SF_STATES', str(options.eomsf), myrems)
+if options.eomee > 0:
+   qrems.ModRem('EE_STATES', str(options.eomee), myrems)
+if options.eomea > 0:
+   qrems.ModRem('EA_STATES', str(options.eomea), myrems)
 
-ex_method = 'tda'
-if options.rpa:
-   ex_method = 'tddft'
-elif options.spinflip:
-   ex_method = 'sftda'
+if options.noprop:
+   qrems.ModRem('CC_EOM_PROP', 'FALSE', myrems)
+   qrems.ModRem('CC_TRANS_PROP', 'FALSE', myrems)
+else:
+   qrems.ModRem('CC_EOM_PROP', 'TRUE', myrems)
+   qrems.ModRem('CC_TRANS_PROP', '2', myrems)
+
+if options.act_virt > 0:
+   n_frozen = options.tot_virt - options.act_virt
+   qrems.ModRem('N_FROZEN_VIRTUAL', str(n_frozen), myrems)
+
+qrems.ModRem('CC_MEMORY', str(options.cc_mem), myrems)
+qrems.ModRem('MEM_TOTAL', str(options.cc_mem+4000), myrems)
+
+if options.eomip > 0:
+   ex_method = 'eomip'
+elif options.eomsf > 0:
+   ex_method = 'eomsf'
+elif options.eomea > 0:
+   ex_method = 'eomea'
+else:
+   ex_method = 'eomee'
+if options.act_virt > 0:
+   ex_method += '_v'+str(options.act_virt)
+
+options.method = ['eom-ccsd']
 for method in options.method:
    for basis in options.basis:
       qrems.set_rems_common(myrems, method, basis)
       for xyz_file in xyzfile_list:
          parsed_XYZ = qmol.XYZ(xyz_file)
-         if options.opt:
-            inputfile = input_path+parsed_XYZ.Name+'_'+ex_method+'_geom_'+method+'_'+qrems.basis_abbr(basis)+'.in' 
-         else:
-            inputfile = input_path+parsed_XYZ.Name+'_'+ex_method+'_'+method+'_'+qrems.basis_abbr(basis)+'.in' 
+         inputfile = input_path+parsed_XYZ.Name+'_'+ex_method+'_'+method+'_'+qrems.basis_abbr(basis)+'.in' 
          fw = open(inputfile, 'w')
          XYZ_to_Input(fw, parsed_XYZ, myrems, options)
          fw.close()
