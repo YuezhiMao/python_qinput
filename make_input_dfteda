@@ -26,6 +26,8 @@ def ParseInput(ArgsIn):
    parser.add_option('--align_spin',dest='align_spin',action='store_true',default=False,help='set eda_align_frgm_spin = 2')
    parser.add_option('--mbe',dest='mbe',action='store_true',default=False,help='do many body expansion (limited to 3-body systems for now)')
    parser.add_option('--snap_range', dest='snap_range', action='callback', type='string', default=None, callback=string_sp_callback, help='Only run snapshots in the given range')
+   parser.add_option('--smd', dest='smd', action='store', type='string', default=None, help='turn on SMD solvation and specify the solvent')
+   parser.add_option('--pcm', dest='pcm', action='store', type='float', default=0., help='turn on PCM solvation and specify the dielectric constant')
    options, args = parser.parse_args(ArgsIn)
   
    if not options.onsite:
@@ -129,11 +131,15 @@ def set_rems_eda(curREM, method, basis, options):
       qrems.ModRem('EDA_SEPARATE_REHYB', 'TRUE', curREM)
    if options.align_spin:
       qrems.ModRem('EDA_ALIGN_FRGM_SPIN', '2', curREM)
+   if options.pcm:
+      qrems.ModRem('SOLVENT_METHOD', 'PCM', curREM)
+   if options.smd:
+      qrems.ModRem('SOLVENT_METHOD', 'SMD', curREM)
 
    #default rem_frgm
-   #qrems.ModRem_Frgm('MEM_TOTAL', '8000', curREM)
-   #qrems.ModRem_Frgm('MEM_STATIC', '2000', curREM)
-   #qrems.ModRem_Frgm('SCF_GUESS', 'SAD', curREM)
+   qrems.ModRem_Frgm('MEM_TOTAL', '8000', curREM)
+   qrems.ModRem_Frgm('MEM_STATIC', '2000', curREM)
+   qrems.ModRem_Frgm('SCF_GUESS', 'SAD', curREM)
 
 def XYZ_to_Input(inputfile, XYZ, FRGM, curREM, skipfrgm=0):
    fw = open(inputfile, 'w')
@@ -144,7 +150,9 @@ def XYZ_to_Input(inputfile, XYZ, FRGM, curREM, skipfrgm=0):
 
    WriteMolecule_Frgm(fw, XYZ, FRGM, skipfrgm)
    qrems.AppendRem(fw, curREM)
-   qrems.AppendRemFrgm(fw,curREM)
+   if options.pcm > 0.0 or options.smd != None:
+      qrems.AppendSolvationSecs(fw, options.pcm, options.smd)
+   #qrems.AppendRemFrgm(fw,curREM)
    fw.close()
 
 #the script 
