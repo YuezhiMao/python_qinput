@@ -491,6 +491,12 @@ def parse_neweda_generic(options, output_dir, keyword=None): #TODO: make this th
       for system in DataPoints:
          DataPoints[system]["E_int"] += DataPoints[system]["BSSE"]
          DataPoints[system]["E_vct"] += DataPoints[system]["BSSE"]
+   #modify elec and frz if doing pcm or smd
+   if options.pcm or options.smd:
+      for system in DataPoints:
+         DataPoints[system]["E_frz"] += DataPoints[system]["E_sol"]
+         DataPoints[system]["E_cls_elec"] += DataPoints[system]["E_sol"]
+         DataPoints[system]["E_elec"] += DataPoints[system]["E_sol"]
 
    #generate output
    if not keyword:
