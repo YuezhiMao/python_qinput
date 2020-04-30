@@ -25,6 +25,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--noprop',dest='noprop',action='store_true',default=False,help='turn off excited state property calculations')
    parser.add_option('--act_virt',dest='act_virt',action='store',type='int',default=0,help='number of active virts')
    parser.add_option('--tot_virt',dest='tot_virt',action='store',type='int',default=0,help='total number of virts')
+   parser.add_option('--cc_mem',dest='cc_mem',action='store',type='int',default=16000,help='value of CC memory')
 
    options, args = parser.parse_args(ArgsIn)
    if len(args) < 2 and (options.all or options.keyword!=None):
@@ -51,6 +52,33 @@ def string_sp_callback(option, opt, value, parser):
 def XYZ_to_Input(fw, XYZ, curREM, options):
    qmol.WriteMolecule(fw, XYZ, options.charge, options.mult)
    qrems.AppendRem(fw, curREM)
+
+def set_rems_eomccsd(myrems, options):
+    if options.eomip > 0:
+       qrems.ModRem('IP_STATES', str(options.eomip), myrems)
+    if options.eomsf > 0:
+       if options.mult == 1 or options.mult == 2: #not specified, not suitable for SF
+          options.mult += 2
+       qrems.ModRem('SF_STATES', str(options.eomsf), myrems)
+    if options.eomee > 0:
+       qrems.ModRem('EE_STATES', str(options.eomee), myrems)
+    if options.eomea > 0:
+       qrems.ModRem('EA_STATES', str(options.eomea), myrems)
+
+    if options.noprop:
+       qrems.ModRem('CC_EOM_PROP', 'FALSE', myrems)
+       qrems.ModRem('CC_TRANS_PROP', 'FALSE', myrems)
+    else:
+       qrems.ModRem('CC_EOM_PROP', 'TRUE', myrems)
+       qrems.ModRem('CC_TRANS_PROP', '2', myrems)
+
+    if options.act_virt > 0:
+       n_frozen = options.tot_virt - options.act_virt
+       qrems.ModRem('N_FROZEN_VIRTUAL', str(n_frozen), myrems)
+
+    qrems.ModRem('CC_MEMORY', str(options.cc_mem), myrems)
+    print "mem_total = " + str(options.cc_mem+4000)
+    qrems.ModRem('MEM_TOTAL', str(options.cc_mem+4000), myrems)
 
 options, args = ParseInput(sys.argv)
 xyz_path =''
@@ -80,30 +108,6 @@ if not os.path.exists(input_path):
 
 rem_file = os.path.expandvars('$QREMPATH')+'/rem_eomccsd'
 myrems = qrems.ParseRems(rem_file)
-if options.eomip > 0:
-   qrems.ModRem('IP_STATES', str(options.eomip), myrems)
-if options.eomsf > 0:
-   if options.mult == 1 or options.mult == 2: #not specified, not suitable for SF
-      options.mult += 2
-   qrems.ModRem('SF_STATES', str(options.eomsf), myrems)
-if options.eomee > 0:
-   qrems.ModRem('EE_STATES', str(options.eomee), myrems)
-if options.eomea > 0:
-   qrems.ModRem('EA_STATES', str(options.eomea), myrems)
-
-if options.noprop:
-   qrems.ModRem('CC_EOM_PROP', 'FALSE', myrems)
-   qrems.ModRem('CC_TRANS_PROP', 'FALSE', myrems)
-else:
-   qrems.ModRem('CC_EOM_PROP', 'TRUE', myrems)
-   qrems.ModRem('CC_TRANS_PROP', '2', myrems)
-
-if options.act_virt > 0:
-   n_frozen = options.tot_virt - options.act_virt
-   qrems.ModRem('N_FROZEN_VIRTUAL', str(n_frozen), myrems)
-
-qrems.ModRem('CC_MEMORY', str(options.cc_mem), myrems)
-qrems.ModRem('MEM_TOTAL', str(options.cc_mem+4000), myrems)
 
 if options.eomip > 0:
    ex_method = 'eomip'
@@ -120,9 +124,11 @@ options.method = ['eom-ccsd']
 for method in options.method:
    for basis in options.basis:
       qrems.set_rems_common(myrems, method, basis)
+      set_rems_eomccsd(myrems, options)
       for xyz_file in xyzfile_list:
          parsed_XYZ = qmol.XYZ(xyz_file)
-         inputfile = input_path+parsed_XYZ.Name+'_'+ex_method+'_'+method+'_'+qrems.basis_abbr(basis)+'.in' 
+         #inputfile = input_path+parsed_XYZ.Name+'_'+ex_method+'_'+method+'_'+qrems.basis_abbr(basis)+'.in' 
+         inputfile = input_path+parsed_XYZ.Name+'_'+ex_method+'_ccsd_'+qrems.basis_abbr(basis)+'.in' 
          fw = open(inputfile, 'w')
          XYZ_to_Input(fw, parsed_XYZ, myrems, options)
          fw.close()
