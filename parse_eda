@@ -30,6 +30,8 @@ def ParseInput(ArgsIn):
    parser.add_option('--kcal',dest='kcal',action='store_true',default=False,help='use kcal/mol for printed interactions (only applied to new EDA jobs)')
    parser.add_option('--modelchem',dest='modelchem',action='store_true',default=False,help='parse the model chemistry used for the job')
    parser.add_option('--bsse',dest='bsse',action='store_true',default=False,help='including the CP-based BSSE manually')
+   parser.add_option('--smd',dest='smd',action='store_true',default=False,help='parse the pcm and cds energies of smd')
+   parser.add_option('--pcm',dest='pcm',action='store_true',default=False,help='parse the solvent contribution to EDA')
    
    options, args=parser.parse_args(ArgsIn)
    if options.mp2:     #when parsing MP2, we should prevent other options being triggered
@@ -294,7 +296,7 @@ def parse_neweda_pes(options, output_dir, keyword=None):
       os.system('grep \"kJ/mol\" *'+keyword+'*.out > '+tmp_filename)
    f = open(tmp_filename, 'r')
    for line in f.readlines():
-      l = re.search(placeholder+'_([^_]+)_\S+:\s+(\S+).+=\s+(\S+)',line)
+      l = re.search(placeholder+'_([^_]+)_\S+:\s*(\S+).+=\s+(\S+)',line)
       if l!=None:
          geom_param = l.group(1)
          item = l.group(2)
@@ -346,8 +348,22 @@ def parse_neweda_pes(options, output_dir, keyword=None):
          f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(geom_param,DataPoints[geom_param]["E_frz"],DataPoints[geom_param]["E_pol"],DataPoints[geom_param]["E_vct"],DataPoints[geom_param]["E_int"],DataPoints[geom_param]["E_cls_elec"],DataPoints[geom_param]["E_frz"]-DataPoints[geom_param]["E_cls_elec"]-DataPoints[geom_param]["E_disp"],DataPoints[geom_param]["E_disp"]))
       else:
          f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(geom_param,DataPoints[geom_param]["E_frz"],DataPoints[geom_param]["E_pol"],DataPoints[geom_param]["E_vct"],DataPoints[geom_param]["E_int"],DataPoints[geom_param]["E_cls_elec"],DataPoints[geom_param]["E_mod_pauli"],DataPoints[geom_param]["E_cls_disp"]))
-
    f.close()
+
+   if options.smd:
+      csvfile_smd = 'sol.csv'
+      fw = open(csvfile_smd, 'w')
+      fw.write('%s,E_pcm,E_cds,E_sol\n' %placeholder1)
+      for geom_param in sorted(DataPoints,key=lambda geom_param:float(geom_param)):
+         fw.write("%s,%.4f,%.4f,%.4f\n" %(geom_param,DataPoints[geom_param]["E_pcm"],DataPoints[geom_param]["E_cds"],DataPoints[geom_param]["E_sol"]))
+      fw.close()
+   if options.pcm:
+      csvfile_smd = 'sol.csv'
+      fw = open(csvfile_smd, 'w')
+      fw.write('%s,E_sol\n' %placeholder1)
+      for geom_param in sorted(DataPoints,key=lambda geom_param:float(geom_param)):
+         fw.write("%s,%.4f\n" %(geom_param,DataPoints[geom_param]["E_sol"]))
+      fw.close()
 
    sp.call(['rm', tmp_filename])
    os.chdir(curdir)
@@ -475,6 +491,12 @@ def parse_neweda_generic(options, output_dir, keyword=None): #TODO: make this th
       for system in DataPoints:
          DataPoints[system]["E_int"] += DataPoints[system]["BSSE"]
          DataPoints[system]["E_vct"] += DataPoints[system]["BSSE"]
+   #modify elec and frz if doing pcm or smd
+   if options.pcm or options.smd:
+      for system in DataPoints:
+         DataPoints[system]["E_frz"] += DataPoints[system]["E_sol"]
+         DataPoints[system]["E_cls_elec"] += DataPoints[system]["E_sol"]
+         DataPoints[system]["E_elec"] += DataPoints[system]["E_sol"]
 
    #generate output
    if not keyword:

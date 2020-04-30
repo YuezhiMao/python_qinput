@@ -232,3 +232,23 @@ def apply_single_geom_constraint(fw, geom_param, constraint_template):
       else:
          fw.write(line)
    fw.write('$end\n')
+
+def AppendSolvationSecs(fw, pcm_epsilon=0.0, smd_solvent=None):
+   if pcm_epsilon > 0.0:
+      fw.write('\n$pcm\n')
+      fw.write('Theory  CPCM\n')
+      fw.write('Method  SWIG\n')
+      fw.write('Solver  INVERSION\n') 
+      fw.write('HPoints     302\n')
+      fw.write('HeavyPoints 302\n')
+      fw.write('$end\n\n')
+      fw.write('$solvent\n')
+      fw.write('Dielectric  %.2f\n' %pcm_epsilon)
+      fw.write('$end\n')
+   elif smd_solvent != None:
+      fw.write('\n$smx\n')
+      fw.write('solvent  %s\n' %smd_solvent)
+      fw.write('$end\n')
+   else:
+      print "why here!?"
+      sys.exit(0)
