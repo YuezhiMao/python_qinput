@@ -18,10 +18,10 @@ def ParseInput(ArgsIn):
    parser.add_option('-i','--input_path',dest='input_path',action='store',type='string', default='input/',help='The directory storing the generated inputs')
    parser.add_option('--charge',dest='charge',action='store',type='int',default=0,help='total charge of the system')
    parser.add_option('--mult',dest='mult',action='store',type='int',default=1,help='total multiplicity of the system') 
-   parser.add_option('--ip',dest='eomip',action='store',type='int',default=0,help='number of EOM-IP states')
-   parser.add_option('--sf',dest='eomsf',action='store',type='int',default=0,help='number of EOM-SF states')
-   parser.add_option('--ee',dest='eomee',action='store',type='int',default=0,help='number of EOM-EE states')
-   parser.add_option('--ea',dest='eomea',action='store',type='int',default=0,help='number of EOM-EA states')
+   parser.add_option('--ip',dest='eomip',action='store',type='string',default=None,help='number of EOM-IP states')
+   parser.add_option('--sf',dest='eomsf',action='store',type='string',default=None,help='number of EOM-SF states')
+   parser.add_option('--ee',dest='eomee',action='store',type='string',default=None,help='number of EOM-EE states')
+   parser.add_option('--ea',dest='eomea',action='store',type='string',default=None,help='number of EOM-EA states')
    parser.add_option('--noprop',dest='noprop',action='store_true',default=False,help='turn off excited state property calculations')
    parser.add_option('--act_virt',dest='act_virt',action='store',type='int',default=0,help='number of active virts')
    parser.add_option('--tot_virt',dest='tot_virt',action='store',type='int',default=0,help='total number of virts')
@@ -35,7 +35,7 @@ def ParseInput(ArgsIn):
       print "The target directory must be specified: one or some or all"
       parser.print_help()
       sys.exit(1)
-   if not (options.eomip > 0 or options.eomsf > 0 or options.eomee > 0 or options.eomea > 0):
+   if not (options.eomip > 0 or options.eomsf > 0 or options.eomee != None or options.eomea > 0):
       print "At least specify one type of excited states"
       parser.print_help()
       sys.exit(1)
@@ -54,15 +54,15 @@ def XYZ_to_Input(fw, XYZ, curREM, options):
    qrems.AppendRem(fw, curREM)
 
 def set_rems_eomccsd(myrems, options):
-    if options.eomip > 0:
+    if options.eomip != None:
        qrems.ModRem('IP_STATES', str(options.eomip), myrems)
-    if options.eomsf > 0:
+    if options.eomsf != None:
        if options.mult == 1 or options.mult == 2: #not specified, not suitable for SF
           options.mult += 2
        qrems.ModRem('SF_STATES', str(options.eomsf), myrems)
-    if options.eomee > 0:
+    if options.eomee != None:
        qrems.ModRem('EE_STATES', str(options.eomee), myrems)
-    if options.eomea > 0:
+    if options.eomea != None:
        qrems.ModRem('EA_STATES', str(options.eomea), myrems)
 
     if options.noprop:
@@ -109,11 +109,11 @@ if not os.path.exists(input_path):
 rem_file = os.path.expandvars('$QREMPATH')+'/rem_eomccsd'
 myrems = qrems.ParseRems(rem_file)
 
-if options.eomip > 0:
+if options.eomip != None:
    ex_method = 'eomip'
-elif options.eomsf > 0:
+elif options.eomsf != None:
    ex_method = 'eomsf'
-elif options.eomea > 0:
+elif options.eomea != None:
    ex_method = 'eomea'
 else:
    ex_method = 'eomee'
@@ -132,4 +132,3 @@ for method in options.method:
          fw = open(inputfile, 'w')
          XYZ_to_Input(fw, parsed_XYZ, myrems, options)
          fw.close()
-

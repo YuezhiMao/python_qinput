@@ -112,7 +112,7 @@ def get_xyz(output_file, options):
    fr.close()
    sp.call(['rm', tmp_file])
    fw = open(xyz_file, 'w')
-   if not options.multigeom:
+   if (not options.multigeom) or ('adiabatic' not in name):
       NAtom = len(AtomList)
       fw.write("%d\n\n" %NAtom) #NAtom
       for index in range(0, NAtom):
@@ -254,7 +254,7 @@ def get_frequency(options):
    freq_data_file = 'frequency.csv'
    fw = open(freq_data_file, 'w')
    for jobname in sorted(freq_data, key=lambda jobname:get_sorting_key(jobname, options)):
-      if not options.multigeom:
+      if (not options.multigeom) or ('adiabatic_eda' not in jobname):
          fw.write('%s,' %jobname)
          for freq in freq_data[jobname]["freq"]:
             fw.write('%.2f,' %freq)
