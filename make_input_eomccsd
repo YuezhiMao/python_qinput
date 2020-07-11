@@ -23,6 +23,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--ee',dest='eomee',action='store',type='string',default=None,help='number of EOM-EE states')
    parser.add_option('--ea',dest='eomea',action='store',type='string',default=None,help='number of EOM-EA states')
    parser.add_option('--noprop',dest='noprop',action='store_true',default=False,help='turn off excited state property calculations')
+   parser.add_option('--trans_prop',dest='trans_prop',type='int',action='store',default=2,help='value for cc_trans_prop (1: gs-ex; 2: ex-ex; 3: all)')
    parser.add_option('--act_virt',dest='act_virt',action='store',type='int',default=0,help='number of active virts')
    parser.add_option('--tot_virt',dest='tot_virt',action='store',type='int',default=0,help='total number of virts')
    parser.add_option('--cc_mem',dest='cc_mem',action='store',type='int',default=16000,help='value of CC memory')
@@ -70,7 +71,7 @@ def set_rems_eomccsd(myrems, options):
        qrems.ModRem('CC_TRANS_PROP', 'FALSE', myrems)
     else:
        qrems.ModRem('CC_EOM_PROP', 'TRUE', myrems)
-       qrems.ModRem('CC_TRANS_PROP', '2', myrems)
+       qrems.ModRem('CC_TRANS_PROP', str(options.trans_prop), myrems)
 
     if options.act_virt > 0:
        n_frozen = options.tot_virt - options.act_virt

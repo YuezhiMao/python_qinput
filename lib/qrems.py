@@ -137,6 +137,8 @@ def basis_abbr(BasName):    #generating abbreviated name for basis sets, using f
       return 'apc3'
    elif fullname == 'dp':
       return 'dp'
+   elif fullname == 'mp':
+      return 'mp'
    elif fullname == 'tp':
       return 'tp' 
    elif fullname == 'lp':
@@ -168,6 +170,8 @@ def set_rems_common(curREM, method, basis):
       ModRem('BASIS','DEF2-QZVPPD',curREM)
    elif basis.upper() == 'DP': #double-zeta Pople: 6-31+G(d)
       ModRem('BASIS','6-31+G(d)', curREM)
+   elif basis.upper() == 'MP':
+      ModRem('BASIS','6-311G(d,p)',curREM)
    elif basis.upper() == 'TP': #triple-zeta Pople: 6-311++G(2df,2pd)
       ModRem('BASIS','6-311++G(2df,2pd)',curREM)
    elif basis.upper() == 'LP':

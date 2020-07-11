@@ -300,6 +300,8 @@ def parse_neweda_pes(options, output_dir, keyword=None):
       if l!=None:
          geom_param = l.group(1)
          item = l.group(2)
+         if item[0] == "[":
+            item = item[1:]
          value = float(l.group(3))
          if geom_param not in DataPoints:
             print "geom_param: %s is not in DataPoints dictionary. Something is very wrong" %geom_param
@@ -334,20 +336,20 @@ def parse_neweda_pes(options, output_dir, keyword=None):
       placeholder7 = "E_pauli"
       placeholder8 = "E_disp"
       placeholder9 = "E_cls_elec"
-      f.write("%s,%s,%s,%s,%s,%s,%s,%s,%s\n" %(placeholder1, placeholder2, placeholder3, placeholder4, placeholder5, placeholder6, placeholder7, placeholder8, placeholder9))
+      f.write("%s,%s,%s,%s,%s,%s,%s,%s,%s\n" %(placeholder1, placeholder6, placeholder7, placeholder8, placeholder9, placeholder2, placeholder3, placeholder4, placeholder5))
    else:
       placeholder6 = "E_cls_elec"
       placeholder7 = "E_mod_pauli"
       placeholder8 = "E_disp" 
-      f.write("%s,%s,%s,%s,%s,%s,%s,%s\n" %(placeholder1, placeholder2, placeholder3, placeholder4, placeholder5, placeholder6, placeholder7, placeholder8))
+      f.write("%s,%s,%s,%s,%s,%s,%s,%s\n" %(placeholder1, placeholder6, placeholder7, placeholder8, placeholder2, placeholder3, placeholder4, placeholder5))
 
    for geom_param in sorted(DataPoints,key=lambda geom_param:float(geom_param)):
       if not options.modified:
-         f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(geom_param,DataPoints[geom_param]["E_frz"],DataPoints[geom_param]["E_pol"],DataPoints[geom_param]["E_vct"],DataPoints[geom_param]["E_int"],DataPoints[geom_param]["E_elec"],DataPoints[geom_param]["E_pauli"],DataPoints[geom_param]["E_disp"],DataPoints[geom_param]["E_cls_elec"]))
+         f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(geom_param,DataPoints[geom_param]["E_elec"],DataPoints[geom_param]["E_pauli"],DataPoints[geom_param]["E_disp"],DataPoints[geom_param]["E_cls_elec"],DataPoints[geom_param]["E_frz"],DataPoints[geom_param]["E_pol"],DataPoints[geom_param]["E_vct"],DataPoints[geom_param]["E_int"]))
       elif not options.cls_disp:
-         f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(geom_param,DataPoints[geom_param]["E_frz"],DataPoints[geom_param]["E_pol"],DataPoints[geom_param]["E_vct"],DataPoints[geom_param]["E_int"],DataPoints[geom_param]["E_cls_elec"],DataPoints[geom_param]["E_frz"]-DataPoints[geom_param]["E_cls_elec"]-DataPoints[geom_param]["E_disp"],DataPoints[geom_param]["E_disp"]))
+         f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(geom_param,DataPoints[geom_param]["E_cls_elec"],DataPoints[geom_param]["E_mod_pauli"],DataPoints[geom_param]["E_disp"],DataPoints[geom_param]["E_frz"],DataPoints[geom_param]["E_pol"],DataPoints[geom_param]["E_vct"],DataPoints[geom_param]["E_int"]))
       else:
-         f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(geom_param,DataPoints[geom_param]["E_frz"],DataPoints[geom_param]["E_pol"],DataPoints[geom_param]["E_vct"],DataPoints[geom_param]["E_int"],DataPoints[geom_param]["E_cls_elec"],DataPoints[geom_param]["E_mod_pauli"],DataPoints[geom_param]["E_cls_disp"]))
+         f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(geom_param,DataPoints[geom_param]["E_cls_elec"],DataPoints[geom_param]["E_mod_pauli"],DataPoints[geom_param]["E_cls_disp"],DataPoints[geom_param]["E_frz"],DataPoints[geom_param]["E_pol"],DataPoints[geom_param]["E_vct"],DataPoints[geom_param]["E_int"]))
    f.close()
 
    if options.smd:
@@ -466,13 +468,15 @@ def parse_neweda_generic(options, output_dir, keyword=None): #TODO: make this th
       os.system('grep \"kJ/mol\" *'+keyword+'*.out > '+tmp_filename)
    f = open(tmp_filename, 'r')
    for line in f.readlines():
-      l = re.search('(\S+)_eda2_op(\d)_(\S+).out:\s+(\S+).+=\s+(\S+)',line)
+      l = re.search('(\S+)_eda2_op(\d)_(\S+).out:\s*(\S+).+=\s+(\S+)',line)
       if l!=None:
          system = l.group(1)
          eda_option = 'op'+l.group(2)
          method = l.group(3)
          item = l.group(4)
          value = float(l.group(5))
+         if item[0] == "[":  #modification for the mod_pauli
+            item = item[1:]
          if system not in DataPoints:
             DataPoints[system]={}
          if not options.modelchem:
@@ -492,11 +496,18 @@ def parse_neweda_generic(options, output_dir, keyword=None): #TODO: make this th
          DataPoints[system]["E_int"] += DataPoints[system]["BSSE"]
          DataPoints[system]["E_vct"] += DataPoints[system]["BSSE"]
    #modify elec and frz if doing pcm or smd
-   if options.pcm or options.smd:
+   if options.pcm:
+      print "Adding PCM sol contribution to the ELEC term"
       for system in DataPoints:
          DataPoints[system]["E_frz"] += DataPoints[system]["E_sol"]
          DataPoints[system]["E_cls_elec"] += DataPoints[system]["E_sol"]
          DataPoints[system]["E_elec"] += DataPoints[system]["E_sol"]
+   elif options.smd:
+      print "Adding SMD sol contribution to the ELEC and PAULI terms"
+      for system in DataPoints:
+         DataPoints[system]["E_frz"] += DataPoints[system]["E_sol"]
+         DataPoints[system]["E_cls_elec"] += DataPoints[system]["E_pcm"]
+         DataPoints[system]["E_mod_pauli"] += DataPoints[system]["E_cds"]
 
    #generate output
    if not keyword:
@@ -531,12 +542,12 @@ def parse_neweda_generic(options, output_dir, keyword=None): #TODO: make this th
          placeholder7 = "E_pauli"
          placeholder8 = "E_disp"
          placeholder9 = "E_cls_elec"
-         f.write("%s,%s,%s,%s,%s,%s,%s,%s,%s\n" %(placeholder1, placeholder2, placeholder3, placeholder4, placeholder5, placeholder6, placeholder7, placeholder8, placeholder9))
+         f.write("%s,%s,%s,%s,%s,%s,%s,%s,%s\n" %(placeholder1, placeholder6, placeholder7, placeholder8, placeholder9, placeholder2, placeholder3, placeholder4, placeholder5))
       else:
          placeholder6 = "E_cls_elec"
          placeholder7 = "E_mod_pauli"
          placeholder8 = "E_disp" 
-         f.write("%s,%s,%s,%s,%s,%s,%s,%s\n" %(placeholder1, placeholder2, placeholder3, placeholder4, placeholder5, placeholder6, placeholder7, placeholder8))
+         f.write("%s,%s,%s,%s,%s,%s,%s,%s\n" %(placeholder1, placeholder6, placeholder7, placeholder8, placeholder2, placeholder3, placeholder4, placeholder5))
       for system in sorted(DataPoints):
          if not options.modelchem:
             E_frz = DataPoints[system]["E_frz"] 
@@ -548,17 +559,17 @@ def parse_neweda_generic(options, output_dir, keyword=None): #TODO: make this th
                E_pauli = DataPoints[system]["E_pauli"]
                E_disp = DataPoints[system]["E_disp"]
                E_cls_elec = DataPoints[system]["E_cls_elec"]
-               f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(system,E_frz,E_pol,E_vct,E_int,E_elec,E_pauli,E_disp,E_cls_elec))
+               f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(system,E_elec,E_pauli,E_disp,E_cls_elec,E_frz,E_pol,E_vct,E_int))
             elif not options.cls_disp:
                E_cls_elec = DataPoints[system]["E_cls_elec"]
                E_disp = DataPoints[system]["E_disp"]
-               E_mod_pauli = E_frz - E_disp - E_cls_elec
-               f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(system,E_frz,E_pol,E_vct,E_int,E_cls_elec,E_mod_pauli,E_disp))
+               E_mod_pauli = DataPoints[system]["E_mod_pauli"]
+               f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(system,E_cls_elec,E_mod_pauli,E_disp,E_frz,E_pol,E_vct,E_int))
             else:
                E_cls_elec = DataPoints[system]["E_cls_elec"]
                E_cls_disp = DataPoints[system]["E_cls_disp"]
                E_mod_pauli = DataPoints[system]["E_mod_pauli"]
-               f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(system,E_frz,E_pol,E_vct,E_int,E_cls_elec,E_mod_pauli,E_cls_disp))
+               f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(system,E_cls_elec,E_mod_pauli,E_cls_disp,E_frz,E_pol,E_vct,E_int))
 
          else:
             for method in DataPoints[system]:
@@ -571,17 +582,17 @@ def parse_neweda_generic(options, output_dir, keyword=None): #TODO: make this th
                   E_pauli = DataPoints[system][method]["E_pauli"]
                   E_disp = DataPoints[system][method]["E_disp"]
                   E_cls_elec = DataPoints[system][method]["E_cls_elec"]
-                  f.write("%s,%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(system,method,E_frz,E_pol,E_vct,E_int,E_elec,E_pauli,E_disp,E_cls_elec))
+                  f.write("%s,%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(system,method,E_elec,E_pauli,E_disp,E_cls_elec,E_frz,E_pol,E_vct,E_int))
                elif not options.cls_disp:
                   E_cls_elec = DataPoints[system][method]["E_cls_elec"]
                   E_disp = DataPoints[system][method]["E_disp"]
-                  E_mod_pauli = E_frz - E_disp - E_cls_elec
-                  f.write("%s,%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(system,method,E_frz,E_pol,E_vct,E_int,E_cls_elec,E_mod_pauli,E_disp))
+                  E_mod_pauli = DataPoints[system][method]["E_mod_pauli"]
+                  f.write("%s,%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(system,method,E_cls_elec,E_mod_pauli,E_disp,E_frz,E_pol,E_vct,E_int))
                else:
                   E_cls_elec = DataPoints[system][method]["E_cls_elec"]
                   E_cls_disp = DataPoints[system][method]["E_cls_disp"]
                   E_mod_pauli = DataPoints[system][method]["E_mod_pauli"]
-                  f.write("%s,%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(system,method,E_frz,E_pol,E_vct,E_int,E_cls_elec,E_mod_pauli,E_cls_disp))
+                  f.write("%s,%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(system,method,E_cls_elec,E_mod_pauli,E_cls_disp,E_frz,E_pol,E_vct,E_int))
 
    f.close()
 
@@ -619,6 +630,8 @@ def parse_neweda_snapshot(options, output_dir, keyword=None):
       #make sure it is an energy item
       if re.search('\d+', l[-1])!=None:
          item = l[1]
+         if item[0] == "[":
+            item = item[1:]
          energy = float(l[-1])
          DataPoints[snapID][item] = energy
          if options.kcal:
@@ -648,20 +661,20 @@ def parse_neweda_snapshot(options, output_dir, keyword=None):
       placeholder7 = "E_pauli"
       placeholder8 = "E_disp"
       placeholder9 = "E_cls_elec"
-      f.write("%s,%s,%s,%s,%s,%s,%s,%s,%s\n" %(placeholder1, placeholder2, placeholder3, placeholder4, placeholder5, placeholder6, placeholder7, placeholder8, placeholder9))
+      f.write("%s,%s,%s,%s,%s,%s,%s,%s,%s\n" %(placeholder1, placeholder6, placeholder7, placeholder8, placeholder9, placeholder2, placeholder3, placeholder4, placeholder5))
    else:
       placeholder6 = "E_cls_elec"
       placeholder7 = "E_mod_pauli"
       placeholder8 = "E_disp" 
-      f.write("%s,%s,%s,%s,%s,%s,%s,%s\n" %(placeholder1, placeholder2, placeholder3, placeholder4, placeholder5, placeholder6, placeholder7, placeholder8))
+      f.write("%s,%s,%s,%s,%s,%s,%s,%s\n" %(placeholder1, placeholder6, placeholder7, placeholder8, placeholder2, placeholder3, placeholder4, placeholder5))
 
    for geom_param in sorted(DataPoints,key=lambda geom_param:float(geom_param)):
       if not options.modified:
-         f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(geom_param,DataPoints[geom_param]["E_frz"],DataPoints[geom_param]["E_pol"],DataPoints[geom_param]["E_vct"],DataPoints[geom_param]["E_int"],DataPoints[geom_param]["E_elec"],DataPoints[geom_param]["E_pauli"],DataPoints[geom_param]["E_disp"],DataPoints[geom_param]["E_cls_elec"]))
+         f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(geom_param,DataPoints[geom_param]["E_elec"],DataPoints[geom_param]["E_pauli"],DataPoints[geom_param]["E_disp"],DataPoints[geom_param]["E_cls_elec"],DataPoints[geom_param]["E_frz"],DataPoints[geom_param]["E_pol"],DataPoints[geom_param]["E_vct"],DataPoints[geom_param]["E_int"]))
       elif not options.cls_disp:
-         f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(geom_param,DataPoints[geom_param]["E_frz"],DataPoints[geom_param]["E_pol"],DataPoints[geom_param]["E_vct"],DataPoints[geom_param]["E_int"],DataPoints[geom_param]["E_cls_elec"],DataPoints[geom_param]["E_frz"]-DataPoints[geom_param]["E_cls_elec"]-DataPoints[geom_param]["E_disp"],DataPoints[geom_param]["E_disp"]))
+         f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(geom_param,DataPoints[geom_param]["E_cls_elec"],DataPoints[geom_param]["E_mod_pauli"],DataPoints[geom_param]["E_disp"],DataPoints[geom_param]["E_frz"],DataPoints[geom_param]["E_pol"],DataPoints[geom_param]["E_vct"],DataPoints[geom_param]["E_int"]))
       else:
-         f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(geom_param,DataPoints[geom_param]["E_frz"],DataPoints[geom_param]["E_pol"],DataPoints[geom_param]["E_vct"],DataPoints[geom_param]["E_int"],DataPoints[geom_param]["E_cls_elec"],DataPoints[geom_param]["E_mod_pauli"],DataPoints[geom_param]["E_cls_disp"]))
+         f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(geom_param,DataPoints[geom_param]["E_cls_elec"],DataPoints[geom_param]["E_mod_pauli"],DataPoints[geom_param]["E_cls_disp"],DataPoints[geom_param]["E_frz"],DataPoints[geom_param]["E_pol"],DataPoints[geom_param]["E_vct"],DataPoints[geom_param]["E_int"]))
 
 
    f.close()
