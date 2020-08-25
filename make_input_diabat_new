@@ -22,6 +22,7 @@ def ParseInput(ArgsIn):
     parser.add_option('--msdft_method', dest='msdft_method', action='store', type='int', default=2, help='SPecify the flavor of MSDFT')
     parser.add_option('--et', dest='do_ET', action='store_true', default=False, help='doing electron transfer')
     parser.add_option('--ex_almo',dest='ex_almo',type='string',action='store',default=None,help='doing excited state almo coupling')
+    parser.add_option('--spin_adapt',dest='spin_adapt',type='int',action='store',default=0,help='specify the spin adaptation method in MSDFT')
     options, args = parser.parse_args(ArgsIn)
 
     if len(args) < 3:
@@ -46,6 +47,8 @@ def Append_Dev_Section(fw, diabat, options):
     if diabat.upper() == 'MSDFT':
         if options.ex_almo != None:
             fw.write('ex_almo_msdft  1\n')
+        if options.spin_adapt > 0:
+            fw.write('spin_adaptation  %d\n' %options.spin_adapt)  
     fw.write('$end\n')
 
 def Append_CDFT_Section(fw, FRGM, do_ET): 
@@ -80,15 +83,35 @@ def Append_CDFT_Section(fw, FRGM, do_ET):
         fw.write('1.0  1  %d  s\n' %FRGM.natoms_frgm[0])
     fw.write('$end\n\n')
 
-def Append_MSDFT_Section(fw, FRGM):
+def Append_MSDFT_Section(fw, FRGM, options):
     fw.write('\n')
     fw.write('$almo_coupling\n')
-    #hard-coded for two states
-    fw.write("%d  %d\n" %(FRGM.charge_frgm[0], FRGM.mult_frgm[0]))
-    fw.write("%d  %d\n" %(FRGM.charge_frgm[1], FRGM.mult_frgm[1]))
-    fw.write("--\n")
-    fw.write("%d  %d\n" %(FRGM.charge_frgm[1], FRGM.mult_frgm[1]))
-    fw.write("%d  %d\n" %(FRGM.charge_frgm[0], FRGM.mult_frgm[0]))
+    if FRGM.mult_frgm[0] == 1 and FRGM.mult_frgm[1] == 1: #starting from closed-shell
+       if not options.spin_adapt > 0: 
+          fw.write("%d  1\n" %FRGM.charge_frgm[0])
+          fw.write("%d  1\n" %FRGM.charge_frgm[1])
+          fw.write("--\n")
+          fw.write("%d  2\n"  %(FRGM.charge_frgm[0]+1))
+          fw.write("%d  -2\n" %(FRGM.charge_frgm[1]-1))
+       else:
+          fw.write("%d  1\n" %FRGM.charge_frgm[0])
+          fw.write("%d  1\n" %FRGM.charge_frgm[1])
+          fw.write("--\n")
+          fw.write("%d  1\n" %FRGM.charge_frgm[0])
+          fw.write("%d  1\n" %FRGM.charge_frgm[1])
+          fw.write("--\n")
+          fw.write("%d  -2\n"  %(FRGM.charge_frgm[0]+1))
+          fw.write("%d  2\n" %(FRGM.charge_frgm[1]-1))
+          fw.write("--\n")
+          fw.write("%d  2\n"  %(FRGM.charge_frgm[0]+1))
+          fw.write("%d  -2\n" %(FRGM.charge_frgm[1]-1))
+    else:
+       #hard-coded for two states
+       fw.write("%d  %d\n" %(FRGM.charge_frgm[0], FRGM.mult_frgm[0]))
+       fw.write("%d  %d\n" %(FRGM.charge_frgm[1], FRGM.mult_frgm[1]))
+       fw.write("--\n")
+       fw.write("%d  %d\n" %(FRGM.charge_frgm[1], FRGM.mult_frgm[1]))
+       fw.write("%d  %d\n" %(FRGM.charge_frgm[0], FRGM.mult_frgm[0]))
     fw.write('$end\n')
 
 
@@ -121,19 +144,23 @@ def XYZ_to_Input(fw, XYZ, FRGM, curREM, diabat, options):
             qrems.ModRem('FRAG_DIABAT_DOHT', 'FALSE', curREM)
         if options.ex_almo != None:
             qrems.ModRem('SCFMI_MOM', 'TRUE', curREM)
+            qrems.ModRem('MOM_METHOD', 'IMOM', curREM)
         qrems.AppendRem(fw, curREM)
         if options.ex_almo != None:
             qrems.copy_section_over(fw, options.ex_almo)
     elif diabat.upper() == 'MSDFT':
         qmol.WriteMolecule_Frgm(fw, XYZ, FRGM)
+        qrems.ModRem('UNRESTRICTED', 'TRUE', curREM)
         qrems.ModRem('FRAG_DIABAT_METHOD', 'ALMO_MSDFT', curREM)
         qrems.ModRem('MSDFT_METHOD', str(options.msdft_method), curREM)
         qrems.ModRem('SCFMI_MODE', '1', curREM)
         qrems.ModRem('FRGM_METHOD', 'STOLL', curREM)
+        qrems.ModRem('SCF_PRINT_FRGM', 'TRUE', curREM)
         if options.ex_almo != None:
             qrems.ModRem('SCFMI_MOM', 'TRUE', curREM)
+            qrems.ModRem('MOM_METHOD', 'IMOM', curREM)
         qrems.AppendRem(fw, curREM)
-        Append_MSDFT_Section(fw, FRGM)
+        Append_MSDFT_Section(fw, FRGM, options)
         if options.ex_almo != None:
             Append_Dev_Section(fw, diabat, options)
             qrems.copy_section_over(fw, options.ex_almo)

@@ -38,9 +38,9 @@ def ParseInput(ArgsIn):
    if options.spinflip and options.rpa:
       print "Spin-flip only works with TDA. We turn off RPA forcefully"
       options.rpa = False
-   if options.sol_file != None and options.sol == None:
-      print "Solvent method must be specified when sol_file is given"
-      sys.exit(0)
+   #if options.sol_file != None and options.sol == None:
+   #   print "Solvent method must be specified when sol_file is given"
+   #   sys.exit(0)
    return options, args
 
 def string_sp_callback(option, opt, value, parser):
