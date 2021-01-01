@@ -23,6 +23,7 @@ def ParseInput(ArgsIn):
     parser.add_option('--et', dest='do_ET', action='store_true', default=False, help='doing electron transfer')
     parser.add_option('--ex_almo',dest='ex_almo',type='string',action='store',default=None,help='doing excited state almo coupling')
     parser.add_option('--spin_adapt',dest='spin_adapt',type='int',action='store',default=0,help='specify the spin adaptation method in MSDFT')
+    parser.add_option('--pinv',dest='pinv',type='int',action='store',default=0,help='specify MSDFT2 pseudo-inverse thresh')
     options, args = parser.parse_args(ArgsIn)
 
     if len(args) < 3:
@@ -49,6 +50,8 @@ def Append_Dev_Section(fw, diabat, options):
             fw.write('ex_almo_msdft  1\n')
         if options.spin_adapt > 0:
             fw.write('spin_adaptation  %d\n' %options.spin_adapt)  
+        if options.pinv > 0:
+            fw.write('pinv_thresh  %d\n' %options.pinv)
     fw.write('$end\n')
 
 def Append_CDFT_Section(fw, FRGM, do_ET): 
@@ -164,6 +167,8 @@ def XYZ_to_Input(fw, XYZ, FRGM, curREM, diabat, options):
         if options.ex_almo != None:
             Append_Dev_Section(fw, diabat, options)
             qrems.copy_section_over(fw, options.ex_almo)
+        if options.pinv > 0:
+            Append_Dev_Section(fw, diabat, options)
     else:
         print "Unrecognized diabatization method"
         sys.exit(0)

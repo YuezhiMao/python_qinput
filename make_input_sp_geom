@@ -26,6 +26,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--tight',dest='tight',action='store_true',default=False,help='use tigher criterion for geom opt convergence')
    parser.add_option('--sym',dest='sym',action='store_true',default=False,help='use sym_ignore = false for geom opt')
    parser.add_option('--stab',dest='stab',action='store_true',default=False,help='use gdm algorithm and turn on stability analysis')
+   parser.add_option('--efield',dest='efield',action='store_true',default=False,help='calculate electric field')
 
    options, args = parser.parse_args(ArgsIn)
    if len(args) < 2 and (options.all or options.keyword!=None):
@@ -35,8 +36,8 @@ def ParseInput(ArgsIn):
       print "The target directory must be specified: one or some or all"
       parser.print_help()
       sys.exit(1)
-   if options.sol_file != None and options.sol == None:
-      print "Solvent method must be specified when sol_file is given"
+   if options.sol_file != None and (not os.path.exists(options.sol_file)):
+      print "Specified sol_file does not exist"
       sys.exit(0)
    return options, args
 
@@ -107,6 +108,9 @@ if options.sol != None:
 if options.stab:
    qrems.ModRem('SCF_ALGORITHM', 'GDM', myrems)
    qrems.ModRem('INTERNAL_STABILITY', 'TRUE', myrems)
+if options.efield:
+   qrems.ModRem('ESP_GRID', '0', myrems)
+   qrems.ModRem('ESP_EFIELD', '1', myrems)
 
 for method in options.method:
    for basis in options.basis:
