@@ -25,6 +25,8 @@ def ParseInput(ArgsIn):
    parser.add_option('--loose', dest='loose', action='store_true', default=False, help='Use looser convergence criterion for geom opt')
    parser.add_option('--geom_constr', dest='geom_constr', action='store', default=None, type='string', help='specify the template file for adding geometry optimization constraint')
    parser.add_option('--lr', dest='lr', action='store_true', default=False, help='turn on special settings for long-range jobs') 
+   parser.add_option('--sol',dest='sol',action='store',type='string',default=None,help='specify the solvent model to use')
+   parser.add_option('--sol_file', dest='sol_file', action='store', type='string', default=None, help='file for the solvent model input section')
     
    options, args = parser.parse_args(ArgsIn)
 
@@ -36,10 +38,12 @@ def ParseInput(ArgsIn):
       if len(args) < 2:
          parser.print_help()
          sys.exit(1)
-
    if not options.all and options.target==None and options.keyword==None:
       print "The target directory must be specified: one or some or all"
       parser.print_help()
+      sys.exit(1)
+   if options.sol_file != None and (not os.path.exists(options.sol_file)):
+      print "Specified sol_file does not exist"
       sys.exit(1)
    return options, args
 
@@ -71,9 +75,10 @@ def set_rems_adiabatic_eda(curREM, method, basis, options):
       qrems.ModRem('SYM_IGNORE', 'TRUE', curREM)
    else:
       qrems.ModRem('SYM_IGNORE', 'FALSE', curREM)
-
    if method.upper() == 'RIMP2':
       qrems.add_aux_basis(basis, curREM)
+   if options.sol != None:
+      qrems.ModRem('SOLVENT_METHOD', options.sol, curREM)
 
 def set_ferf_rems(curREM):
    qrems.ModRem('IDERIV', '0', curREM)
@@ -116,6 +121,8 @@ def XYZ_to_Input(fw, XYZ, FRGM, curREM, read_mol=False, do_freq=False, do_ferf=F
       qmol.WriteMolecule_Read(fw) 
 
    qrems.AppendRem(fw, curREM)
+   if options.sol_file != None:
+      qrems.copy_section_over(fw, options.sol_file)
    if genbas:
       qrems.copy_section_over(fw, 'genbas')
    if geom_constr != None:
@@ -128,6 +135,8 @@ def XYZ_to_Input(fw, XYZ, FRGM, curREM, read_mol=False, do_freq=False, do_ferf=F
       #Use the current rem but modify the jobtype to freq
       qrems.ModRem('JOBTYPE', 'FREQ', curREM)
       qrems.AppendRem(fw, curREM)
+      if options.sol_file != None:
+         qrems.copy_section_over(fw, options.sol_file)
       if genbas:
          qrems.copy_section_over(fw, 'genbas')
 

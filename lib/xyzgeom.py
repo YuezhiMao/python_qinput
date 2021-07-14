@@ -122,6 +122,28 @@ def xy_rotate_nfold(Coords, fold):
    Coords = np.dot(Coords, rotmat)
    return Coords
 
+def rotate_cylindrical(Coords, angle, axis='z', use_degree=True):
+   rotmat = np.zeros((3, 3))
+   if use_degree:
+      angle *= np.pi / 180.0 #convert angle to rad
+   if axis == 'x': #rotate in the YZ plane
+      rotmat[0] = np.array([1.0, 0.0, 0.0])
+      rotmat[1] = np.array([0.0, np.cos(angle), -np.sin(angle)])
+      rotmat[2] = np.array([0.0, np.sin(angle), np.cos(angle)])
+   elif axis == 'y': #rotate in the XZ plane
+      rotmat[0] = np.array([np.cos(angle), 0.0, -np.sin(angle)])
+      rotmat[1] = np.array([0.0, 1.0, 0.0])
+      rotmat[2] = np.array([np.sin(angle), 0.0, np.cos(angle)])
+   elif axis == 'z':
+      rotmat[0] = np.array([np.cos(angle), -np.sin(angle), 0.0])
+      rotmat[1] = np.array([np.sin(angle), np.cos(angle), 0.0])
+      rotmat[2] = np.array([0.0, 0.0, 1.0])
+   else:
+      print "Invalid value for variable \"axis\""
+      sys.exit(0)
+   Coords = np.dot(Coords, rotmat)
+   return Coords
+
 def reflection(Coords, mirror_pos, normal_axis='z'):
    if normal_axis.lower() == 'z':
       print "reflection with respect to the mirror at z = %.2f" %mirror_pos

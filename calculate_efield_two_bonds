@@ -1,0 +1,264 @@
+#! /usr/bin/env python
+
+import os, glob, sys, re, math
+import numpy as np
+import xyzgeom
+import pandas as pd
+from optparse import OptionParser
+
+def ParseInput(ArgsIn):
+    UseMsg = '''
+    Usage: python [script] [options] [target_dir] [xyz_dir]
+    '''
+    parser = OptionParser(usage=UseMsg)
+    parser.add_option('--cutoff_values', dest='cutoff_values', action='callback', type='string', default=None, callback=string_sp_callback, help='specify multiple cutoff values (default: 0A and 7A)')
+    parser.add_option('--skip_efield', dest='skip_efield', action='store_true', default=False, help='set true when .efield files have been generated')
+    parser.add_option('--no_subtract', dest='no_subtract', action='store_true', default=False, help='skip subtraction of solute field')
+    parser.add_option('--second_only', dest='second_only', action='store_true', default=False, help='only parse the efield produced by the second job')
+    parser.add_option('--probe_atoms', dest='probe_atoms', action='callback', type='string', default=None, callback=string_sp_callback, help='the indices of C, D, O atoms')
+
+    options, args = parser.parse_args(ArgsIn)
+    if len(args) < 3:
+        parser.print_help()
+        sys.exit(0)
+    if options.probe_atoms != None and len(options.probe_atoms) != 3:
+        print "Has to specify the index of three probe atoms (C, D, O)"
+        parser.print_help()
+        sys.exit(0)
+
+    return options, args
+
+def string_sp_callback(option, opt, value, parser):
+   setattr(parser.values, option.dest, value.split(','))
+
+def parse_efield(efld_file, infile, second_only = False):
+    fr = open(infile, 'r')
+    start_parsing = False
+    begin = -1
+    end = -1
+    efield = np.array([])
+    efield_temp = None
+    N = -1
+    job_counter = 0
+    for line in fr.readlines():
+        l_sp = line.split()
+        if len(l_sp) == 1 and l_sp[0] == 'EField':
+            job_counter += 1
+            if not (second_only and job_counter == 1):
+                start_parsing = True
+                counter = 0
+            continue
+        if len(l_sp) > 2 and l_sp[1] == 'DONE':
+            if not (second_only and job_counter == 1):
+                break
+        if start_parsing:
+            if second_only and job_counter == 1:
+                continue
+            #print line
+            if counter == 0: #atom index
+                begin = int(l_sp[0])
+                end = int(l_sp[-1])
+                N = end - begin + 1
+                efield_temp = np.zeros((N, 3))
+                counter += 1
+            else:
+                for idx in range(N):
+                    efield_temp[idx][counter-1] = float(l_sp[idx+1])
+                if counter == 3:
+                    if len(efield) == 0:
+                        efield = efield_temp
+                    else:
+                        efield = np.vstack((efield, efield_temp))
+                    counter = 0
+                else:
+                    counter += 1
+    fr.close()
+    #dump field to file
+    np.savetxt(efld_file, efield, fmt="%.7f")
+
+def generate_all_efld_files(second_only):
+   outfile_list = glob.glob('*.out')
+   for outfile in outfile_list:
+       tmpfile = "tmp.txt"
+       command = "sed -n " + "'/ EField /,/DONE ESP/p' " + outfile + " > " + tmpfile
+       os.system(command)
+       efld_file = outfile + ".efld"
+       parse_efield(efld_file, tmpfile, second_only)
+   os.system('rm '+tmpfile)
+   
+
+def get_bond_direction(xyzfile, atom_idx1, atom_idx2):
+    atomlist, coords = xyzgeom.parse_xyz_file(xyzfile)
+    direction = coords[atom_idx2 - 1] - coords[atom_idx1 - 1]
+    direction /= np.linalg.norm(direction)
+    return direction
+
+def get_bond_direction_all_frames(xyz_path, atom_idx_list):
+    bond_direction = {}
+    xyzfile_list = glob.glob(xyz_path+'/'+'r*.xyz')
+    for xyzfile in xyzfile_list:
+        frame = int(re.search("frame_([^_]+).xyz", xyzfile).group(1))
+        bond_direction[frame] = {}
+        bond_direction[frame]["CD"] = get_bond_direction(xyzfile, atom_idx_list[0], atom_idx_list[1])
+        bond_direction[frame]["CO"] = get_bond_direction(xyzfile, atom_idx_list[0], atom_idx_list[2])
+    return bond_direction
+
+def get_efield_single_cutoff(data_efield, target_dir, cutoff, atom_idx_list):
+    efield_file_list = glob.glob(target_dir+"/r{:.2f}_frame*.efld".format(cutoff))
+    #print "Cutoff = %.1f, processing %d E-field files" %(cutoff, len(efield_file_list))
+    data_efield[cutoff] = {}
+    for efield_file in efield_file_list:
+        #print (efield_file)
+        data = np.loadtxt(efield_file)
+        frame = int(re.search("frame_([^_]+)_", efield_file).group(1))
+        data_efield[cutoff][frame] = {}
+        for idx in atom_idx_list:
+            data_efield[cutoff][frame][idx] = data[idx-1]
+    return data_efield
+
+def calculate_efield_on_atom(data_efield, bond_direction, atom_idx_list):
+    au_to_MVcm = 5.142E+3
+    data_efield_atom = {}
+    for cutoff in data_efield:
+        data_efield_atom[cutoff] = {}
+        sum_C_CO = sum2_C_CO = 0.0
+        sum_O_CO = sum2_O_CO = 0.0
+        sum_C_CD = sum2_C_CD = 0.0
+        sum_D_CD = sum2_D_CD = 0.0
+        for frame in data_efield[cutoff]:
+            dir_CO = bond_direction[frame]["CO"]
+            dir_CD = bond_direction[frame]["CD"]
+            field_C = data_efield[cutoff][frame][atom_idx_list[0]] * au_to_MVcm
+            field_D = data_efield[cutoff][frame][atom_idx_list[1]] * au_to_MVcm
+            field_O = data_efield[cutoff][frame][atom_idx_list[2]] * au_to_MVcm
+            C_CO = np.dot(field_C, dir_CO)
+            O_CO = np.dot(field_O, dir_CO)
+            C_CD = np.dot(field_C, dir_CD)
+            D_CD = np.dot(field_D, dir_CD)
+            sum_C_CO += C_CO
+            sum_O_CO += O_CO
+            sum_C_CD += C_CD
+            sum_D_CD += D_CD
+            sum2_C_CO += C_CO ** 2
+            sum2_O_CO += O_CO ** 2
+            sum2_C_CD += C_CD ** 2
+            sum2_D_CD += D_CD ** 2
+        n_frames = len(data_efield[cutoff])
+        data_efield_atom[cutoff]["avg_C_CO"] = sum_C_CO / float(n_frames)
+        data_efield_atom[cutoff]["avg_O_CO"] = sum_O_CO / float(n_frames)
+        data_efield_atom[cutoff]["avg_C_CD"] = sum_C_CD / float(n_frames)
+        data_efield_atom[cutoff]["avg_D_CD"] = sum_D_CD / float(n_frames)
+        data_efield_atom[cutoff]["std_C_CO"] = math.sqrt(sum2_C_CO / float(n_frames) - data_efield_atom[cutoff]["avg_C_CO"]**2)
+        data_efield_atom[cutoff]["std_O_CO"] = math.sqrt(sum2_O_CO / float(n_frames) - data_efield_atom[cutoff]["avg_O_CO"]**2)
+        data_efield_atom[cutoff]["std_C_CD"] = math.sqrt(sum2_C_CD / float(n_frames) - data_efield_atom[cutoff]["avg_C_CD"]**2)
+        data_efield_atom[cutoff]["std_D_CD"] = math.sqrt(sum2_D_CD / float(n_frames) - data_efield_atom[cutoff]["avg_D_CD"]**2)
+        data_efield_atom[cutoff]["se_C_CO"] = data_efield_atom[cutoff]["std_C_CO"] / math.sqrt(float(n_frames))
+        data_efield_atom[cutoff]["se_O_CO"] = data_efield_atom[cutoff]["std_O_CO"] / math.sqrt(float(n_frames))
+        data_efield_atom[cutoff]["se_C_CD"] = data_efield_atom[cutoff]["std_C_CD"] / math.sqrt(float(n_frames))
+        data_efield_atom[cutoff]["se_D_CD"] = data_efield_atom[cutoff]["std_D_CD"] / math.sqrt(float(n_frames))
+    return data_efield_atom
+
+def calculate_rel_efield(data_efield, bond_direction, target_dir, atom_idx_list, no_subtract = False):
+    au_to_MVcm = 5.142E+3
+    idx_C, idx_D, idx_O = atom_idx_list[0], atom_idx_list[1], atom_idx_list[2]
+    data_efield_stat = {}
+    for cutoff in data_efield:
+        efield_data_file = target_dir +'/'+"efield_per_frame_"+str(cutoff)+"A.csv"
+        fw = open(efield_data_file, 'w')
+        fw.write("frame,E_CO,E_CD\n")
+        data_efield_stat[cutoff] = {}
+        sum_E_CO = sum2_E_CO = 0.0
+        sum_E_CD = sum2_E_CD = 0.0
+        for frame in sorted(data_efield[cutoff]):
+            dir_CO = bond_direction[frame]["CO"]
+            dir_CD = bond_direction[frame]["CD"]
+            if not no_subtract:
+                field_C = (data_efield[cutoff][frame][idx_C] - data_efield[0][frame][idx_C]) * au_to_MVcm
+                field_D = (data_efield[cutoff][frame][idx_D] - data_efield[0][frame][idx_D]) * au_to_MVcm
+                field_O = (data_efield[cutoff][frame][idx_O] - data_efield[0][frame][idx_O]) * au_to_MVcm
+            else:
+                field_C = data_efield[cutoff][frame][idx_C] * au_to_MVcm
+                field_D = data_efield[cutoff][frame][idx_D] * au_to_MVcm
+                field_O = data_efield[cutoff][frame][idx_O] * au_to_MVcm
+            C_CO = np.dot(field_C, dir_CO)
+            O_CO = np.dot(field_O, dir_CO)
+            C_CD = np.dot(field_C, dir_CD)
+            D_CD = np.dot(field_D, dir_CD)
+            E_CO = 0.5 * (C_CO + O_CO)
+            E_CD = 0.5 * (C_CD + D_CD)
+            fw.write("%d,%.3f,%.3f\n" %(frame, E_CO, E_CD))
+            sum_E_CO += E_CO
+            sum2_E_CO += E_CO ** 2
+            sum_E_CD += E_CD
+            sum2_E_CD += E_CD ** 2
+        n_frames = len(data_efield[cutoff])
+        print "Cutoff = %.1f A, Number of frames: %d" %(cutoff, n_frames)
+        fw.close()
+        data_efield_stat[cutoff]["avg_E_CO"] = sum_E_CO / float(n_frames)
+        data_efield_stat[cutoff]["std_E_CO"] = math.sqrt(sum2_E_CO / float(n_frames) - data_efield_stat[cutoff]["avg_E_CO"]**2)
+        data_efield_stat[cutoff]["se_E_CO"] = data_efield_stat[cutoff]["std_E_CO"] / math.sqrt(float(n_frames))
+        data_efield_stat[cutoff]["avg_E_CD"] = sum_E_CD / float(n_frames)
+        data_efield_stat[cutoff]["std_E_CD"] = math.sqrt(sum2_E_CD / float(n_frames) - data_efield_stat[cutoff]["avg_E_CD"]**2)
+        data_efield_stat[cutoff]["se_E_CD"] = data_efield_stat[cutoff]["std_E_CD"] / math.sqrt(float(n_frames))
+    return data_efield_stat
+
+
+options, args = ParseInput(sys.argv) 
+curdir = os.getcwd()
+print "Generating all E-field files from Q-Chem output..."
+target_dir = args[1]
+if not options.skip_efield:
+    os.chdir(target_dir)
+    generate_all_efld_files(options.second_only)
+    os.chdir(curdir)
+
+#probe atoms
+if options.probe_atoms != None:
+   atom_idx_list = []
+   for iatm in options.probe_atoms:
+      atom_idx_list.append(int(iatm))
+else:
+   atom_idx_list = [20, 21, 22]
+
+print "Calculating the C-O and C-D directions in each snapshot"
+xyz_path = args[2]
+if xyz_path[:-1] == '/':
+    xyz_path = xyz_path[:-1]
+bond_direction = get_bond_direction_all_frames(xyz_path, atom_idx_list)
+
+print "Getting the E-field vectors on relevant atoms"
+data_efield = {}
+
+cutoff_values = []
+if options.cutoff_values == None:
+    if options.no_subtract:
+        cutoff_values = [7]
+    else:
+        cutoff_values = [0, 7]  #default
+else:
+    [cutoff_values.append(int(val)) for val in options.cutoff_values]
+for cutoff in cutoff_values:
+    get_efield_single_cutoff(data_efield, target_dir, cutoff, atom_idx_list)
+
+print "Calculating E-field along bond directions"
+data_relE_stat = calculate_rel_efield(data_efield, bond_direction, target_dir, atom_idx_list, options.no_subtract)
+data_efield_on_atom = calculate_efield_on_atom(data_efield, bond_direction, atom_idx_list)
+#print E-field on chemical bonds
+df_relE = pd.DataFrame.from_dict(data_relE_stat, orient="index")
+df_relE.index.name = 'cutoff'
+for cutoff in sorted(cutoff_values):
+   if cutoff == 0:
+      continue
+   print "E-field along C=O bond (cutoff = %dA):" %cutoff
+   print "Mean: %.3f MV/cm, Std Err: %.3f MV/cm" %(df_relE["avg_E_CO"][cutoff], df_relE["se_E_CO"][cutoff])
+
+   print "E-field along C-D bond (cutoff = %dA):" %cutoff
+   print "Mean: %.3f MV/cm, Std Err: %.3f MV/cm" %(df_relE["avg_E_CD"][cutoff], df_relE["se_E_CD"][cutoff])
+df_relE = df_relE.reindex(sorted(df_relE.columns), axis=1)
+df_relE.to_csv(target_dir + '/efield_bond.csv')
+
+#save E-field on atoms to csvfile
+df_efield_atom = pd.DataFrame.from_dict(data_efield_on_atom, orient="index")
+df_efield_atom.index.name = "cutoff"
+df_efield_atom = df_efield_atom.reindex(sorted(df_efield_atom), axis=1)
+df_efield_atom.to_csv(target_dir + '/efield_atom.csv')

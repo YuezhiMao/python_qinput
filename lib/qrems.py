@@ -147,7 +147,7 @@ def basis_abbr(BasName):    #generating abbreviated name for basis sets, using f
       print "unrecognized basis choice"
       sys.exit(1)
 
-def set_rems_common(curREM, method, basis):
+def set_rems_common(curREM, method, basis, loose=False):
    if basis.upper() == 'SVP':
       ModRem('BASIS','DEF2-SVP',curREM)
    elif basis.upper() == 'SVPD':
@@ -178,12 +178,22 @@ def set_rems_common(curREM, method, basis):
       ModRem('BASIS','6-311++G(3df,3pd)', curREM)
    else: #copy the name of standard basis
       ModRem('BASIS', basis, curREM)
-   ModRem('MEM_TOTAL', '8000', curREM)
-   ModRem('MEM_STATIC','2000', curREM)
+
+   if loose:
+      #ModRem('THRESH', '12', curREM)
+      ModRem('MEM_TOTAL', '16000', curREM)
+      ModRem('MEM_STATIC','8000', curREM)
+   else:
+      ModRem('THRESH', '14', curREM)
+      ModRem('MEM_TOTAL', '8000', curREM)
+      ModRem('MEM_STATIC','2000', curREM)
    ModRem('SCF_GUESS', 'SAD', curREM)
    ModRem('METHOD', method, curREM)	
    if (method != 'HF'):
-      ModRem ('XC_GRID', '000099000590', curREM)		
+      if loose:
+         ModRem('XC_GRID', '000075000302', curREM)
+      else:
+         ModRem('XC_GRID', '000099000590', curREM)
       ModRem ('NL_GRID', '1', curREM)
    #deal with -D3 in the method
    if "-D3" in method.upper():

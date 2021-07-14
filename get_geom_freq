@@ -18,6 +18,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--intens',dest='intensity',action='store_true',default=False,help='parse the IR intensities together with the frequencies')
    parser.add_option('--n_imag',dest='n_imag',action='store_true',default=False,help='count the number of imaginary frequencies')
    parser.add_option('--sorted',dest='sorted',action='store',type='string',default=None,help='sort the output based on a given criteria: [given_str]_[sort_key]_')
+   parser.add_option('--reverse_order',dest='reverse_order',action='store_true',default=False,help='sort the output name in the reverse order')
    parser.add_option('--modelchem',dest='modelchem',action='store_true',default=False,help='parse the model chemistry')
    parser.add_option('--multigeom',dest='multigeom',action='store',type='int',default=None,help='get multiple geometries')
    parser.add_option('--adiab_eda',dest='adiab_eda',action='store_true',default=False,help='split output as adiabatic eda results')
@@ -57,7 +58,8 @@ def manipulate_one_folder(target_path, options):
    os.chdir(target_path)
    get_energy(options)
    if options.do_freq:
-      get_frequency(options)
+      #get_frequency(options)
+      get_frequency_new(options)
    out_list = glob.glob('*.out')
    if not os.path.exists("geometry"):
       sp.call(['mkdir', 'geometry'])
@@ -96,7 +98,7 @@ def get_xyz(output_file, options):
    name = output_file[:-4]
    tmp_file = name+'.tmp'
    xyz_file = name+'.xyz'
-   #os.system('grep -B 100 "OPTIMIZATION CONVERGED" '+output_file+' | grep -A 1000 "Coordinates (Angstroms)" | grep -B 1000 Point | grep -A 1000 ATOM | grep -v ATOM | grep -v Point | awk \'{print $2, $3, $4, $5}\' > '+tmp_file)   
+   #os.system('grep -B 100 "OPTIMIZATION CONVERGED" '+output_file+' | grep -A 1000 "Coordinates (Angstroms)" | grep -B 1000 Point | grep -A 1000 ATOM | grep -v ATOM | grep -v Point | awk \'{print $2, $3, $4, $5}\' > '+tmp_file)
    #os.system('grep -A 100 "OPTIMIZATION CONVERGED" '+output_file+' | grep -B 100 "Z-matrix" | grep -A 500 "ATOM" | grep -v "ATOM" | grep -v "Print" > '+tmp_file)
    command = "sed -n " + "'/OPTIMIZATION CONVERGED/,/Z-matrix/p' " + output_file + " > "+tmp_file
    os.system(command)
@@ -203,7 +205,7 @@ def get_energy(options): #This function should be called in "manipulate_one_fold
    fr.close()
    fw = open(data_file,'w')
    if options.pes:
-      for data in sorted(datapoints, key=lambda data:data[0]):
+      for data in sorted(datapoints, key=lambda data:data[0], reverse=options.reverse_order):
          fw.write("%.2f,%.10f\n" %data)
    else:
       for data in datapoints:
@@ -215,8 +217,8 @@ def get_energy(options): #This function should be called in "manipulate_one_fold
 def get_frequency(options):
    freq_data={}
    tmpfile = 'tmp_freq'
-   #os.system('grep "Frequency: " *.out > '+tmpfile)
-   os.system('grep -A 50000 "Final energy is" *.out | grep "Frequency: " > '+tmpfile)
+   os.system('grep "Frequency: " *.out > '+tmpfile)
+   #os.system('grep -A 50000 "Final energy is" *.out | grep "Frequency: " > '+tmpfile)
    fr = open(tmpfile, 'r')
    for line in fr.readlines():
       l = line.split()
@@ -233,8 +235,8 @@ def get_frequency(options):
 
    if options.intensity:
       tmpfile = 'tmp_intensity'
-      #os.system('grep "IR Intens: " *.out > '+tmpfile)
-      os.system('grep -A 50000 "Final energy is" *.out | grep "IR Intens: " > '+tmpfile)
+      os.system('grep "IR Intens: " *.out > '+tmpfile)
+      #os.system('grep -A 50000 "Final energy is" *.out | grep "IR Intens: " > '+tmpfile)
       fr = open(tmpfile, 'r')
       for line in fr.readlines():
          l = line.split()
@@ -253,7 +255,7 @@ def get_frequency(options):
 
    freq_data_file = 'frequency.csv'
    fw = open(freq_data_file, 'w')
-   for jobname in sorted(freq_data, key=lambda jobname:get_sorting_key(jobname, options)):
+   for jobname in sorted(freq_data, key=lambda jobname:get_sorting_key(jobname, options), reverse=options.reverse_order):
       if (not options.multigeom) or ('adiabatic_eda' not in jobname):
          fw.write('%s,' %jobname)
          for freq in freq_data[jobname]["freq"]:
@@ -274,7 +276,86 @@ def get_frequency(options):
    if options.intensity:
       intens_data_file = 'intensity.csv'
       fw = open(intens_data_file, 'w')
-      for jobname in sorted(freq_data, key=lambda jobname:get_sorting_key(jobname, options)):
+      for jobname in sorted(freq_data, key=lambda jobname:get_sorting_key(jobname, options), reverse=options.reverse_order):
+         if not options.multigeom:
+            fw.write('%s,' %jobname)
+            for intens in freq_data[jobname]["intens"]:
+               fw.write('%.3f,' %intens)
+            fw.write('\n')
+         else:
+            n_geom = options.multigeom
+            n_intens_per_geom = freq_data[jobname]["n_intens"] / n_geom
+            offset = 0
+            for igeom in range(0, n_geom):
+               fw.write('%s,' %jobname)
+               for i_intens in range(0, n_intens_per_geom):
+                  fw.write('%.2f,' %freq_data[jobname]["intens"][offset+i_intens])
+               fw.write('\n')
+               offset += n_intens_per_geom
+      fw.close()
+
+def get_frequency_new(options):
+   outfile_list = glob.glob("*.out")
+   freq_data = {}
+   tmpfile = 'tmp_freq'
+   for outfile in outfile_list:
+      jobname = re.search('(\S+).out', outfile).group(1)
+      freq_data[jobname] = {}
+      command = "sed -n '/INFRARED INTENSITIES/,/STANDARD THERMODYNAMIC/p' " + outfile + " | " + "grep 'Frequency:'" + " > " + tmpfile
+      os.system(command)
+      fr = open(tmpfile, 'r')
+      for line in fr.readlines():
+         l = line.split()
+         if "freq" not in freq_data[jobname]:
+            freq_data[jobname]["n_freq"] = 0
+            freq_data[jobname]["freq"]=[]
+         for data in l[1:]:
+            freq_data[jobname]["freq"].append(float(data))
+            freq_data[jobname]["n_freq"] += 1
+      fr.close()
+      
+      if options.intensity:
+         command = "sed -n '/INFRARED INTENSITIES/,/STANDARD THERMODYNAMIC/p' " + outfile + " | " + "grep 'IR Intens:'" + " > " + tmpfile
+         os.system(command)
+         fr = open(tmpfile, 'r')
+         for line in fr.readlines():
+            l = line.split()
+            if jobname not in freq_data:
+               print "Error: the frequency data for %s does not exist" %jobname
+               sys.exit(0)
+            if "intens" not in freq_data[jobname]:
+               freq_data[jobname]["intens"]=[]
+               freq_data[jobname]["n_intens"] = 0
+            for data in l[2:]:
+               freq_data[jobname]["intens"].append(float(data))
+               freq_data[jobname]["n_intens"] += 1
+         fr.close()
+   sp.call(['rm', tmpfile])
+
+   freq_data_file = 'frequency.csv'
+   fw = open(freq_data_file, 'w')
+   for jobname in sorted(freq_data, key=lambda jobname:get_sorting_key(jobname, options), reverse=options.reverse_order):
+      if (not options.multigeom) or ('adiabatic_eda' not in jobname):
+         fw.write('%s,' %jobname)
+         for freq in freq_data[jobname]["freq"]:
+            fw.write('%.2f,' %freq)
+         fw.write('\n')
+      else:
+         n_geom = options.multigeom
+         n_freq_per_geom = freq_data[jobname]["n_freq"] / n_geom
+         offset = 0
+         for igeom in range(0, n_geom):
+            fw.write('%s,' %jobname)
+            for ifreq in range(0, n_freq_per_geom):
+               fw.write('%.2f,' %freq_data[jobname]["freq"][offset+ifreq])
+            fw.write('\n')
+            offset += n_freq_per_geom
+   fw.close()
+
+   if options.intensity:
+      intens_data_file = 'intensity.csv'
+      fw = open(intens_data_file, 'w')
+      for jobname in sorted(freq_data, key=lambda jobname:get_sorting_key(jobname, options), reverse=options.reverse_order):
          if not options.multigeom:
             fw.write('%s,' %jobname)
             for intens in freq_data[jobname]["intens"]:
@@ -296,7 +377,7 @@ def get_sorting_key(jobname, options):
    if options.sorted==None:
       return jobname
    else:
-      l = re.search(options.sorted+'_([^_]+)_', jobname)
+      l = re.search(options.sorted+'_([^_]+)', jobname)
       if l!=None:
          return float(l.group(1))
       else:

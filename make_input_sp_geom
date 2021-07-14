@@ -24,9 +24,11 @@ def ParseInput(ArgsIn):
    parser.add_option('--sol_file', dest='sol_file', action='store', type='string', default=None, help='file for the solvent model input section')
    parser.add_option('--geom_constr', dest='geom_constr', action='store', default=None, type='string', help='specify the template file for adding geometry optimization constraint')
    parser.add_option('--tight',dest='tight',action='store_true',default=False,help='use tigher criterion for geom opt convergence')
+   parser.add_option('--coarse',dest='coarse',action='store_true',default=False,help='use less tight integral thresh and less fine grid for SCF calculations')
    parser.add_option('--sym',dest='sym',action='store_true',default=False,help='use sym_ignore = false for geom opt')
    parser.add_option('--stab',dest='stab',action='store_true',default=False,help='use gdm algorithm and turn on stability analysis')
    parser.add_option('--efield',dest='efield',action='store_true',default=False,help='calculate electric field')
+   parser.add_option('--dipole_field',dest='dipole_field',action='store',type='int',default=None,help='apply a dipolar field along Z direction')
 
    options, args = parser.parse_args(ArgsIn)
    if len(args) < 2 and (options.all or options.keyword!=None):
@@ -63,6 +65,14 @@ def XYZ_to_Input(fw, XYZ, curREM, options):
          sys.exit(0)
       else:
          qrems.copy_section_over(fw, options.sol_file)
+   if options.dipole_field != None and options.dipole_field != 0:
+      append_dipolar_field(fw, options.dipole_field)
+
+def append_dipolar_field(fw, dipole_field):
+   field_in_au = -1.0 * float(dipole_field) / 5142.0 #note: the minus comes from q-chem's convention
+   fw.write('\n$multipole_field\n')
+   fw.write('Z\t%.6f\n' %field_in_au)
+   fw.write('$end\n')
 
 def set_tight_opt_criterion(curREM):
    qrems.ModRem('GEOM_OPT_TOL_GRADIENT','100', curREM)
@@ -99,6 +109,7 @@ rem_file = os.path.expandvars('$QREMPATH')+'/rem_stdscf'
 myrems = qrems.ParseRems(rem_file)
 if options.opt:
    qrems.ModRem('JOBTYPE', 'OPT', myrems)
+   qrems.ModRem('GEOM_OPT_MAX_CYCLES', '200', myrems)
 if options.tight:
    set_tight_opt_criterion(myrems)
 if options.sym:
@@ -114,14 +125,21 @@ if options.efield:
 
 for method in options.method:
    for basis in options.basis:
-      qrems.set_rems_common(myrems, method, basis)
+      qrems.set_rems_common(myrems, method, basis, options.coarse)
       for xyz_file in xyzfile_list:
          parsed_XYZ = qmol.XYZ(xyz_file)
-         if options.opt:
-            inputfile = input_path+parsed_XYZ.Name+'_geom_'+method+'_'+qrems.basis_abbr(basis)+'.in' 
+         if options.dipole_field != None:
+            if options.dipole_field > 0:
+               inputfile = input_path+parsed_XYZ.Name+'_+'+str(options.dipole_field)+'.in'
+            elif options.dipole_field == 0:
+               inputfile = input_path+parsed_XYZ.Name+'_0.in'
+            else:
+               inputfile = input_path+parsed_XYZ.Name+'_'+str(options.dipole_field)+'.in'
          else:
-            inputfile = input_path+parsed_XYZ.Name+'_'+method+'_'+qrems.basis_abbr(basis)+'.in' 
+            if options.opt:
+               inputfile = input_path+parsed_XYZ.Name+'_geom_'+method+'_'+qrems.basis_abbr(basis)+'.in'
+            else:
+               inputfile = input_path+parsed_XYZ.Name+'_'+method+'_'+qrems.basis_abbr(basis)+'.in'
          fw = open(inputfile, 'w')
          XYZ_to_Input(fw, parsed_XYZ, myrems, options)
          fw.close()
-

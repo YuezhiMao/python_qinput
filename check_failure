@@ -1,0 +1,147 @@
+#!/usr/bin/env python
+#This script is to check whether a job is normally terminated or not
+
+import os, glob, re, sys
+import subprocess as sp
+from optparse import OptionParser
+
+def ParseInput(ArgsIn):
+   parser=OptionParser()
+   parser.add_option('-a','--all',dest='all', action='store_true', default=False, help='check all the output directories')
+   parser.add_option('-t','--target', dest='target', action='store', type='string', default=None, help='the output directory to check')
+   parser.add_option('-k','--keyword', dest='keyword', action='store', type='string', default=None, help='search for all matching output direcotries based on the keyword')
+   parser.add_option('-m','--multi',dest='multi', action='store', type='int', default=0, help='search for multiple complete flags. You need to specify the number')
+   parser.add_option('-f','--flag',dest='flag',action='store',type='string',default="Have a nice day", help='The flag for successfully finished jobs (default is \"Have a nice day\")')
+   parser.add_option('--skip',dest='skip',action='store',type='string',default=None,help='skip this output directory')
+   parser.add_option('--delete',dest='delete',action='store_true',default=False, help='delete the failed jobs')
+   options, args=parser.parse_args(ArgsIn)
+   if not options.all and options.target==None and options.keyword==None: 
+      print "The target directory must be specified: one or some or all"
+      parser.print_help()
+      sys.exit(1)
+   else:
+      return options, args
+
+def CheckComplete_Single(target_path, flag, unfinished_list):
+   print "checking directory %s" %target_path
+   cur_dir = os.getcwd()
+   os.chdir(target_path)
+   jobname_list = glob.glob("*.out")
+   n_jobs = len(jobname_list)
+   job_status = {}  #the dictionary
+   for jobname in jobname_list:
+      job_status[jobname]= False
+   tmp = 'tmp.txt'
+   #os.system('grep \"Have a nice day\" *.out > ' + tmp)
+   os.system('grep \"'+flag+'\" *.out > ' + tmp)
+   f = open('tmp.txt')
+   #initialize the counts
+   n_fail = n_jobs
+   n_complete = 0
+   for line in f.readlines():
+      jobname = re.search("(\S+):",line).group(1)
+      job_status[jobname] = True
+      n_fail -= 1
+      n_complete += 1
+   f.close()
+   sp.call(['rm', tmp])
+   target_root = target_path
+   if 'result/' in target_path:
+      target_root = re.search('result/(\S+)', target_path).group(1)
+   #print out the failures
+   for jobname in job_status:
+      if job_status[jobname]!=True:
+         print jobname+': Failed'
+         sp.call(['rm', jobname])
+         inputname = jobname[:-4]+'.in'
+         inputpath = "input_"+target_root
+         unfinished_list.append((inputpath, inputname))
+   #print out the summary
+   print "%d jobs in total: %d completed, %d failed" %(n_jobs, n_complete, n_fail)
+   os.chdir(cur_dir)
+
+def CheckComplete_Multi(target_path, multiple, flag, unfinished_list):
+   print "checking directory %s" %target_path
+   cur_dir = os.getcwd()
+   os.chdir(target_path)
+   jobname_list = glob.glob("*.out")
+   n_jobs = len(jobname_list)
+   job_status = {}  #the dictionary
+   #initialize the job_status dict
+   for jobname in jobname_list:
+      job_status[jobname] = {}
+      job_status[jobname]["status"] = False
+      job_status[jobname]["counts"] = 0     #counts of complete flag
+   tmp = 'tmp.txt'
+   os.system('grep \"'+flag+'\" *.out > ' + tmp)
+   f = open('tmp.txt')
+    
+   n_fail = n_jobs
+   n_complete = 0
+   for line in f.readlines():
+      l = re.search("(\S+):",line)
+      job_status[l.group(1)]["counts"] += 1
+      if job_status[l.group(1)]["counts"] == multiple:  #expected number of flags reached
+         job_status[l.group(1)]["status"] = True
+         n_fail -= 1
+         n_complete += 1
+   f.close()
+   sp.call(['rm', tmp])
+   #print out the failures
+   for jobname in job_status:
+      if job_status[jobname]["status"]!=True:
+         print jobname+': Only %d/%d complete flags detected, failed' %(job_status[jobname]["counts"], options.multi)
+         inputname = jobname
+         inputpath = target_path
+         unfinished_list.append((inputpath, inputname))
+   print "%d jobs in total: %d completed, %d failed" %(n_jobs, n_complete, n_fail)
+   os.chdir(cur_dir)
+
+def delete_failed(unfinished_list):
+   curdir = os.getcwd()
+   for unfinished_job in unfinished_list:
+      inputpath = unfinished_job[0]
+      inputfile = unfinished_job[1]
+      #print "resubmit "+inputpath+inputfile
+      os.chdir(inputpath)
+      #sp.call(['submitSLURM', '-t', 'openmp', '-p', '8', '--exclude=n0036.mhg0', inputfile])
+      sp.call(['rm', inputfile])
+      os.chdir(curdir)
+
+#The script
+options,args=ParseInput(sys.argv)
+outdir_list = []
+unfinished_list = []
+if options.all or options.keyword!=None:
+   cur_dir = os.getcwd()
+   os.chdir('result/')
+   if options.all:
+      outdir_list=glob.glob('*/')
+   else:
+      outdir_list = glob.glob('*'+options.keyword+'*/')
+   if options.skip!=None:
+      skipped_dir = options.skip
+      if skipped_dir[-1:]!='/':
+         skipped_dir += '/'
+      if skipped_dir in outdir_list:
+         outdir_list.remove(options.skip)
+
+   for outdir in outdir_list:
+      if not options.multi:
+         CheckComplete_Single(outdir, options.flag, unfinished_list)
+      else:
+         CheckComplete_Multi(outdir, options.multi, options.flag, unfinished_list)
+   os.chdir(cur_dir)
+
+elif options.target!=None:
+   cur_dir = os.getcwd()
+   if not options.multi:
+      CheckComplete_Single(options.target, options.flag, unfinished_list)
+   else:
+      CheckComplete_Multi(options.target, options.multi, options.flag, unfinished_list)
+   os.chdir(cur_dir)
+
+if options.delete and len(unfinished_list) > 0:
+   delete_failed(unfinished_list)
+
+                                                                    

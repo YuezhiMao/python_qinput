@@ -8,7 +8,7 @@ import qrems, qmol
 
 def ParseInput(ArgsIn):
    UseMsg = '''
-   make_input_sp_geom [options] [xyz_path]
+   make_input_tddft [options] [xyz_path]
    '''
    parser = OptionParser(usage=UseMsg)
    parser.add_option('-a','--all',dest='all',action='store_true',default=False,help='run all the xyz files under the xyz_path')
@@ -25,7 +25,9 @@ def ParseInput(ArgsIn):
    parser.add_option('--rpa',dest='rpa',action='store_true',default=False,help='use full TDDFT (instead of TDA)')
    parser.add_option('--spinflip',dest='spinflip',action='store_true',default=False,help='do spin-flip')
    parser.add_option('--sol',dest='sol',action='store',type='string',default=None,help='specify the solvent model to use')
-   parser.add_option('--sol_file', dest='sol_file', action='store', type='string', default=None, help='file for the solvent model input section')
+   parser.add_option('--sol_file',dest='sol_file', action='store', type='string', default=None, help='file for the solvent model input section')
+   parser.add_option('--nto',dest='nto', action='store_true', default=False, help='perform nto analysis and save to fchk file')
+   parser.add_option('--diab',dest='diab',type='string',action='callback',default=None,callback=string_sp_callback,help='perform GMH and FCD diabatization (specify the number of atoms on fragment 1 and total number of atoms)')
 
    options, args = parser.parse_args(ArgsIn)
    if len(args) < 2 and (options.all or options.keyword!=None):
@@ -98,6 +100,16 @@ if options.rpa:
    qrems.ModRem('RPA', '1', myrems)
 if options.sol != None:
    qrems.ModRem('SOLVENT_METHOD', options.sol, myrems)
+if options.nto:
+   qrems.ModRem('GUI', '2', myrems)
+   qrems.ModRem('NTO_PAIRS', '2', myrems)
+if options.diab:
+   qrems.ModRem('STS_GMH', 'TRUE', myrems)
+   qrems.ModRem('STS_FCD', 'TRUE', myrems)
+   donor_range = '1-'+options.diab[0]
+   acceptor_range = str(int(options.diab[0])+1)+'-'+options.diab[1]
+   qrems.ModRem('STS_DONOR', donor_range, myrems)
+   qrems.ModRem('STS_ACCEPTOR', acceptor_range, myrems)
 
 ex_method = 'tda'
 if options.rpa:

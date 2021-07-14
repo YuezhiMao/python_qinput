@@ -622,18 +622,16 @@ def parse_neweda_snapshot(options, output_dir, keyword=None):
       os.system('grep \"kJ/mol\" *'+keyword+'*.out > '+tmp_filename)
    f = open(tmp_filename, 'r')
    for line in f.readlines():
-      l = line.split()
-      jobname = l[0][:-1]
-      snapID = re.search('(\d+)_eda2', jobname).group(1)
-      if snapID not in DataPoints:
-         DataPoints[snapID]={}
-      #make sure it is an energy item
-      if re.search('\d+', l[-1])!=None:
-         item = l[1]
-         if item[0] == "[":
+      l = re.search('(\d+)_eda2_op(\d)_(\S+).out:\s*(\S+).+=\s+(\S+)',line)
+      if l!=None:
+         snapID = l.group(1)
+         if snapID not in DataPoints:
+            DataPoints[snapID] = {}
+         item = l.group(4)
+         value = float(l.group(5))
+         if item[0] == "[":  #modification for the mod_pauli
             item = item[1:]
-         energy = float(l[-1])
-         DataPoints[snapID][item] = energy
+         DataPoints[snapID][item] = value
          if options.kcal:
             DataPoints[snapID][item] *= 1.0/hart_to_kj * hart_to_kcal
    f.close()
