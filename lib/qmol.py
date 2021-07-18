@@ -20,7 +20,7 @@ class XYZ:  #class for XYZ coordinates
             self.CoordList.append(coord)
 
       if(len(self.AtomList)!=self.NAtom):
-         print "Error in number of atoms: "+xyzfile
+         print("Error in number of atoms: "+xyzfile)
          sys.exit(1)
 
 class FRGM: #class for fragment partition information
@@ -33,35 +33,35 @@ class FRGM: #class for fragment partition information
          ls = line.split()
          if counter == 1:
             if len(ls) != 1:
-               print "Error in line %d of %s" %(counter, frgm_file)
+               print("Error in line %d of %s" %(counter, frgm_file))
                sys.exit(0)
             else:
                self.total_charge = int(ls[0])
          elif counter == 2:
             if len(ls) != 1:
-               print "Error in line %d of %s" %(counter, frgm_file)
+               print("Error in line %d of %s" %(counter, frgm_file))
                sys.exit(0)
             else:
                self.total_mult = int(ls[0])
          elif counter == 3:
             self.n_frgm = len(ls)
             if self.n_frgm < 2:
-               print "Error in line %d of %s: At least two fragments required" %(counter, frgm_file)
+               print("Error in line %d of %s: At least two fragments required" %(counter, frgm_file))
                sys.exit(0)
             self.charge_frgm = [int(i) for i in ls]
          elif counter == 4:
             if len(ls) != self.n_frgm:
-               print "Error in line %d of %s" %(counter, frgm_file)
+               print("Error in line %d of %s" %(counter, frgm_file))
                sys.exit(0)
             self.mult_frgm = [int(i) for i in ls]
          elif counter == 5:
             if len(ls) != self.n_frgm:
-               print "Error in line %d of %s" %(counter, frgm_file)
+               print("Error in line %d of %s" %(counter, frgm_file))
                sys.exit(0)
             self.natoms_frgm = [int(i) for i in ls] 
             
          else:
-            print "skip the unexpected lines in " + frgm_file 
+            print("skip the unexpected lines in " + frgm_file) 
          line = fr.readline()
 
       self.atoms_offset = np.zeros(self.n_frgm, dtype=int)
@@ -103,7 +103,7 @@ def WriteMolecule_supersub(fw, XYZ, FRGM, monomer=0, ghost=False):
    fw.write('$molecule\n')
    if monomer == 0:   #supersystem
       if ghost:
-         print "Can't add ghost atoms for the supersystem calculation"
+         print("Can't add ghost atoms for the supersystem calculation")
          sys.exit(0)
       else:
          fw.write("%d %d\n" %(FRGM.total_charge, FRGM.total_mult))

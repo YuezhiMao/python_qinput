@@ -23,7 +23,7 @@ def get_analytic_forces(output):
         elif l_sp[0] == "3":
             for i in range(1, len(l_sp)):
                 coord_z.append(float(l_sp[i]))
-    print "length of x, y, z vectors: %d %d %d" %(len(coord_x), len(coord_y), len(coord_z))
+    print("length of x, y, z vectors: %d %d %d" %(len(coord_x), len(coord_y), len(coord_z)))
     fr.close()
     sp.call(['rm', tmpfile])
     #dump to csvfile
@@ -34,7 +34,7 @@ def get_analytic_forces(output):
         fw.write("%.7f,%.7f,%.7f\n" %(coord_x[i], coord_y[i], coord_z[i]))
     fw.close()
     #return numpy array
-    all_forces = np.array(zip(coord_x, coord_y, coord_z))
+    all_forces = np.array(list(zip(coord_x, coord_y, coord_z)))
     return all_forces
 
 def get_numerical_forces(output):

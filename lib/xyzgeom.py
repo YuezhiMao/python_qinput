@@ -71,13 +71,13 @@ def write_xyz_file(outfile, AtomList, Coords):
    fw.close()
 
 def set_origin(Coords, idx_orig):
-   print "Set the position of Atom %d as the origin" %idx_orig
+   print("Set the position of Atom %d as the origin" %idx_orig)
    origin = np.copy(Coords[idx_orig-1])
    for i in range(0, Coords.shape[0]):
       Coords[i] -= origin
 
 def set_xy_plane(Coords, idx1, idx2, idx3):
-   print "Set the plane determined by atoms %d, %d, %d as the xy-plane" %(idx1, idx2, idx3) 
+   print("Set the plane determined by atoms %d, %d, %d as the xy-plane" %(idx1, idx2, idx3)) 
    A0, A1, A2 = Coords[idx1-1], Coords[idx2-1], Coords[idx3-1]
    dx = A1 - A0
    dy = A2 - A0
@@ -94,7 +94,7 @@ def set_xy_plane(Coords, idx1, idx2, idx3):
    return Coords
 
 def axis_translate(Coords, distance, axis='z'): 
-   print "Translate atoms along the %s axis by %.4f Angstrom" %(axis.lower(), distance)
+   print("Translate atoms along the %s axis by %.4f Angstrom" %(axis.lower(), distance))
    if axis.lower() == 'x':
       Coords[:, 0] += distance
    elif axis.lower() == 'y':
@@ -104,7 +104,7 @@ def axis_translate(Coords, distance, axis='z'):
    return Coords
 
 def xy_rotate(Coords, angle):
-   print "rotate in the xy-plane by %f degrees" %angle
+   print("rotate in the xy-plane by %f degrees" %angle)
    rotmat = np.zeros((3,3))
    rotmat[0] = np.array([np.cos(angle/180.0*np.pi), -np.sin(angle/180.0*np.pi), 0.0])
    rotmat[1] = np.array([np.sin(angle/180.0*np.pi), np.cos(angle/180.0*np.pi), 0.0])
@@ -113,7 +113,7 @@ def xy_rotate(Coords, angle):
    return Coords
 
 def xy_rotate_nfold(Coords, fold):
-   print "rotate in the xy-plane by 2pi/%d" %fold
+   print("rotate in the xy-plane by 2pi/%d" %fold)
    n = float(fold) #n-fold rotational axis
    rotmat = np.zeros((3,3))
    rotmat[0] = np.array([np.cos(2*np.pi/n), -np.sin(2*np.pi/n), 0.0])
@@ -139,32 +139,32 @@ def rotate_cylindrical(Coords, angle, axis='z', use_degree=True):
       rotmat[1] = np.array([np.sin(angle), np.cos(angle), 0.0])
       rotmat[2] = np.array([0.0, 0.0, 1.0])
    else:
-      print "Invalid value for variable \"axis\""
+      print("Invalid value for variable \"axis\"")
       sys.exit(0)
    Coords = np.dot(Coords, rotmat)
    return Coords
 
 def reflection(Coords, mirror_pos, normal_axis='z'):
    if normal_axis.lower() == 'z':
-      print "reflection with respect to the mirror at z = %.2f" %mirror_pos
+      print("reflection with respect to the mirror at z = %.2f" %mirror_pos)
       Coords[:,2] = 2*mirror_pos - Coords[:,2]
    elif normal_axis.lower() == 'x':
-      print "reflection with respect to the mirror at x = %.2f" %mirror_pos
+      print("reflection with respect to the mirror at x = %.2f" %mirror_pos)
       Coords[:,0] = 2*mirror_pos - Coords[:,0]
    elif normal_axis.lower() == 'y':
-      print "reflection with respect to the mirror at y = %.2f" %mirror_pos
+      print("reflection with respect to the mirror at y = %.2f" %mirror_pos)
       Coords[:,0] = 2*mirror_pos - Coords[:,1]
    return Coords 
 
 def pivot(Coords_orig, reverse=False):
    Coords = np.zeros(Coords_orig.shape)
    if reverse:
-      print "pivot the axes: x->z, y->x, z->y"
+      print("pivot the axes: x->z, y->x, z->y")
       Coords[:,0] = np.copy(Coords_orig[:,1])
       Coords[:,1] = np.copy(Coords_orig[:,2])
       Coords[:,2] = np.copy(Coords_orig[:,0])
    else:
-      print "pivot the axes: x->y, y->z, z->x"
+      print("pivot the axes: x->y, y->z, z->x")
       Coords[:,0] = np.copy(Coords_orig[:,2])
       Coords[:,1] = np.copy(Coords_orig[:,0])
       Coords[:,2] = np.copy(Coords_orig[:,1])

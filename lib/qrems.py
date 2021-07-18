@@ -144,7 +144,7 @@ def basis_abbr(BasName):    #generating abbreviated name for basis sets, using f
    elif fullname == 'lp':
       return 'lp'
    else:
-      print "unrecognized basis choice"
+      print("unrecognized basis choice")
       sys.exit(1)
 
 def set_rems_common(curREM, method, basis, loose=False):
@@ -229,7 +229,7 @@ def add_aux_basis(basis, curREM):
    elif basis.upper() == 'AUG-CC-PVQZ':
       ModRem('AUX_BASIS', 'RIMP2-AUG-CC-PVQZ', curREM)
    else:
-      print "No corresponding auxiliary basis for "+basis+" yet"
+      print("No corresponding auxiliary basis for "+basis+" yet")
 
 def apply_single_geom_constraint(fw, geom_param, constraint_template):
    fr = open(constraint_template, 'r')
@@ -264,5 +264,5 @@ def AppendSolvationSecs(fw, pcm_epsilon=0.0, smd_solvent=None):
       fw.write('solvent  %s\n' %smd_solvent)
       fw.write('$end\n')
    else:
-      print "why here!?"
+      print("why here!?")
       sys.exit(0)
