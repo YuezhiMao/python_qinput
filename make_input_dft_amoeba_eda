@@ -32,7 +32,7 @@ def ParseInput(ArgsIn):
          sys.exit(1)
 
    if not options.all and options.target==None and options.keyword==None:
-      print "The target directory must be specified: one or some or all"
+      print("The target directory must be specified: one or some or all")
       parser.print_help()
       sys.exit(1)
    return options, args
@@ -58,7 +58,7 @@ class XYZ:
             self.CoordList.append(coord)
 
       if(len(self.AtomList)!=self.NAtom):
-         print "Error in number of atoms"
+         print("Error in number of atoms")
          sys.exit(1)
 
 
@@ -76,44 +76,44 @@ def ParseFRGM(FRGMFile, debug = False):
             if (not l==None):
                FRGM["total_charge"] = int(l.group(1)) 
                if debug:
-                  print "supersystem charge is "+ str(FRGM["total_charge"])
+                  print("supersystem charge is "+ str(FRGM["total_charge"]))
             else:
-               print "error parsing frgm file"
+               print("error parsing frgm file")
          if counter == 2:
             l=re.search("(\S+)",line) 
             if (not l==None):
                FRGM["total_mult"] = int(l.group(1)) 
                if debug:
-                  print "supersystem multiplicity is "+ str(FRGM["total_mult"])
+                  print("supersystem multiplicity is "+ str(FRGM["total_mult"]))
             else:
-               print "error parsing frgm file"
+               print("error parsing frgm file")
          if counter == 3:
             l=re.search("(\S+)",line) 
             if (not l==None):
                FRGM["charge_frgm"] = [int(i) for i in line.split()]
                if debug:
-                  print "printing fragment charges"
-                  print FRGM["charge_frgm"]
+                  print("printing fragment charges")
+                  print(FRGM["charge_frgm"])
             else:
-               print "error parsing frgm file"
+               print("error parsing frgm file")
          if counter == 4:
             l=re.search("(\S+)",line) 
             if (not l==None):
                FRGM["mult_frgm"] = [int(i) for i in line.split()]
                if debug:
-                  print "printing fragment multiplicites"
-                  print FRGM["mult_frgm"]
+                  print("printing fragment multiplicites")
+                  print(FRGM["mult_frgm"])
             else:
-               print "error parsing frgm file"
+               print("error parsing frgm file")
          if counter == 5:
             l=re.search("(\S+)",line) 
             if (not l==None):
                FRGM["atoms_frgm"] = [int(i) for i in line.split()]
                if debug:
-                  print "printing number of atoms in each fragment"
-                  print FRGM["atoms_frgm"]
+                  print("printing number of atoms in each fragment")
+                  print(FRGM["atoms_frgm"])
             else:
-               print "error parsing frgm file"
+               print("error parsing frgm file")
             #make a list for number of atoms prior to each fragment (offset)
             FRGM["NFrgm"] = len(FRGM["atoms_frgm"])
             FRGM["atoms_offset"] = np.zeros(FRGM["NFrgm"],dtype=int)
@@ -123,7 +123,7 @@ def ParseFRGM(FRGMFile, debug = False):
                offset += FRGM["atoms_frgm"][index]
       line = f.readline()
    if counter != 5:
-      print "did not parse the expected number of lines in "+FRGMFile 
+      print("did not parse the expected number of lines in "+FRGMFile) 
    return FRGM
 
 def ParseRems(RemFile):
@@ -184,8 +184,8 @@ def WriteAMOEBAFrgm(fw, XYZ, FRGM, frgmname='amoebawater_l', frgm_index=1):
    fw.write('$efp_fragments\n')
    N_MM_atoms = FRGM["atoms_frgm"][frgm_index]
    if N_MM_atoms%3!=0:
-      print "N_MM_ATOM = %d" %N_MM_atoms
-      print "Only water is supported for now so the number of atoms in the MM region must be multiple of 3"
+      print("N_MM_ATOM = %d" %N_MM_atoms)
+      print("Only water is supported for now so the number of atoms in the MM region must be multiple of 3")
       sys.exit(0)
    for i in range(0, N_MM_atoms):
       if i%3 == 0:
@@ -208,7 +208,7 @@ def WriteQMVDWParams(fw, vdw_param_file, n_qm_atoms):
    fw.write('$end\n')
    fr.close()
    if count != n_qm_atoms:
-      print "Error: wrong number of QM vdW parameters"
+      print("Error: wrong number of QM vdW parameters")
       sys.exit(0)
 
 def WriteMolecule(fw, XYZ, FRGM, monomer=0, pureAMOEBA=False):
@@ -217,19 +217,19 @@ def WriteMolecule(fw, XYZ, FRGM, monomer=0, pureAMOEBA=False):
       WriteAMOEBAFrgm(fw, XYZ, FRGM) 
 
    elif monomer > 2:
-      print "At most there could be two fragments for QM/MM"
+      print("At most there could be two fragments for QM/MM")
       sys.exit(0)
    else:   #monomer job
       index_frgm = monomer - 1   #start from zero
       if index_frgm == 0:
          if pureAMOEBA:
-            print "The first frgm must be QM for now"
+            print("The first frgm must be QM for now")
             sys.exit(0)
          else:   #the qm frgm
             WriteQMFrgm(fw, XYZ, FRGM, index_frgm)
       else:
          if not pureAMOEBA:
-            print "The second frgm must be AMOEBA for now"
+            print("The second frgm must be AMOEBA for now")
             sys.exit(0)
          else:
             #write the He
@@ -279,7 +279,7 @@ def basis_abbr(BasName):    #generating abbreviated name for basis sets, using f
    elif fullname == 'lp':
       return 'lp'
    else:
-      print "unrecognized basis choice: %s" %fullname
+      print("unrecognized basis choice: %s" %fullname)
       sys.exit(1)
 
 def Set_rems_common(curREM, method, basis):
@@ -338,7 +338,7 @@ def Set_rems_common(curREM, method, basis):
 def XYZ_to_Input(XYZ, inputfile, FRGM, method, basis, vdw_param_file, blur=False, nobackpol=False):
    fw = open(inputfile, 'w')
    if FRGM["NFrgm"] != 2:
-      print "Only two-fragment case is supported for now"
+      print("Only two-fragment case is supported for now")
       sys.exit(0)
    #write isolated frgm jobs 
    #Order: 1. AMOEBA; 2. QM

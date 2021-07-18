@@ -33,16 +33,16 @@ def ParseInput(ArgsIn):
       parser.print_help()
       sys.exit(0)
    if not options.all and options.target==None and options.keyword==None:
-      print "The target directory must be specified: one or some or all"
+      print("The target directory must be specified: one or some or all")
       parser.print_help()
       sys.exit(1)
    if not (options.eomip > 0 or options.eomsf > 0 or options.eomee != None or options.eomea > 0):
-      print "At least specify one type of excited states"
+      print("At least specify one type of excited states")
       parser.print_help()
       sys.exit(1)
    if options.act_virt > 0 and (options.act_virt > options.tot_virt):
-      print "Active virt: %d, Total virt: %d" %(options.act_virt, options.tot_virt)
-      print "Invalid number of active virtuals"
+      print("Active virt: %d, Total virt: %d" %(options.act_virt, options.tot_virt))
+      print("Invalid number of active virtuals")
       sys.exit(1)
 
    return options, args
@@ -78,7 +78,7 @@ def set_rems_eomccsd(myrems, options):
        qrems.ModRem('N_FROZEN_VIRTUAL', str(n_frozen), myrems)
 
     qrems.ModRem('CC_MEMORY', str(options.cc_mem), myrems)
-    print "mem_total = " + str(options.cc_mem+4000)
+    print("mem_total = " + str(options.cc_mem+4000))
     qrems.ModRem('MEM_TOTAL', str(options.cc_mem+4000), myrems)
 
 options, args = ParseInput(sys.argv)

@@ -24,27 +24,27 @@ def ParseInput(ArgsIn):
    parser.add_option('--adiab_eda',dest='adiab_eda',action='store_true',default=False,help='split output as adiabatic eda results')
    options, args=parser.parse_args(ArgsIn)
    if len(args) < 2 and options.target==None:
-      print "Specify the directory that stores all the results"
+      print("Specify the directory that stores all the results")
       parser.print_help()
       sys.exit(1)
    if not options.all and options.target==None and options.keyword==None: 
-      print "The target directory or keyword must be specified"
+      print("The target directory or keyword must be specified")
       parser.print_help()
       sys.exit(1)
    if options.format!='xyz' and options.format!='gzmat':
-      print "The specified format of geometry files is not recognized"
+      print("The specified format of geometry files is not recognized")
       parser.print_help()
       sys.exit(1)
    if options.intensity and not options.do_freq:
-      print "Can't request intensity without parsing frequency"
+      print("Can't request intensity without parsing frequency")
       parser.print_help()
       sys.exit() 
    if options.n_imag and not options.do_freq:
-      print "Can't figure out the number of imaginary frequencies without parsing frequency"
+      print("Can't figure out the number of imaginary frequencies without parsing frequency")
       parser.print_help()
       sys.exit()
    if options.adiab_eda and options.multigeom!=3:
-      print "Warning: set multigeom = 3 for adiabatic EDA"
+      print("Warning: set multigeom = 3 for adiabatic EDA")
       options.multigeom = 3
 
    return options, args
@@ -53,7 +53,7 @@ def string_sp_callback(option, opt, value, parser):
    setattr(parser.values, option.dest, value.split(','))
 
 def manipulate_one_folder(target_path, options):
-   print "manipulating directory %s" %target_path
+   print("manipulating directory %s" %target_path)
    cur_dir = os.getcwd()
    os.chdir(target_path)
    get_energy(options)
@@ -80,7 +80,7 @@ def manipulate_one_folder(target_path, options):
    os.chdir(cur_dir)
 
 def manipulate_folder_modelchem(target_path, options):
-   print "manipulating directory %s" %target_path
+   print("manipulating directory %s" %target_path)
    cur_dir = os.getcwd()
    os.chdir(target_path)
    datapoint = initialize_datapoint(options)
@@ -175,7 +175,7 @@ def get_xyz_adiab_eda(output_file, options):
    return xyz_files
 
 def get_gzmat(output_file):
-   print "\"get_gzmat\" is not implemented yet"
+   print("\"get_gzmat\" is not implemented yet")
    sys.exit(1)
 
 def get_energy(options): #This function should be called in "manipulate_one_folder"
@@ -212,7 +212,7 @@ def get_energy(options): #This function should be called in "manipulate_one_fold
          fw.write("%s,%.10f\n" %data)
    fw.close()
    sp.call(['rm', tmpfile])
-   print "\"energy_of_opt_structures.csv\" created"
+   print("\"energy_of_opt_structures.csv\" created")
 
 def get_frequency(options):
    freq_data={}
@@ -242,7 +242,7 @@ def get_frequency(options):
          l = line.split()
          jobname = re.search('(\S+).out', l[0]).group(1)
          if jobname not in freq_data:
-            print "Error: the frequency data for %s does not exist" %jobname
+            print("Error: the frequency data for %s does not exist" %jobname)
             sys.exit(0)
          if "intens" not in freq_data[jobname]:
             freq_data[jobname]["intens"]=[]
@@ -321,7 +321,7 @@ def get_frequency_new(options):
          for line in fr.readlines():
             l = line.split()
             if jobname not in freq_data:
-               print "Error: the frequency data for %s does not exist" %jobname
+               print("Error: the frequency data for %s does not exist" %jobname)
                sys.exit(0)
             if "intens" not in freq_data[jobname]:
                freq_data[jobname]["intens"]=[]
@@ -381,7 +381,7 @@ def get_sorting_key(jobname, options):
       if l!=None:
          return float(l.group(1))
       else:
-         print "Can't locate the sort key"
+         print("Can't locate the sort key")
          sys.exit(0)
 
 def get_jobname_modelchem(line, options):
@@ -571,7 +571,7 @@ if options.target!=None:
    for target_dir in  options.target:
       if target_dir not in outdir_list:
          outdir_list.append(target_dir)
-print outdir_list
+print(outdir_list)
 
 for outdir in outdir_list:
    if not options.modelchem:

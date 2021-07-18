@@ -83,9 +83,9 @@ def ParseCubeFile(cubefilename,restart,debug):
    CubeDict['y_A'] = CubeDict['y_A']*0.529
    CubeDict['z_A'] = CubeDict['z_A']*0.529
    if debug:
-      print 'first x value '+str(CubeDict['x_A'][0])+' last value '+str(CubeDict['x_A'][len(CubeDict['x_A'])-1])
-      print 'first y value '+str(CubeDict['y_A'][0])+' last value '+str(CubeDict['y_A'][len(CubeDict['y_A'])-1])
-      print 'first z value '+str(CubeDict['z_A'][0])+' last value '+str(CubeDict['z_A'][len(CubeDict['z_A'])-1])
+      print('first x value '+str(CubeDict['x_A'][0])+' last value '+str(CubeDict['x_A'][len(CubeDict['x_A'])-1]))
+      print('first y value '+str(CubeDict['y_A'][0])+' last value '+str(CubeDict['y_A'][len(CubeDict['y_A'])-1]))
+      print('first z value '+str(CubeDict['z_A'][0])+' last value '+str(CubeDict['z_A'][len(CubeDict['z_A'])-1]))
    
    CubeDict['Atom'] = {}
    for a in range(1,int(CubeDict['NAtoms'])+1): #the next lines have atomic number, atomic number as float, and 3 floats for cartesians for each atom
@@ -101,8 +101,8 @@ def ParseCubeFile(cubefilename,restart,debug):
       CubeDict['carts_A'][a-1,2] = CubeDict['Atom'][str(a)]['carts'][2]
    CubeDict['carts_A'] = CubeDict['carts_A']*0.529 #convert from bohr to angstroms
    if debug:
-      print 'the cartesians'
-      print CubeDict['carts_A']
+      print('the cartesians')
+      print(CubeDict['carts_A'])
 
    #the next lines contain 1-6 signed floats indicating density value at a location.
    #all density data is converted from e/b^3 to e/A^3
@@ -122,7 +122,7 @@ def ParseCubeFile(cubefilename,restart,debug):
                CubeDict['Ycrash'][x,z] += CubeDict['VolData'][pos]
                CubeDict['Zcrash'][y,x] += CubeDict['VolData'][pos]
                pos += 1
-      print 'integral for parsed cube is '+str(integral)
+      print('integral for parsed cube is '+str(integral))
       np.save(cubefilename+'.Xcrash',CubeDict['Xcrash'])
       np.save(cubefilename+'.Ycrash',CubeDict['Ycrash'])
       np.save(cubefilename+'.Zcrash',CubeDict['Zcrash'])
@@ -132,13 +132,13 @@ def ParseCubeFile(cubefilename,restart,debug):
       CubeDict['Ycrash'] = np.load(cubefilename+'.Ycrash.npy')
       CubeDict['Zcrash'] = np.load(cubefilename+'.Zcrash.npy')
    if debug:
-      print 'len of x y z = '+str(len(CubeDict['x_A']))+'  '+str(len(CubeDict['y_A']))+'   '+str(len(CubeDict['z_A']))
-      print 'dimenstion of Xcrash'
-      print CubeDict['Xcrash'].shape
-      print 'dimenstion of Ycrash'
-      print CubeDict['Ycrash'].shape
-      print 'dimenstion of Zcrash'
-      print CubeDict['Zcrash'].shape
+      print('len of x y z = '+str(len(CubeDict['x_A']))+'  '+str(len(CubeDict['y_A']))+'   '+str(len(CubeDict['z_A'])))
+      print('dimenstion of Xcrash')
+      print(CubeDict['Xcrash'].shape)
+      print('dimenstion of Ycrash')
+      print(CubeDict['Ycrash'].shape)
+      print('dimenstion of Zcrash')
+      print(CubeDict['Zcrash'].shape)
    
    return CubeDict
 
@@ -150,25 +150,25 @@ rc('font', **{'family':'serif','serif':['Times New Roman']})
 options,args=ParseInput(sys.argv)
 
 if options.debug:
-   print "these are the args:"
-   print args
-   print "these are the options:"
-   print options
+   print("these are the args:")
+   print(args)
+   print("these are the options:")
+   print(options)
 
 #see if we were passed real files
 for i in [1,2]:
    if not os.path.exists(args[i]):
-      print "specified input file does not exist "+args[i] 
+      print("specified input file does not exist "+args[i]) 
       sys.exit(1)
 
 F1_F_cube   = str(args[1])
 if options.debug:
-   print 'parsing Final Fragment 1 cube: '+F1_F_cube  
+   print('parsing Final Fragment 1 cube: '+F1_F_cube)  
 DataF1_F = ParseCubeFile(F1_F_cube,options.restart,options.debug)
 
 F1_I_cube   = str(args[2])    #The density to subtract out
 if options.debug:
-   print 'parsing Initial Fragment 1 cube: '+F1_I_cube  
+   print('parsing Initial Fragment 1 cube: '+F1_I_cube)  
 DataF1_I = ParseCubeFile(F1_I_cube,options.restart,options.debug)
 
 
@@ -209,7 +209,7 @@ elif options.crash_axis == 'Z':
    horiz_int = 0
    vert_int = 1
 else:
-   print 'axis choice not recognized'
+   print('axis choice not recognized')
 
 fig = plt.figure()
 plt.tick_params(labelsize=18)

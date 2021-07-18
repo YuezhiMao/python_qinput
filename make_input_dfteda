@@ -40,7 +40,7 @@ def ParseInput(ArgsIn):
          sys.exit(1)
    
    if not options.all and options.target==None and options.keyword==None:
-      print "The target directory must be specified: one or some or all"
+      print("The target directory must be specified: one or some or all")
       parser.print_help()
       sys.exit(1)
    return options, args
@@ -68,7 +68,7 @@ def WriteMolecule_Frgm(fw, XYZ, FRGM, skipfrgm=0):
    else: #this skipfrgm thing is hard-coded for 3-body mbe
       fw.write('$molecule\n')
       if skipfrgm not in [1, 2, 3]:
-         print "invalid skipfrgm index: %d" %skipfrgm
+         print("invalid skipfrgm index: %d" %skipfrgm)
          sys.exit(0)
       #recalculate charge and mult (both open-shell not allowed for now)
       total_charge = 0
@@ -83,7 +83,7 @@ def WriteMolecule_Frgm(fw, XYZ, FRGM, skipfrgm=0):
          if FRGM.mult_frgm[ifrgm] > 1:
             n_openshell += 1
       if n_openshell > 1:
-         print "multiple open-shell fragments not allowed for now"
+         print("multiple open-shell fragments not allowed for now")
          sys.exit(0)
 
       fw.write("%d %d\n" %(total_charge, max_mult))
@@ -124,7 +124,7 @@ def set_rems_eda(curREM, method, basis, options):
          qrems.ModRem('DISP_FREE_X', 'B', curREM)
          qrems.ModRem('DISP_FREE_C', 'LYP', curREM)
       else:
-         print "Requested DFXC: %s is not recognized" %options.dfxc
+         print("Requested DFXC: %s is not recognized" %options.dfxc)
 
    qrems.ModRem('SCF_GUESS', 'FRAGMO', curREM)
    if options.rehyb:

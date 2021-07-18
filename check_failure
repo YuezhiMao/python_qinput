@@ -16,14 +16,14 @@ def ParseInput(ArgsIn):
    parser.add_option('--delete',dest='delete',action='store_true',default=False, help='delete the failed jobs')
    options, args=parser.parse_args(ArgsIn)
    if not options.all and options.target==None and options.keyword==None: 
-      print "The target directory must be specified: one or some or all"
+      print("The target directory must be specified: one or some or all")
       parser.print_help()
       sys.exit(1)
    else:
       return options, args
 
 def CheckComplete_Single(target_path, flag, unfinished_list):
-   print "checking directory %s" %target_path
+   print("checking directory %s" %target_path)
    cur_dir = os.getcwd()
    os.chdir(target_path)
    jobname_list = glob.glob("*.out")
@@ -51,17 +51,17 @@ def CheckComplete_Single(target_path, flag, unfinished_list):
    #print out the failures
    for jobname in job_status:
       if job_status[jobname]!=True:
-         print jobname+': Failed'
+         print(jobname+': Failed')
          sp.call(['rm', jobname])
          inputname = jobname[:-4]+'.in'
          inputpath = "input_"+target_root
          unfinished_list.append((inputpath, inputname))
    #print out the summary
-   print "%d jobs in total: %d completed, %d failed" %(n_jobs, n_complete, n_fail)
+   print("%d jobs in total: %d completed, %d failed" %(n_jobs, n_complete, n_fail))
    os.chdir(cur_dir)
 
 def CheckComplete_Multi(target_path, multiple, flag, unfinished_list):
-   print "checking directory %s" %target_path
+   print("checking directory %s" %target_path)
    cur_dir = os.getcwd()
    os.chdir(target_path)
    jobname_list = glob.glob("*.out")
@@ -90,11 +90,11 @@ def CheckComplete_Multi(target_path, multiple, flag, unfinished_list):
    #print out the failures
    for jobname in job_status:
       if job_status[jobname]["status"]!=True:
-         print jobname+': Only %d/%d complete flags detected, failed' %(job_status[jobname]["counts"], options.multi)
+         print(jobname+': Only %d/%d complete flags detected, failed' %(job_status[jobname]["counts"], options.multi))
          inputname = jobname
          inputpath = target_path
          unfinished_list.append((inputpath, inputname))
-   print "%d jobs in total: %d completed, %d failed" %(n_jobs, n_complete, n_fail)
+   print("%d jobs in total: %d completed, %d failed" %(n_jobs, n_complete, n_fail))
    os.chdir(cur_dir)
 
 def delete_failed(unfinished_list):

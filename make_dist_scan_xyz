@@ -23,7 +23,7 @@ def ParseInput(ArgsIn):
 
    options, args = parser.parse_args(ArgsIn)
    if options.scan_coord == None or len(options.scan_coord)!=2:
-      print "specify the distance we are going to scan (given by a pair of atom indices)"
+      print("specify the distance we are going to scan (given by a pair of atom indices)")
       parser.print_help()
       sys.exit(0)
    if not options.bond:
@@ -134,7 +134,7 @@ if options.bond: #scan a single bond length
       if l != None:
          name_root = l.group(1)
       else:
-         print "missing a name root!"
+         print("missing a name root!")
          sys.exit(1)
    if options.type == 'absolute':
       start_value = float(options.start_absolute)
@@ -156,7 +156,7 @@ else:   #scan intermolecular distance
       if l!=None:
          name_root = l.group(1)
       else:
-         print "missing a name root!"
+         print("missing a name root!")
          sys.exit(1)
 
    atom_to_frgm_list = make_atom_to_frgm_list(parse_XYZ, FRGM)
@@ -188,5 +188,5 @@ else:   #scan intermolecular distance
          fragment_translate_log(parse_XYZ, FRGM, name_root, atom1_idx, atom2_idx, shifted_frgm, dist_log, dest_path)
          dist_log += increment
    else:
-      print "Unsupported type: " +options.type
+      print("Unsupported type: " +options.type)
       sys.exit(0)

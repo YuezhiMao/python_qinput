@@ -34,11 +34,11 @@ def ParseInput(ArgsIn):
       parser.print_help()
       sys.exit(0)
    if not options.all and options.target==None and options.keyword==None:
-      print "The target directory must be specified: one or some or all"
+      print("The target directory must be specified: one or some or all")
       parser.print_help()
       sys.exit(1)
    if options.spinflip and options.rpa:
-      print "Spin-flip only works with TDA. We turn off RPA forcefully"
+      print("Spin-flip only works with TDA. We turn off RPA forcefully")
       options.rpa = False
    #if options.sol_file != None and options.sol == None:
    #   print "Solvent method must be specified when sol_file is given"
@@ -53,7 +53,7 @@ def XYZ_to_Input(fw, XYZ, curREM, options):
    qrems.AppendRem(fw, curREM)
    if options.sol_file != None:
       if not os.path.exists(options.sol_file):
-         print "specified pcm file does not exist"
+         print("specified pcm file does not exist")
          sys.exit(0)
       else:
          qrems.copy_section_over(fw, options.sol_file)

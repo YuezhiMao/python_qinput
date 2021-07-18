@@ -31,7 +31,7 @@ def ParseInput(ArgsIn):
          sys.exit(1)
 
    if not options.all and options.target==None and options.keyword==None:
-      print "The target directory must be specified: one or some or all"
+      print("The target directory must be specified: one or some or all")
       parser.print_help()
       sys.exit(1)
 
@@ -61,7 +61,7 @@ class XYZ:
             self.CoordList.append(coord)
 
       if(len(self.AtomList)!=self.NAtom):
-         print "Error in number of atoms"
+         print("Error in number of atoms")
          sys.exit(1)
 
 
@@ -79,44 +79,44 @@ def ParseFRGM(FRGMFile, debug = False):
             if (not l==None):
                FRGM["total_charge"] = int(l.group(1)) 
                if debug:
-                  print "supersystem charge is "+ str(FRGM["total_charge"])
+                  print("supersystem charge is "+ str(FRGM["total_charge"]))
             else:
-               print "error parsing frgm file"
+               print("error parsing frgm file")
          if counter == 2:
             l=re.search("(\S+)",line) 
             if (not l==None):
                FRGM["total_mult"] = int(l.group(1)) 
                if debug:
-                  print "supersystem multiplicity is "+ str(FRGM["total_mult"])
+                  print("supersystem multiplicity is "+ str(FRGM["total_mult"]))
             else:
-               print "error parsing frgm file"
+               print("error parsing frgm file")
          if counter == 3:
             l=re.search("(\S+)",line) 
             if (not l==None):
                FRGM["charge_frgm"] = [int(i) for i in line.split()]
                if debug:
-                  print "printing fragment charges"
-                  print FRGM["charge_frgm"]
+                  print("printing fragment charges")
+                  print(FRGM["charge_frgm"])
             else:
-               print "error parsing frgm file"
+               print("error parsing frgm file")
          if counter == 4:
             l=re.search("(\S+)",line) 
             if (not l==None):
                FRGM["mult_frgm"] = [int(i) for i in line.split()]
                if debug:
-                  print "printing fragment multiplicites"
-                  print FRGM["mult_frgm"]
+                  print("printing fragment multiplicites")
+                  print(FRGM["mult_frgm"])
             else:
-               print "error parsing frgm file"
+               print("error parsing frgm file")
          if counter == 5:
             l=re.search("(\S+)",line) 
             if (not l==None):
                FRGM["atoms_frgm"] = [int(i) for i in line.split()]
                if debug:
-                  print "printing number of atoms in each fragment"
-                  print FRGM["atoms_frgm"]
+                  print("printing number of atoms in each fragment")
+                  print(FRGM["atoms_frgm"])
             else:
-               print "error parsing frgm file"
+               print("error parsing frgm file")
             #make a list for number of atoms prior to each fragment (offset)
             FRGM["NFrgm"] = len(FRGM["atoms_frgm"])
             FRGM["atoms_offset"] = np.zeros(FRGM["NFrgm"],dtype=int)
@@ -126,7 +126,7 @@ def ParseFRGM(FRGMFile, debug = False):
                offset += FRGM["atoms_frgm"][index]
       line = f.readline()
    if counter != 5:
-      print "did not parse the expected number of lines in "+FRGMFile 
+      print("did not parse the expected number of lines in "+FRGMFile) 
    return FRGM
 
 def ParseRems(RemFile):
@@ -235,7 +235,7 @@ def basis_abbr(BasName):    #generating abbreviated name for basis sets, using f
    elif fullname == 'lp':
       return 'lp'
    else:
-      print "unrecognized basis choice"
+      print("unrecognized basis choice")
       sys.exit(1)
 
 def set_rems_common(curREM, method, basis):
@@ -292,7 +292,7 @@ def add_d3_tail(method, curREM):
    
 def AppendCDFTSection(fw, FRGM):
    if FRGM["NFrgm"] > 2:
-      print "Can only support jobs with two fragments for now"
+      print("Can only support jobs with two fragments for now")
       sys.exit(0)
 
    fw.write('\n$cdft\n')
@@ -315,7 +315,7 @@ def XYZ_to_Input(fw, XYZ, FRGM, curREM, pop_scheme=-1, read_mol=False):
          unrestricted=True
          break
    if unrestricted:
-      print "Unrestricted system not allowed yet"
+      print("Unrestricted system not allowed yet")
       sys.exit(0)
    if not read_mol:
       WriteMolecule_Frgm(fw, XYZ, FRGM)

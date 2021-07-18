@@ -23,7 +23,7 @@ def ParseInput(ArgsIn):
       sys.exit(0)
    if not options.all and options.keyword==None and options.target==None:
       #print "-t is the only supported mode for now. Specify the folder"
-      print "select one mode: -t, -k, -a"
+      print("select one mode: -t, -k, -a")
       parser.print_help()
       sys.exit(0)
 
@@ -56,7 +56,7 @@ def Parse_MP2(AllEnergy, options):
       AllEnergy[jobname]["MP2TOT_QZ"][count] = energy
       count += 1
       if count > (2*nfrag+1):
-         print "Too many (%d) MP2 total energies (QZ) for job %s" %(count, jobname)
+         print("Too many (%d) MP2 total energies (QZ) for job %s" %(count, jobname))
          sys.exit(0)
    fr.close()
 
@@ -78,7 +78,7 @@ def Parse_MP2(AllEnergy, options):
       AllEnergy[jobname]["MP2CORR_QZ"][count] = energy
       count += 1
       if count > (2*nfrag+1):
-         print "Too many (%d) MP2 correlation energies (QZ) for job %s" %(count, jobname)
+         print("Too many (%d) MP2 correlation energies (QZ) for job %s" %(count, jobname))
          sys.exit(0)
    fr.close()
 
@@ -116,7 +116,7 @@ def Parse_ParenT(AllEnergy, options):
       AllEnergy[jobname]["SCF_TZ"][count] = energy
       count += 1
       if count > (2*nfrag+1):
-         print "Too many (%d) SCF energies (TZ) for job %s" %(count, jobname)
+         print("Too many (%d) SCF energies (TZ) for job %s" %(count, jobname))
          sys.exit(0)
    fr.close() 
 
@@ -137,7 +137,7 @@ def Parse_ParenT(AllEnergy, options):
       AllEnergy[jobname]["MP2TOT_TZ"][count] = energy
       count += 1
       if count > (2*nfrag+1):
-         print "Too many (%d) MP2 total energies (TZ) for job %s" %(count, jobname)
+         print("Too many (%d) MP2 total energies (TZ) for job %s" %(count, jobname))
          sys.exit(0)
    fr.close() 
 
@@ -158,7 +158,7 @@ def Parse_ParenT(AllEnergy, options):
       AllEnergy[jobname]["ParenT_TOT_TZ"][count] = energy
       count += 1
       if count > (2*nfrag+1):
-         print "Too many (%d) CCSD(T) total energies (TZ) for job %s" %(count, jobname)
+         print("Too many (%d) CCSD(T) total energies (TZ) for job %s" %(count, jobname))
          sys.exit(0)
    fr.close() 
    
@@ -276,7 +276,7 @@ def two_points_extrap(value_small, value_big, extrap_order=0):
    elif extrap_order == 2: #do 56 extrap
       return (125.0*value_small - 216.0*value_big)/(125.0 - 216.0)
    else:
-      print "Invalid extrap_order: %d" %extrap_order
+      print("Invalid extrap_order: %d" %extrap_order)
       sys.exit(0)
 
 def Parse_Single_Dir(options):
@@ -299,7 +299,7 @@ elif options.keyword!=None:
    outdir_list = glob.glob(result_dir+'*'+options.keyword+'*/')
 if options.target!=None:
    outdir_list.append(options.target)
-print outdir_list
+print(outdir_list)
 curdir = os.getcwd()
 for outdir in outdir_list:
    os.chdir(outdir)

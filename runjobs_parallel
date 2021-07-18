@@ -20,7 +20,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--exculude',dest='exclude',type='string',action='store',default=None,help='nodes to be excluded (separated by \",\")')
    options,args = parser.parse_args(ArgsIn)
    if len(args) < 2:
-      print "Specify the input diretory"
+      print("Specify the input diretory")
       parser.print_help()
       sys.exit(0)
 
@@ -35,16 +35,16 @@ def Determine_joblist(options, args):
    curdir = os.getcwd()
    os.chdir(input_dir)
    if options.keywords == None:
-      print "Run all the jobs under the input dir"
+      print("Run all the jobs under the input dir")
       temp_list = glob.glob('*.in')
       for temp in temp_list:
          if options.reverse not in temp:
             joblist.append(temp)
 
    elif not options.union:
-      print "Figure out the overlap of all the keywords" 
+      print("Figure out the overlap of all the keywords") 
       keyword_list = options.keywords
-      print keyword_list
+      print(keyword_list)
       temp_list = []
       temp_list = glob.glob('*'+keyword_list[0]+'*.in')
       #subtractive approach
@@ -58,9 +58,9 @@ def Determine_joblist(options, args):
             joblist.append(temp)
 
    elif options.union:
-      print "Figure out the union of all the keywords"
+      print("Figure out the union of all the keywords")
       keyword_list = options.keywords
-      print keyword_list
+      print(keyword_list)
       #additive approach
       for keyword in keyword_list:
          temp_list = glob.glob('*'+keyword+'*.in')
@@ -68,8 +68,8 @@ def Determine_joblist(options, args):
             if temp not in joblist and options.reverse not in temp:
                joblist.append(temp)
    os.chdir(curdir)
-   print "%d jobs" %len(joblist)
-   print joblist 
+   print("%d jobs" %len(joblist))
+   print(joblist) 
    return joblist
 
 def run_jobs(joblist, options, args):

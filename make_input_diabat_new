@@ -34,7 +34,7 @@ def ParseInput(ArgsIn):
         parser.print_help()
         sys.exit(0)
     if options.ex_almo != None and (not os.path.exists(options.ex_almo)):
-        print("Can't find file "+options.ex_almo)
+        print(("Can't find file "+options.ex_almo))
         parser.print_help()
         sys.exit(0)
     return options, args
@@ -170,7 +170,7 @@ def XYZ_to_Input(fw, XYZ, FRGM, curREM, diabat, options):
         if options.pinv > 0:
             Append_Dev_Section(fw, diabat, options)
     else:
-        print "Unrecognized diabatization method"
+        print("Unrecognized diabatization method")
         sys.exit(0)
 
      
@@ -216,7 +216,7 @@ if xyz_path[-1] != '/':
     xyz_path += '/'
 if frgm_path[-1] == '/':
     frgm_path = frgm_path[:-1]
-print frgm_path
+print(frgm_path)
 
 curdir = os.getcwd()
 xyzfile_list = []
@@ -228,7 +228,7 @@ if options.target != None:
     for xyz_file in options.target:
         if xyz_file not in xyzfile_list:
             xyzfile_list.append(xyz_file)
-print xyzfile_list
+print(xyzfile_list)
 
 input_path = options.input_path
 if input_path[-1:] != '/':
@@ -236,7 +236,7 @@ if input_path[-1:] != '/':
 if not os.path.exists(input_path):
     sp.call(['mkdir', input_path])
 
-print "list of diabatization method: "+str(options.diabat)
+print("list of diabatization method: "+str(options.diabat))
 
 for diabat in options.diabat: #loop over diabat schemes
     if diabat.upper() == 'CDFT':

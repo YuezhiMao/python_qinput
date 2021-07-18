@@ -25,12 +25,12 @@ def ParseInput(ArgsIn):
       sys.exit(1)
 
    if not options.all and options.target==None and options.keyword==None:
-      print "The target directory must be specified: one or some or all"
+      print("The target directory must be specified: one or some or all")
       parser.print_help()
       sys.exit(1)
 
    if options.fc:
-      print "Frozen core mode not supported for now"
+      print("Frozen core mode not supported for now")
       sys.exit(1)
 
    return options, args
@@ -50,7 +50,7 @@ def AppendBasis(fh, corr):
    elif corr.upper() == 'CCSD(T)':
       basisfile = 'basis/aCVQZ.bas'
    else:
-      print "Unknown correlation method"
+      print("Unknown correlation method")
       sys.exit(1)
    fh.write('\n$basis\n')
    fr = open(basisfile, 'r')
@@ -116,7 +116,7 @@ curREM = qrems.ParseRems(rem_file)
 
 #check if the "basis" folder exists
 if not os.path.exists('basis/'):
-   print "Need a \"basis\" folder under CWD"
+   print("Need a \"basis\" folder under CWD")
    sys.exit(0)
 
 #determine xyz_file list

@@ -19,12 +19,12 @@ def ParseInput(ArgsIn):
     options, args = parser.parse_args(ArgsIn)
     if len(args) < 2:
       if options.all or options.keyword:
-         print "You must specify a result folder for -a and -k mode"
+         print("You must specify a result folder for -a and -k mode")
          parser.print_help()
          sys.exit(0)
 
     if not options.all and options.target==None and options.keyword==None:
-      print "The target directory must be specified: one or some or all"
+      print("The target directory must be specified: one or some or all")
       parser.print_help()
       sys.exit(1)
 
@@ -43,8 +43,8 @@ def get_diabat_method_list():
         diabat_method = re.search('_([^_]+)_([^_]+)_([^_]+).out', output).group(1).lower()
         if diabat_method not in diabat_method_list:
             diabat_method_list.append(diabat_method)
-    print "Diabat schemes:"
-    print diabat_method_list
+    print("Diabat schemes:")
+    print(diabat_method_list)
     return diabat_method_list
 
 def parse_single_dir(options):
@@ -69,7 +69,7 @@ def parse_single_dir(options):
         elif "sftda" in diabat_method:
             parse_sftda_results(options)
         else:
-            print "unknown diabat method"
+            print("unknown diabat method")
             sys.exit(0)
     summarize_errors()
 
@@ -576,8 +576,8 @@ def perform_error_analysis_separate_dist(fw, data, ref_values):
 
 def summarize_errors():
     csvfile_list = glob.glob('*.csv')
-    print "csvfiles: "
-    print csvfile_list
+    print("csvfiles: ")
+    print(csvfile_list)
     summary_file = 'summary.csv'
     fw = open(summary_file, 'w')
     for csvfile in csvfile_list:
@@ -600,7 +600,7 @@ def extract_csv(target_dir):
     curdir = os.getcwd()
     os.chdir(target_dir)
     if os.path.exists("csvfiles"):
-        print "Previous csvfiles are removed"
+        print("Previous csvfiles are removed")
         os.system('rm -rf csvfiles')
     outdir_list = glob.glob('*/')
     sp.call(['mkdir', 'csvfiles'])
@@ -628,8 +628,8 @@ if options.target!=None:
    for target_dir in options.target:
       if target_dir not in outdir_list:
          outdir_list.append(target_dir)
-print "parse the following output dirs:"
-print outdir_list
+print("parse the following output dirs:")
+print(outdir_list)
 curdir = os.getcwd()
 for outdir in outdir_list:
    os.chdir(outdir)

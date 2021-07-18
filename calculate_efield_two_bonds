@@ -22,7 +22,7 @@ def ParseInput(ArgsIn):
         parser.print_help()
         sys.exit(0)
     if options.probe_atoms != None and len(options.probe_atoms) != 3:
-        print "Has to specify the index of three probe atoms (C, D, O)"
+        print("Has to specify the index of three probe atoms (C, D, O)")
         parser.print_help()
         sys.exit(0)
 
@@ -192,7 +192,7 @@ def calculate_rel_efield(data_efield, bond_direction, target_dir, atom_idx_list,
             sum_E_CD += E_CD
             sum2_E_CD += E_CD ** 2
         n_frames = len(data_efield[cutoff])
-        print "Cutoff = %.1f A, Number of frames: %d" %(cutoff, n_frames)
+        print("Cutoff = %.1f A, Number of frames: %d" %(cutoff, n_frames))
         fw.close()
         data_efield_stat[cutoff]["avg_E_CO"] = sum_E_CO / float(n_frames)
         data_efield_stat[cutoff]["std_E_CO"] = math.sqrt(sum2_E_CO / float(n_frames) - data_efield_stat[cutoff]["avg_E_CO"]**2)
@@ -205,7 +205,7 @@ def calculate_rel_efield(data_efield, bond_direction, target_dir, atom_idx_list,
 
 options, args = ParseInput(sys.argv) 
 curdir = os.getcwd()
-print "Generating all E-field files from Q-Chem output..."
+print("Generating all E-field files from Q-Chem output...")
 target_dir = args[1]
 if not options.skip_efield:
     os.chdir(target_dir)
@@ -220,13 +220,13 @@ if options.probe_atoms != None:
 else:
    atom_idx_list = [20, 21, 22]
 
-print "Calculating the C-O and C-D directions in each snapshot"
+print("Calculating the C-O and C-D directions in each snapshot")
 xyz_path = args[2]
 if xyz_path[:-1] == '/':
     xyz_path = xyz_path[:-1]
 bond_direction = get_bond_direction_all_frames(xyz_path, atom_idx_list)
 
-print "Getting the E-field vectors on relevant atoms"
+print("Getting the E-field vectors on relevant atoms")
 data_efield = {}
 
 cutoff_values = []
@@ -240,7 +240,7 @@ else:
 for cutoff in cutoff_values:
     get_efield_single_cutoff(data_efield, target_dir, cutoff, atom_idx_list)
 
-print "Calculating E-field along bond directions"
+print("Calculating E-field along bond directions")
 data_relE_stat = calculate_rel_efield(data_efield, bond_direction, target_dir, atom_idx_list, options.no_subtract)
 data_efield_on_atom = calculate_efield_on_atom(data_efield, bond_direction, atom_idx_list)
 #print E-field on chemical bonds
@@ -249,11 +249,11 @@ df_relE.index.name = 'cutoff'
 for cutoff in sorted(cutoff_values):
    if cutoff == 0:
       continue
-   print "E-field along C=O bond (cutoff = %dA):" %cutoff
-   print "Mean: %.3f MV/cm, Std Err: %.3f MV/cm" %(df_relE["avg_E_CO"][cutoff], df_relE["se_E_CO"][cutoff])
+   print("E-field along C=O bond (cutoff = %dA):" %cutoff)
+   print("Mean: %.3f MV/cm, Std Err: %.3f MV/cm" %(df_relE["avg_E_CO"][cutoff], df_relE["se_E_CO"][cutoff]))
 
-   print "E-field along C-D bond (cutoff = %dA):" %cutoff
-   print "Mean: %.3f MV/cm, Std Err: %.3f MV/cm" %(df_relE["avg_E_CD"][cutoff], df_relE["se_E_CD"][cutoff])
+   print("E-field along C-D bond (cutoff = %dA):" %cutoff)
+   print("Mean: %.3f MV/cm, Std Err: %.3f MV/cm" %(df_relE["avg_E_CD"][cutoff], df_relE["se_E_CD"][cutoff]))
 df_relE = df_relE.reindex(sorted(df_relE.columns), axis=1)
 df_relE.to_csv(target_dir + '/efield_bond.csv')
 

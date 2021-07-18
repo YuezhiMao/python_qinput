@@ -41,7 +41,7 @@ def ParseInput(ArgsIn):
    if options.single_atom!=None:
       option_list = ["1","2","mon1","mon2","monA","monB", "both"]
       if options.single_atom not in option_list:
-         print "Single-atom option unrecognized"
+         print("Single-atom option unrecognized")
          parser.print_help()
          sys.exit(1)
       #regularize the input: mon1, mon2, both
@@ -52,11 +52,11 @@ def ParseInput(ArgsIn):
       
    if len(args) < 2:
       if options.all or options.keyword:  #in these two scenarios
-         print "You must specify a result folder for -a and -k mode"
+         print("You must specify a result folder for -a and -k mode")
          parser.print_help()
          sys.exit(1)
    if not options.all and options.target==None and options.keyword==None:
-      print "The target directory must be specified: one or some or all"
+      print("The target directory must be specified: one or some or all")
       parser.print_help()
       sys.exit(1)
    
@@ -80,7 +80,7 @@ def parse_oldeda(options, output_dir):
    elif re.search('angle',output_dir):
       placeholder = 'angle'
    else:
-      print "Neither \"dist\" nor \"angle\", the placeholder got confused"
+      print("Neither \"dist\" nor \"angle\", the placeholder got confused")
       sys.exit(1)
    
    DataPoints = {}
@@ -104,7 +104,7 @@ def parse_oldeda(options, output_dir):
       item = l.group(2)
       value = float(l.group(3))
       if geom_param not in DataPoints:
-         print "geom_param: %s is not in DataPoints dictionary" %geom_param
+         print("geom_param: %s is not in DataPoints dictionary" %geom_param)
          sys.exit(1)
       DataPoints[geom_param][item] = value
    f.close()
@@ -118,7 +118,7 @@ def parse_oldeda(options, output_dir):
       item = l.group(2)
       value = float(l.group(3))
       if geom_param not in DataPoints:
-         print "geom_param: %s is not in DataPoints dictionary" %geom_param
+         print("geom_param: %s is not in DataPoints dictionary" %geom_param)
          sys.exit(1)
       DataPoints[geom_param][item] = value
    f.close()
@@ -132,7 +132,7 @@ def parse_oldeda(options, output_dir):
       item = l.group(2)
       value = float(l.group(3))
       if geom_param not in DataPoints:
-         print "geom_param: %s is not in DataPoints dictionary" %geom_param
+         print("geom_param: %s is not in DataPoints dictionary" %geom_param)
          sys.exit(1)
       DataPoints[geom_param][item] = value
    f.close()
@@ -153,12 +153,12 @@ def parse_oldeda(options, output_dir):
       if l!=None:
          frag_count += 1
          if frag_count > 2:
-            print "Warning: this script only prints the energies of the first two fragments"
+            print("Warning: this script only prints the energies of the first two fragments")
          item = "E_frag"+str(frag_count)
          geom_param = l.group(1)
          value = float(l.group(2))
          if geom_param not in DataPoints:
-            print "geom_param: %s is not in DataPoints dictionary" %geom_param
+            print("geom_param: %s is not in DataPoints dictionary" %geom_param)
             sys.exit(1)
          DataPoints[geom_param][item] = value
    f.close() 
@@ -174,7 +174,7 @@ def parse_oldeda(options, output_dir):
          item = l.group(2)
          value = float(l.group(3))
          if geom_param not in DataPoints:
-            print "geom_param: %s is not in DataPoints dictionary" %geom_param
+            print("geom_param: %s is not in DataPoints dictionary" %geom_param)
             sys.exit(1)
          DataPoints[geom_param][item] = value
       f.close()
@@ -192,7 +192,7 @@ def parse_oldeda(options, output_dir):
          item = "pol_scf"
          value = float(l.group(2))
          if geom_param not in DataPoints:
-            print "geom_param: %s is not in DataPoints dictionary" %geom_param
+            print("geom_param: %s is not in DataPoints dictionary" %geom_param)
             sys.exit(1)
          DataPoints[geom_param][item] = value
       f.close()
@@ -205,7 +205,7 @@ def parse_oldeda(options, output_dir):
          item = "full_scf"
          value = float(l.group(2))
          if geom_param not in DataPoints:
-            print "geom_param: %s is not in DataPoints dictionary" %geom_param
+            print("geom_param: %s is not in DataPoints dictionary" %geom_param)
             sys.exit(1)
          DataPoints[geom_param][item] = value
       f.close()
@@ -263,7 +263,7 @@ def parse_oldeda(options, output_dir):
 #for parsing a PES scan
 def parse_neweda_pes(options, output_dir, keyword=None): 
    if options.noCT:
-      print "parse_disp_decomp doesn't support the noCT option for now"
+      print("parse_disp_decomp doesn't support the noCT option for now")
       sys.exit(1)
 
    hart_to_kj = 2625.5311584660003
@@ -279,7 +279,7 @@ def parse_neweda_pes(options, output_dir, keyword=None):
    elif options.placeholder!=None:
       placeholder = options.placeholder
    else:
-      print "Neither \"dist\" nor \"angle\", the placeholder got confused"
+      print("Neither \"dist\" nor \"angle\", the placeholder got confused")
       sys.exit(1)
 
    DataPoints = {} 
@@ -304,7 +304,7 @@ def parse_neweda_pes(options, output_dir, keyword=None):
             item = item[1:]
          value = float(l.group(3))
          if geom_param not in DataPoints:
-            print "geom_param: %s is not in DataPoints dictionary. Something is very wrong" %geom_param
+            print("geom_param: %s is not in DataPoints dictionary. Something is very wrong" %geom_param)
             sys.exit(1)
          DataPoints[geom_param][item] = value
          if options.kcal:
@@ -386,7 +386,7 @@ def parse_cdft_pes(options, output_dir, keyword=None):
    elif options.placeholder!=None:
       placeholder = options.placeholder
    else:
-      print "Neither \"dist\" nor \"angle\", the placeholder got confused"
+      print("Neither \"dist\" nor \"angle\", the placeholder got confused")
       sys.exit(1)
 
    DataPoints = {}
@@ -410,7 +410,7 @@ def parse_cdft_pes(options, output_dir, keyword=None):
       geom_param = re.search(placeholder+'_([^_]+)_', l[0]).group(1)
       value = float(l[2])
       if geom_param not in DataPoints:
-         print "geom_param: %s is not in DataPoints dictionary. Something is very wrong" %geom_param
+         print("geom_param: %s is not in DataPoints dictionary. Something is very wrong" %geom_param)
          sys.exit(1)
       DataPoints[geom_param]["basic_energies"].append(value)
    f.close()
@@ -448,7 +448,7 @@ def parse_cdft_pes(options, output_dir, keyword=None):
 #parse generic EDA jobs (using full jobname to specify each data point)
 def parse_neweda_generic(options, output_dir, keyword=None): #TODO: make this the update-to-date parser for new EDA jobs
    if options.noCT:
-      print "parse_disp_decomp doesn't support the noCT option for now"
+      print("parse_disp_decomp doesn't support the noCT option for now")
       sys.exit(1)
 
    hart_to_kj = 2625.5311584660003
@@ -497,13 +497,13 @@ def parse_neweda_generic(options, output_dir, keyword=None): #TODO: make this th
          DataPoints[system]["E_vct"] += DataPoints[system]["BSSE"]
    #modify elec and frz if doing pcm or smd
    if options.pcm:
-      print "Adding PCM sol contribution to the ELEC term"
+      print("Adding PCM sol contribution to the ELEC term")
       for system in DataPoints:
          DataPoints[system]["E_frz"] += DataPoints[system]["E_sol"]
          DataPoints[system]["E_cls_elec"] += DataPoints[system]["E_sol"]
          DataPoints[system]["E_elec"] += DataPoints[system]["E_sol"]
    elif options.smd:
-      print "Adding SMD sol contribution to the ELEC and PAULI terms"
+      print("Adding SMD sol contribution to the ELEC and PAULI terms")
       for system in DataPoints:
          DataPoints[system]["E_frz"] += DataPoints[system]["E_sol"]
          DataPoints[system]["E_cls_elec"] += DataPoints[system]["E_pcm"]
@@ -604,7 +604,7 @@ def parse_neweda_generic(options, output_dir, keyword=None): #TODO: make this th
 #parse EDA results for snapshots from MD simulations
 def parse_neweda_snapshot(options, output_dir, keyword=None): 
    if options.noCT:
-      print "parse_disp_decomp doesn't support the noCT option for now"
+      print("parse_disp_decomp doesn't support the noCT option for now")
       sys.exit(1)
 
    hart_to_kj = 2625.5311584660003
@@ -707,7 +707,7 @@ def parse_mp2(options, output_dir):
    elif re.search('angle',output_dir):
       placeholder = 'angle'
    else:
-      print "Neither \"dist\" nor \"angle\", the placeholder got confused"
+      print("Neither \"dist\" nor \"angle\", the placeholder got confused")
       sys.exit(1)
    
    DataPoints = {}
@@ -746,7 +746,7 @@ def parse_mp2(options, output_dir):
       elif scfE_counts == 1:
          DataPoints[geom_param]["complex"]["SCF_QZ"] = value
       else:
-         print "There are more than two SCF energies around for the same job. Something is wrong!"
+         print("There are more than two SCF energies around for the same job. Something is wrong!")
          sys.exit(1)
       scfE_counts += 1
    f.close()
@@ -791,7 +791,7 @@ def parse_mp2(options, output_dir):
          else:
             cur_E_QZ_mon2 = value
       else:
-         print "There are more than two SCF energies around for the same job. Something is wrong!"
+         print("There are more than two SCF energies around for the same job. Something is wrong!")
          sys.exit(1)
       scfE_counts += 1
    f.close()
@@ -823,7 +823,7 @@ def parse_mp2(options, output_dir):
       elif corrE_counts == 1:
          DataPoints[geom_param]["complex"]["corr_QZ"] = value
       else:
-         print "There are more than two correlation energies around for the same job. Something is wrong!"
+         print("There are more than two correlation energies around for the same job. Something is wrong!")
          sys.exit(1)
       corrE_counts += 1
    f.close()
@@ -859,7 +859,7 @@ def parse_mp2(options, output_dir):
          else:
             cur_corrE_QZ_mon2 = value
       else:
-         print "There are more than two correlation energies around for the same job. Something is wrong!"
+         print("There are more than two correlation energies around for the same job. Something is wrong!")
          sys.exit(1)
       corrE_counts += 1
    f.close()
@@ -920,7 +920,7 @@ if options.skip_word!=None:
    skip_list = glob.glob(result_dir+'*'+options.skip_word+'*/')
    for skip_dir in skip_list:
       outdir_list.remove(skip_dir)
-print outdir_list
+print(outdir_list)
 
 #parse them
 for outdir in outdir_list:
@@ -932,7 +932,7 @@ for outdir in outdir_list:
       if options.pes:
          parse_cdft_pes(options, outdir)
       else:
-         print "Parsing option not available for CDFT yet"
+         print("Parsing option not available for CDFT yet")
          sys.exit(0) 
    else:
       if options.pes:
