@@ -131,9 +131,9 @@ def rotate_cylindrical(Coords, angle, axis='z', use_degree=True):
       rotmat[1] = np.array([0.0, np.cos(angle), -np.sin(angle)])
       rotmat[2] = np.array([0.0, np.sin(angle), np.cos(angle)])
    elif axis == 'y': #rotate in the XZ plane
-      rotmat[0] = np.array([np.cos(angle), 0.0, -np.sin(angle)])
+      rotmat[0] = np.array([np.cos(angle), 0.0, np.sin(angle)])
       rotmat[1] = np.array([0.0, 1.0, 0.0])
-      rotmat[2] = np.array([np.sin(angle), 0.0, np.cos(angle)])
+      rotmat[2] = np.array([-np.sin(angle), 0.0, np.cos(angle)])
    elif axis == 'z':
       rotmat[0] = np.array([np.cos(angle), -np.sin(angle), 0.0])
       rotmat[1] = np.array([np.sin(angle), np.cos(angle), 0.0])
