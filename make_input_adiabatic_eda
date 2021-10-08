@@ -58,11 +58,16 @@ def set_rems_adiabatic_eda(curREM, method, basis, options):
    if options.loose:
       qrems.ModRem('SCF_CONVERGENCE', '8', curREM)
       #use default convergence criterion for opt
-   else:
-      qrems.ModRem('SCF_CONVERGENCE', '9', curREM)
       qrems.ModRem('GEOM_OPT_TOL_GRADIENT', '100', curREM)
       qrems.ModRem('GEOM_OPT_TOL_DISPLACEMENT', '100', curREM)
       qrems.ModRem('GEOM_OPT_TOL_ENERGY', '10', curREM)
+      qrems.ModRem('GEOM_OPT_MAX_CYCLES', '200', curREM)
+   else:
+      qrems.ModRem('SCF_CONVERGENCE', '9', curREM)
+      qrems.ModRem('GEOM_OPT_TOL_GRADIENT', '50', curREM)
+      qrems.ModRem('GEOM_OPT_TOL_DISPLACEMENT', '50', curREM)
+      qrems.ModRem('GEOM_OPT_TOL_ENERGY', '10', curREM)
+      qrems.ModRem('GEOM_OPT_MAX_CYCLES', '200', curREM)
    if (method != 'HF'):
       qrems.ModRem ('XC_GRID', '000075000302', curREM)  #not using the too dense grid		
       qrems.ModRem ('NL_GRID', '1', curREM)
