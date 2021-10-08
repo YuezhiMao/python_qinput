@@ -202,7 +202,7 @@ def set_rems_common(curREM, method, basis, loose=False):
 def add_d3_tail(method, curREM):
    if method.upper() == 'WB97X-D3' or method.upper() == 'B97-D3':
       return
-   l = re.search('(\S+)-(D3\S*)', method)
+   l = re.search('(\S+)-(D3\S*)', method.upper())
    parent_func = l.group(1)
    tail = l.group(2)
    ModRem('METHOD', parent_func, curREM)
