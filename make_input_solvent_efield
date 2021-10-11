@@ -17,7 +17,7 @@ def ParseInput(ArgsIn):
    parser.add_option('-b','--basis',dest='basis',action='callback',callback=string_sp_callback, type='string', default='aug-cc-pvtz',help='The target basis (default is aug-cc-pVTZ)')
    parser.add_option('-m','--method',dest='method',action='callback',type='string', default=None, callback=string_sp_callback,help='The methods (density functionals) to use')
    parser.add_option('-i','--input_path',dest='input_path',action='store',type='string', default='input/',help='The directory storing the generated inputs')
-   parser.add_option('--almo',dest='almo',action='store',type='int',default=0,help='Use ALMO method to compute E-field')
+   parser.add_option('--almo',dest='almo',action='store_store',default=False,help='Use ALMO method to compute E-field')
    parser.add_option('--charge',dest='charge',action='store',type='int',default=0,help='total charge of the system')
    parser.add_option('--mult',dest='mult',action='store',type='int',default=1,help='total multiplicity of the system') 
    parser.add_option('--coarse',dest='coarse',action='store_true',default=False,help='use less tight integral thresh and less fine grid for SCF calculations')
