@@ -143,6 +143,8 @@ def basis_abbr(BasName):    #generating abbreviated name for basis sets, using f
       return 'tp' 
    elif fullname == 'lp':
       return 'lp'
+   elif fullname == '3-21g':
+      return '321g'
    else:
       print("unrecognized basis choice")
       sys.exit(1)
