@@ -31,6 +31,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--stab',dest='stab',action='store_true',default=False,help='use gdm algorithm and turn on stability analysis')
    parser.add_option('--efield',dest='efield',action='store_true',default=False,help='calculate electric field')
    parser.add_option('--dipole_field',dest='dipole_field',action='store',type='int',default=None,help='apply a dipolar field along Z direction (in MV/cm)')
+   parser.add_option('--isotope',dest='isotope',action='store',type='string',default=None,help='Doing isotope substitution for vib analysis; specify the file for isotope section')
 
    options, args = parser.parse_args(ArgsIn)
    if len(args) < 2 and (options.all or options.keyword!=None):
@@ -68,20 +69,13 @@ def XYZ_to_Input(fw, XYZ, curREM, options):
       else:
          qrems.copy_section_over(fw, options.sol_file)
    if options.dipole_field != None and options.dipole_field != 0:
-      append_dipolar_field(fw, options.dipole_field)
+      qrems.apply_dipolar_field(fw, options.dipole_field)
+   if options.freq and options.isotope:
+      qrems.copy_section_over(fw, options.isotope)
 
 def XYZ_to_Input_optfreq(fw, XYZ, curREM, options):
    #geom opt job
-   qmol.WriteMolecule(fw, XYZ, options.charge, options.mult)
-   qrems.AppendRem(fw, curREM)
-   if options.sol_file != None:
-      if not os.path.exists(options.sol_file):
-         print("specified pcm file does not exist")
-         sys.exit(0)
-      else:
-         qrems.copy_section_over(fw, options.sol_file)
-   if options.dipole_field != None and options.dipole_field != 0:
-      append_dipolar_field(fw, options.dipole_field)
+   XYZ_to_Input(fw, XYZ, curREM, options)
    #freq job
    fw.write("\n@@@\n\n")
    qmol.WriteMolecule_Read(fw)
@@ -89,6 +83,8 @@ def XYZ_to_Input_optfreq(fw, XYZ, curREM, options):
    qrems.ModRem('SCF_GUESS', 'READ', curREM)
    if options.dipole_field != None and options.dipole_field != 0:
       qrems.ModRem('IDERIV', '1', curREM)
+   if options.isotope != None:
+      qrems.ModRem('ISOTOPES', 'TRUE', curREM)
    qrems.AppendRem(fw, curREM)
    if options.sol_file != None:
       if not os.path.exists(options.sol_file):
@@ -97,13 +93,9 @@ def XYZ_to_Input_optfreq(fw, XYZ, curREM, options):
       else:
          qrems.copy_section_over(fw, options.sol_file)
    if options.dipole_field != None and options.dipole_field != 0:
-      append_dipolar_field(fw, options.dipole_field)
-
-def append_dipolar_field(fw, dipole_field):
-   field_in_au = -1.0 * float(dipole_field) / 5142.0 #note: the minus comes from q-chem's convention
-   fw.write('\n$multipole_field\n')
-   fw.write('Z\t%.6f\n' %field_in_au)
-   fw.write('$end\n')
+      qrems.apply_dipolar_field(fw, options.dipole_field)
+   if options.isotope:
+      qrems.copy_section_over(fw, options.isotope)
 
 def set_tight_opt_criterion(curREM):
    qrems.ModRem('GEOM_OPT_TOL_GRADIENT','100', curREM)
@@ -143,6 +135,8 @@ if options.opt or options.opt_freq: #the latter also starts with OPT
    qrems.ModRem('GEOM_OPT_MAX_CYCLES', '200', myrems)
 if options.freq:
    qrems.ModRem('JOBTYPE', 'FREQ', myrems)
+   if options.isotope != None:
+      qrems.ModRem('ISOTOPES', 'TRUE', myrems)
 if options.tight:
    set_tight_opt_criterion(myrems)
 if options.sym:

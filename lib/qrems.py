@@ -268,3 +268,13 @@ def AppendSolvationSecs(fw, pcm_epsilon=0.0, smd_solvent=None):
    else:
       print("why here!?")
       sys.exit(0)
+
+def apply_dipolar_field(fw, field_strength, direction='Z'):
+   if direction.upper() != 'X' and direction.upper() != 'Y' and direction.upper() != 'Z':
+      print ("Invalid specification of field direction") 
+      sys.exit(0)
+   field_in_au = -1.0 * float(field_strength) / 5142.0 #note: the minus comes from q-chem's convention
+   fw.write('\n$multipole_field\n')
+   fw.write('%s\t%.6f\n' %(direction.upper(), field_in_au))
+   fw.write('$end\n')
+
