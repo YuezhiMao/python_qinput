@@ -1,0 +1,79 @@
+#! /usr/bin/env python
+
+import os, sys, glob, re
+import xyzgeom
+import numpy as np
+import pandas as pd
+from optparse import OptionParser
+
+def ParseInput(ArgsIn):
+   UseMsg = "parse_geom_freq_scan [options] [target_dir]"
+   parser = OptionParser(usage=UseMsg)
+   parser.add_option('--bond_atoms', dest='bond_atoms', action='callback', type='string', callback=string_sp_callback, default=None, help='specify the two bond atoms')
+   parser.add_option('--vib_mode', dest='vib_mode', action='store', type='int', default=None, help='The vibrational mode to be parsed (can be negative)')
+   parser.add_option('--placeholder', dest='placeholder', action='store', type='string', default='dist_', help='The keyword in the output names right in front of the scanned parameter (default: dist_)')
+   options, args = parser.parse_args(ArgsIn)
+   if options.bond_atoms == None and options.vib_mode == None:
+      print ("Should collect data for either a geometry parameter or a vibrational mode")
+      parser.print_help()
+      sys.exit(0)
+   if len(sys.argv) < 2:
+      parser.print_help()
+      sys.exit(0)
+   return options, args
+
+def string_sp_callback(option, opt, value, parser):
+   setattr(parser.values, option.dest, value.split(','))
+
+def get_bond_length_data(data, idx_1, idx_2):
+   xyzfile_list = glob.glob('geometry/*.xyz')
+   for xyzfile in xyzfile_list:
+      scan_param = float(re.search(options.placeholder+'([^_]+)', xyzfile).group(1))
+      if scan_param not in data:
+         data[scan_param] = {}
+      AtomList, Coords = xyzgeom.parse_xyz_file(xyzfile)
+      bond_length = xyzgeom.compute_distance(Coords, idx_1, idx_2)
+      data[scan_param]['bond_length'] = bond_length
+
+def get_frequency_data(data, mode_idx):
+   df = pd.read_csv('frequency.csv', header=None, usecols=[0, mode_idx])
+   df.columns = ['name', 'frequency']
+   for i in df.index:
+      full_name = df.iloc[i]['name']
+      print (full_name)
+      scan_param = float(re.search(options.placeholder+'([^_]+)', full_name).group(1))
+      if scan_param not in data:
+         data[scan_param] = {}
+      data[scan_param]['freq'] = df.iloc[i]['frequency']
+
+def write_data(data, csvfile, datatype):
+   if datatype == "bond":
+      fw = open(csvfile, 'w')
+      fw.write('scan_param,bond_length\n')
+      for scan_param in sorted(data):
+         fw.write("%.2f,%.6f\n" %(scan_param, data[scan_param]['bond_length']))
+      fw.close()
+   elif datatype == "freq":
+      fw = open(csvfile, 'w')
+      fw.write('scan_param,frequency\n')
+      for scan_param in sorted(data):
+         fw.write("%.2f,%.1f\n" %(scan_param, data[scan_param]['freq']))
+      fw.close()
+   else:
+      print ("Unrecognized datatype")
+      sys.exit(0)
+
+options, args = ParseInput(sys.argv)
+target_dir = args[1]
+curdir = os.getcwd()
+os.chdir(target_dir)
+data = {}
+if options.bond_atoms != None:
+   idx_1, idx_2 = int(options.bond_atoms[0]), int(options.bond_atoms[1])
+   get_bond_length_data(data, idx_1, idx_2)
+   write_data(data, "bond_length_scan.csv", "bond")
+elif options.vib_mode != None:
+   mode_idx = options.vib_mode
+   get_frequency_data(data, mode_idx)
+   write_data(data, "frequency_scan.csv", "freq")
+os.chdir(curdir)
