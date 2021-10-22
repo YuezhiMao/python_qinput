@@ -1,0 +1,138 @@
+#! /usr/bin/env python
+
+import os, sys, glob, re
+import numpy as np
+from optparse import OptionParser
+
+def ParseInput(ArgsIn):
+   UseMsg = "parse_eom_results [options] [target_dir]"
+   parser = OptionParser(usage=UseMsg)
+   parser.add_option('--eom_type', dest='eom_type', action='store', type='string', default='EE', help='specify the type of EOM-CC calculation (default: EE)')
+   parser.add_option('--do_dipole', dest='do_dipole', action='store_true', default=False, help='parse state dipole')
+   parser.add_option('--do_trans_dip', dest='do_trans_dip', action='store_true', default=False, help='parse transition dipole')
+   parser.add_option('--placeholder', dest='placeholder', action='store', type='string', default='dist_', help='The keyword in the output names right in front of the indexing parameter (default: dist_)')
+   options, args = parser.parse_args(ArgsIn)
+   if len(args) < 2:
+      parser.print_help()
+      sys.exit(0)
+   return options, args
+
+def get_eomtype_key(options):
+   if options.eom_type.upper() == "EE":
+      return "EOMEE"
+   elif options.eom_type.upper() == "IP":
+      return "EOMIP"
+   elif options.eom_type.upper() == "EA":
+      return "EOMEA"
+   elif options.eom_type.upper() == "SF":
+      return "EOMSF"
+   else:
+      print ("unrecognized EOM-CC option")
+      sys.exit(0)
+
+def parse_ex_energy(target_dir, options):
+   curdir = os.getcwd()
+   os.chdir(target_dir)
+   tmpfile = "ex_energy.tmp"
+   eomtype_key = get_eomtype_key(options)
+   command = "grep -A 1 \""+eomtype_key+" transition\" *.out > " + tmpfile
+   os.system(command)
+   data_eom = {}
+   fr = open(tmpfile, 'r')
+   for line in fr.readlines():
+      l_sp = line.split()
+      if re.search('(\d+)\/A', l_sp[-1]) != None:
+         frame_idx = int(re.search(options.placeholder+"(\d+)_", l_sp[0]).group(1))
+         data_eom[frame_idx] = {}
+         state_idx = int(re.search('(\d+)\/A', l_sp[-1]).group(1))
+         data_eom[frame_idx][state_idx] = {}
+      elif "eV" in l_sp[-1]:
+         data_eom[frame_idx][state_idx]["E_ex"] = float(l_sp[-2])
+      else:
+         continue
+   fr.close()
+   os.system("rm " + tmpfile)
+
+   fw = open("E_ex.csv", "w")
+   fw.write("frame,state,E_ex\n")
+   for frame_idx in sorted(data_eom):
+      for state_idx in sorted(data_eom[frame_idx]):
+         fw.write("%d,%d,%.4f\n" %(frame_idx, state_idx, data_eom[frame_idx][state_idx]["E_ex"]))
+   fw.close()
+   os.chdir(curdir)
+
+def parse_state_dipole(target_dir, options):
+   curdir = os.getcwd()
+   os.chdir(target_dir)
+   tmpfile = "state_dipole.tmp"
+   command = "grep -A 1 \"Excited state properties\" *.out > " + tmpfile
+   os.system(command)
+   data_eom = {}
+   fr = open(tmpfile, 'r')
+   for line in fr.readlines():
+      l_sp = line.split()
+      if re.search('(\d+)\/A', l_sp[-1]) != None:
+         frame_idx = int(re.search(options.placeholder+"(\d+)_", l_sp[0]).group(1))
+         data_eom[frame_idx] = {}
+         state_idx = int(re.search('(\d+)\/A', l_sp[-1]).group(1))
+         data_eom[frame_idx][state_idx] = {}
+      elif len(l_sp) > 1:
+         mu_x, mu_y, mu_z = float(l_sp[-5][:-1]), float(l_sp[-3][:-1]), float(l_sp[-1][:-1])
+         data_eom[frame_idx][state_idx]["dipole"] = np.array([mu_x, mu_y, mu_z])
+      else:
+         continue
+   fr.close()
+   os.system("rm " + tmpfile)
+   fw = open("state_dipole.csv", "w")
+   fw.write("frame,state,mu_x,mu_y,mu_z\n")
+   for frame_idx in sorted(data_eom):
+      for state_idx in sorted(data_eom[frame_idx]):
+         fw.write("%d,%d,%.6f,%.6f,%.6f\n" %(frame_idx, state_idx, data_eom[frame_idx][state_idx]["dipole"][0], data_eom[frame_idx][state_idx]["dipole"][1], data_eom[frame_idx][state_idx]["dipole"][2]))
+   fw.close()
+   os.chdir(curdir)
+
+def parse_trans_dipole(target_dir, options):
+   curdir = os.getcwd()
+   os.chdir(target_dir)
+   tmpfile = "trans_dipole.tmp"
+   command = "grep -A 4 \"State A:\" *.out > " + tmpfile
+   os.system(command)
+   data_eom = {}
+   fr = open(tmpfile, 'r')
+   state_idx1 = None
+   state_idx2 = None
+   for line in fr.readlines():
+      l_sp = line.split()
+      if re.search('(\d+)\/A', l_sp[-1]) != None:
+         if l_sp[-3] == "A:":
+            state_idx1 = int(re.search('(\d+)\/A', l_sp[-1]).group(1))
+         else:
+            state_idx2 = int(re.search('(\d+)\/A', l_sp[-1]).group(1))
+      elif "A->B" in line:
+         data_eom[(state_idx1, state_idx2)] = {}
+         mu_x, mu_y, mu_z = float(l_sp[-5][:-1]), float(l_sp[-3][:-1]), float(l_sp[-1][:-1])
+         data_eom[(state_idx1,state_idx2)]["trans_dipole"] = np.array([mu_x, mu_y, mu_z])
+      elif "B->A" in line:
+         data_eom[(state_idx2, state_idx1)] = {}
+         mu_x, mu_y, mu_z = float(l_sp[-5][:-1]), float(l_sp[-3][:-1]), float(l_sp[-1][:-1])
+         data_eom[(state_idx2,state_idx1)]["trans_dipole"] = np.array([mu_x, mu_y, mu_z])
+      else:
+         continue
+   fr.close()
+   os.system("rm " + tmpfile)
+   fw = open("trans_dipole.csv", 'w')
+   fw.write("frame,state_1,state_2,mu_x,mu_y,mu_z\n")
+   for frame_idx in sorted(data_eom):
+      for pair_idx in sorted(data_eom[frame_idx]):
+         fw.write("%d,%d,%d,%.6f,%.6f,%.6f\n" %(frame_idx,pair_idx[0],pair_idx[1],data_eom[frame_idx][pair_idx][0],data_eom[frame_idx][pair_idx][1],data_eom[frame_idx][pair_idx][2])) 
+   fw.close()
+   os.chdir(curdir)
+   
+
+options, args = ParseInput(sys.argv) 
+target_dir = args[1]
+parse_ex_energy(target_dir, options)
+if options.do_dipole:
+   parse_state_dipole(target_dir, options)
+if options.do_trans_dip:
+   parse_trans_dipole(target_dir, options)

@@ -17,7 +17,7 @@ def ParseInput(ArgsIn):
       print ("Should collect data for either a geometry parameter or a vibrational mode")
       parser.print_help()
       sys.exit(0)
-   if len(sys.argv) < 2:
+   if len(args) < 2:
       parser.print_help()
       sys.exit(0)
    return options, args
