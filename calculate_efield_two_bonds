@@ -21,6 +21,10 @@ def ParseInput(ArgsIn):
     if len(args) < 3:
         parser.print_help()
         sys.exit(0)
+    if options.probe_atoms == None:
+        print("Has to specify the index of three probe atoms (C, D, O)")
+        parser.print_help()
+        sys.exit(0)
     if options.probe_atoms != None and len(options.probe_atoms) != 3:
         print("Has to specify the index of three probe atoms (C, D, O)")
         parser.print_help()
