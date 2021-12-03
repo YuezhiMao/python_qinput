@@ -43,7 +43,8 @@ def parse_ex_energy(target_dir, options):
       l_sp = line.split()
       if re.search('(\d+)\/A', l_sp[-1]) != None:
          frame_idx = int(re.search(options.placeholder+"(\d+)_", l_sp[0]).group(1))
-         data_eom[frame_idx] = {}
+         if frame_idx not in data_eom:
+            data_eom[frame_idx] = {}
          state_idx = int(re.search('(\d+)\/A', l_sp[-1]).group(1))
          data_eom[frame_idx][state_idx] = {}
       elif "eV" in l_sp[-1]:
@@ -73,7 +74,8 @@ def parse_state_dipole(target_dir, options):
       l_sp = line.split()
       if re.search('(\d+)\/A', l_sp[-1]) != None:
          frame_idx = int(re.search(options.placeholder+"(\d+)_", l_sp[0]).group(1))
-         data_eom[frame_idx] = {}
+         if frame_idx not in data_eom:
+            data_eom[frame_idx] = {}
          state_idx = int(re.search('(\d+)\/A', l_sp[-1]).group(1))
          data_eom[frame_idx][state_idx] = {}
       elif len(l_sp) > 1:
@@ -95,7 +97,7 @@ def parse_trans_dipole(target_dir, options):
    curdir = os.getcwd()
    os.chdir(target_dir)
    tmpfile = "trans_dipole.tmp"
-   command = "grep -A 4 \"State A:\" *.out > " + tmpfile
+   command = "grep -A 6 \"State A:\" *.out > " + tmpfile
    os.system(command)
    data_eom = {}
    fr = open(tmpfile, 'r')
@@ -104,27 +106,32 @@ def parse_trans_dipole(target_dir, options):
    for line in fr.readlines():
       l_sp = line.split()
       if re.search('(\d+)\/A', l_sp[-1]) != None:
+         frame_idx = int(re.search(options.placeholder+"(\d+)_", l_sp[0]).group(1))
+         if frame_idx not in data_eom:
+            data_eom[frame_idx] = {}
          if l_sp[-3] == "A:":
             state_idx1 = int(re.search('(\d+)\/A', l_sp[-1]).group(1))
          else:
             state_idx2 = int(re.search('(\d+)\/A', l_sp[-1]).group(1))
       elif "A->B" in line:
-         data_eom[(state_idx1, state_idx2)] = {}
+         data_eom[frame_idx][(state_idx1, state_idx2)] = {}
          mu_x, mu_y, mu_z = float(l_sp[-5][:-1]), float(l_sp[-3][:-1]), float(l_sp[-1][:-1])
-         data_eom[(state_idx1,state_idx2)]["trans_dipole"] = np.array([mu_x, mu_y, mu_z])
-      elif "B->A" in line:
-         data_eom[(state_idx2, state_idx1)] = {}
-         mu_x, mu_y, mu_z = float(l_sp[-5][:-1]), float(l_sp[-3][:-1]), float(l_sp[-1][:-1])
-         data_eom[(state_idx2,state_idx1)]["trans_dipole"] = np.array([mu_x, mu_y, mu_z])
+         data_eom[frame_idx][(state_idx1,state_idx2)]["trans_dipole"] = np.array([mu_x, mu_y, mu_z])
+      elif "Oscillator" in line: 
+         data_eom[frame_idx][(state_idx1, state_idx2)]["osc_strength"] = float(l_sp[-1])
+      #elif "B->A" in line:
+      #   data_eom[frame_idx][(state_idx2, state_idx1)] = {}
+      #   mu_x, mu_y, mu_z = float(l_sp[-5][:-1]), float(l_sp[-3][:-1]), float(l_sp[-1][:-1])
+      #   data_eom[frame_idx][(state_idx2,state_idx1)]["trans_dipole"] = np.array([mu_x, mu_y, mu_z])
       else:
          continue
    fr.close()
    os.system("rm " + tmpfile)
    fw = open("trans_dipole.csv", 'w')
-   fw.write("frame,state_1,state_2,mu_x,mu_y,mu_z\n")
+   fw.write("frame,state_1,state_2,mu_x,mu_y,mu_z,osc\n")
    for frame_idx in sorted(data_eom):
       for pair_idx in sorted(data_eom[frame_idx]):
-         fw.write("%d,%d,%d,%.6f,%.6f,%.6f\n" %(frame_idx,pair_idx[0],pair_idx[1],data_eom[frame_idx][pair_idx][0],data_eom[frame_idx][pair_idx][1],data_eom[frame_idx][pair_idx][2])) 
+         fw.write("%d,%d,%d,%.6f,%.6f,%.6f,%.6f\n" %(frame_idx, pair_idx[0], pair_idx[1],data_eom[frame_idx][pair_idx]["trans_dipole"][0], data_eom[frame_idx][pair_idx]["trans_dipole"][1], data_eom[frame_idx][pair_idx]["trans_dipole"][2],data_eom[frame_idx][pair_idx]["osc_strength"])) 
    fw.close()
    os.chdir(curdir)
    
