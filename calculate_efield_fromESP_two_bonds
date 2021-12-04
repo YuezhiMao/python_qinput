@@ -90,7 +90,7 @@ def calculate_efield_from_esp(data_esp, bond_length, target_dir, atom_idx_list):
    idx_1, idx_2, idx_3 = atom_idx_list[0], atom_idx_list[1], atom_idx_list[2]
    data_efield_stat = {}
    for cutoff in data_esp:
-      efield_data_file = target_dir + '/' + "efield_per_frame_"+str(cutoff)+"A.csv"
+      efield_data_file = target_dir + '/' + "efield_per_frame_fromESP_"+str(cutoff)+"A.csv"
       fw = open(efield_data_file, 'w')
       fw.write("frame,E_bond1,E_bond2\n")
       data_efield_stat[cutoff] = {}
