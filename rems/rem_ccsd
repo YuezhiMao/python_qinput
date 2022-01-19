@@ -1,0 +1,13 @@
+$rem
+jobtype sp
+method  ccsd
+basis   6-31+g(d)
+symmetry  false
+sym_ignore true
+scf_algorithm diis
+unrestricted  false
+gen_scfman    true
+scf_guess     sad
+scf_convergence 8
+max_scf_cycles 200 
+$end

@@ -14,6 +14,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--opt',dest='opt',action='store_true',default=False,help='doing geometry optimization')
    parser.add_option('--freq',dest='freq',action='store_true',default=False,help='doing harmonic frequency calculation')
    parser.add_option('--opt_freq',dest='opt_freq',action='store_true',default=False,help='doing geometry optimization followed by harmonic frequency calculation')
+   parser.add_option('--force',dest='force',action='store_true',default=False,help='doing force calculaiton')
    parser.add_option('-a','--all',dest='all',action='store_true',default=False,help='run all the xyz files under the xyz_path')
    parser.add_option('-k','--keyword',dest='keyword',action='store',type='string',default=None,help='create inputs for xyz files containing the keyword')
    parser.add_option('-t','--target',dest='target',action='callback',callback=string_sp_callback,type='string',default=None,help='create input for certain xyz files')
@@ -133,7 +134,9 @@ myrems = qrems.ParseRems(rem_file)
 if options.opt or options.opt_freq: #the latter also starts with OPT
    qrems.ModRem('JOBTYPE', 'OPT', myrems)
    qrems.ModRem('GEOM_OPT_MAX_CYCLES', '200', myrems)
-if options.freq:
+elif options.force:
+   qrems.ModRem('JOBTYPE', 'FORCE', myrems)
+elif options.freq:
    qrems.ModRem('JOBTYPE', 'FREQ', myrems)
    if options.isotope != None:
       qrems.ModRem('ISOTOPES', 'TRUE', myrems)

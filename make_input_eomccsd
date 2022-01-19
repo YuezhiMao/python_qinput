@@ -23,7 +23,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--sf',dest='eomsf',action='store',type='string',default=None,help='number of EOM-SF states')
    parser.add_option('--ee',dest='eomee',action='store',type='string',default=None,help='number of EOM-EE states')
    parser.add_option('--ea',dest='eomea',action='store',type='string',default=None,help='number of EOM-EA states')
-   parser.add_option('--noprop',dest='noprop',action='store_true',default=False,help='turn off excited state property calculations')
+   parser.add_option('--gs',dest='gs',action='store_true',default=False,help='do ground state CCSD')
    parser.add_option('--state_prop',dest='state_prop',action='store_true',default=False,help='calculating excited state properties')
    parser.add_option('--trans_prop',dest='trans_prop',type='int',action='store',default=0,help='value for cc_trans_prop (1: gs-ex; 2: ex-ex; 3: all)')
    parser.add_option('--act_virt',dest='act_virt',action='store',type='int',default=0,help='number of active virts')
@@ -39,8 +39,8 @@ def ParseInput(ArgsIn):
       print("The target directory must be specified: one or some or all")
       parser.print_help()
       sys.exit(1)
-   if not (options.eomip > 0 or options.eomsf > 0 or options.eomee != None or options.eomea > 0):
-      print("At least specify one type of excited states")
+   if not (options.eomip != None or options.eomsf != None or options.eomee != None or options.eomea != None or options.gs):
+      print("At least specify one type of excited states (or GS)")
       parser.print_help()
       sys.exit(1)
    if options.act_virt > 0 and (options.act_virt > options.tot_virt):
@@ -57,6 +57,24 @@ def XYZ_to_Input(fw, XYZ, curREM, options):
    qmol.WriteMolecule(fw, XYZ, options.charge, options.mult)
    qrems.AppendRem(fw, curREM)
 
+def set_rems_ccsd(myrems, options):
+   if options.force != None:
+      qrems.ModRem('JOBTYPE', 'FORCE', myrems)
+   if options.state_prop:
+      qrems.ModRem('CC_REF_PROP', 'TRUE', myrems)
+   if options.act_virt > 0:
+      n_frozen = options.tot_virt - options.act_virt
+      qrems.ModRem('N_FROZEN_VIRTUAL', str(n_frozen), myrems)
+   if options.cc_sp:
+      qrems.ModRem('CC_SINGLE_PREC', '1', myrems)
+      qrems.ModRem('CC_SP_DM', '1', myrems)
+      qrems.ModRem('CC_SP_T_CONV', '4', myrems)
+      qrems.ModRem('CC_SP_E_CONV', '6', myrems)
+      qrems.ModRem('CC_ERASE_DP_INTEGRALS', '1', myrems)
+      
+   qrems.ModRem('CC_MEMORY', str(options.cc_mem), myrems)
+   qrems.ModRem('MEM_TOTAL', str(options.cc_mem+2000), myrems)
+
 def set_rems_eomccsd(myrems, options):
    if options.eomip != None:
       qrems.ModRem('IP_STATES', str(options.eomip), myrems)
@@ -72,14 +90,10 @@ def set_rems_eomccsd(myrems, options):
    if options.force != None:
       qrems.ModRem('JOBTYPE', 'FORCE', myrems)
       qrems.ModRem('CC_STATE_TO_OPT', options.force, myrems)
-   if options.noprop:
-      qrems.ModRem('CC_EOM_PROP', 'FALSE', myrems)
-      qrems.ModRem('CC_TRANS_PROP', 'FALSE', myrems)
-   else:
-      if options.state_prop:
-         qrems.ModRem('CC_EOM_PROP', 'TRUE', myrems)
-      if options.trans_prop > 0:
-         qrems.ModRem('CC_TRANS_PROP', str(options.trans_prop), myrems)
+   if options.state_prop:
+      qrems.ModRem('CC_EOM_PROP', 'TRUE', myrems)
+   if options.trans_prop > 0:
+      qrems.ModRem('CC_TRANS_PROP', str(options.trans_prop), myrems)
 
    if options.act_virt > 0:
       n_frozen = options.tot_virt - options.act_virt
@@ -123,7 +137,10 @@ if input_path[-1:] != '/':
 if not os.path.exists(input_path):
    sp.call(['mkdir', input_path])
 
-rem_file = os.path.expandvars('$QREMPATH')+'/rem_eomccsd'
+if options.gs:
+   rem_file = os.path.expandvars('$QREMPATH')+'/rem_ccsd'
+else:
+   rem_file = os.path.expandvars('$QREMPATH')+'/rem_eomccsd'
 myrems = qrems.ParseRems(rem_file)
 
 if options.eomip != None:
@@ -132,19 +149,26 @@ elif options.eomsf != None:
    ex_method = 'eomsf'
 elif options.eomea != None:
    ex_method = 'eomea'
-else:
+elif options.eomee != None:
    ex_method = 'eomee'
+else:
+   ex_method = 'gs'
 if options.act_virt > 0:
    ex_method += '_v'+str(options.act_virt)
 
-options.method = ['eom-ccsd']
-for method in options.method:
-   for basis in options.basis:
-      qrems.set_rems_common(myrems, method, basis)
+if options.gs:
+   method = 'ccsd'
+else:
+   method = 'eom-ccsd'
+for basis in options.basis:
+   qrems.set_rems_common(myrems, method, basis)
+   if options.gs:
+      set_rems_ccsd(myrems, options)
+   else:
       set_rems_eomccsd(myrems, options)
-      for xyz_file in xyzfile_list:
-         parsed_XYZ = qmol.XYZ(xyz_file)
-         inputfile = input_path+parsed_XYZ.Name+'_'+ex_method+'_ccsd_'+qrems.basis_abbr(basis)+'.in' 
-         fw = open(inputfile, 'w')
-         XYZ_to_Input(fw, parsed_XYZ, myrems, options)
-         fw.close()
+   for xyz_file in xyzfile_list:
+      parsed_XYZ = qmol.XYZ(xyz_file)
+      inputfile = input_path+parsed_XYZ.Name+'_'+ex_method+'_ccsd_'+qrems.basis_abbr(basis)+'.in' 
+      fw = open(inputfile, 'w')
+      XYZ_to_Input(fw, parsed_XYZ, myrems, options)
+      fw.close()
