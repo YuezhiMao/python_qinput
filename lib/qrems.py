@@ -135,6 +135,14 @@ def basis_abbr(BasName):    #generating abbreviated name for basis sets, using f
       return 'apc2'
    elif fullname == 'aug-pc-3':
       return 'apc3'
+   elif fullname == '3-21g':
+      return '321g'
+   elif fullname == '6-31gd':
+      return '631gd'
+   elif fullname == '6-31+gd':
+      return '631+gd'
+   elif fullname == '6-31+gdp':
+      return '631+gdp'
    elif fullname == 'dp':
       return 'dp'
    elif fullname == 'mp':
@@ -143,8 +151,6 @@ def basis_abbr(BasName):    #generating abbreviated name for basis sets, using f
       return 'tp' 
    elif fullname == 'lp':
       return 'lp'
-   elif fullname == '3-21g':
-      return '321g'
    else:
       print("unrecognized basis choice")
       sys.exit(1)
@@ -170,10 +176,16 @@ def set_rems_common(curREM, method, basis, loose=False):
       ModRem('BASIS','DEF2-QZVPD',curREM)
    elif basis.upper() == 'QZVPPD':
       ModRem('BASIS','DEF2-QZVPPD',curREM)
+   elif basis.upper() == '6-31GD':
+      ModRem('BASIS', '6-31G(D)', curREM)
+   elif basis.upper() == '6-31+GD':
+      ModRem('BASIS', '6-31+G(D)', curREM)
+   elif basis.upper() == '6-31+GDP':
+      ModRem('BASIS', '6-31+G(D,P)', curREM)
    elif basis.upper() == 'DP': #double-zeta Pople: 6-31+G(d)
       ModRem('BASIS','6-31+G(d)', curREM)
    elif basis.upper() == 'MP':
-      ModRem('BASIS','6-311G(d,p)',curREM)
+      ModRem('BASIS','6-311+G(d,p)',curREM)
    elif basis.upper() == 'TP': #triple-zeta Pople: 6-311++G(2df,2pd)
       ModRem('BASIS','6-311++G(2df,2pd)',curREM)
    elif basis.upper() == 'LP':
@@ -236,15 +248,18 @@ def add_aux_basis(basis, curREM):
 def apply_single_geom_constraint(fw, geom_param, constraint_template):
    fr = open(constraint_template, 'r')
    fw.write('\n$opt\n')
+   constr_applied = False
    for line in fr.readlines():
       l_split = line.split()
-      if len(l_split) > 2: #constraint line
+      #note: only the 1st constraint is modifiable
+      if len(l_split) > 2 and not constr_applied: #constraint line
          l_split[-1] = str(geom_param)
          for idx, item in enumerate(l_split, 1):
             if idx != len(l_split):
                fw.write('%s\t' %item)
             else:
                fw.write('%s\n' %item)
+         constr_applied = True
       else:
          fw.write(line)
    fw.write('$end\n')

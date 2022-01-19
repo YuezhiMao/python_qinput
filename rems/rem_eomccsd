@@ -10,7 +10,6 @@ gen_scfman    true
 scf_guess     sad
 scf_convergence 8
 max_scf_cycles 200 
-cc_eom_prop    true
-cc_trans_prop  2
 eom_davidson_convergence 6
+eom_davidson_max_iter    50
 $end
