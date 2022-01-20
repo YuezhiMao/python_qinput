@@ -1,0 +1,100 @@
+#! /usr/bin/env python
+
+import os, glob, sys, re, math
+import numpy as np
+import xyzgeom
+import pandas as pd
+from optparse import OptionParser
+
+def ParseInput(ArgsIn):
+   UseMsg = '''
+   Usage: python [script] [options] [target_dir] [xyzfile]
+   '''
+   parser = OptionParser(usage=UseMsg)
+   parser.add_option('--placeholder',dest='placeholder',action='store',type='string',default=None,help='keyword for parsing the job index')
+
+   options, args = parser.parse_args(ArgsIn)
+   if len(args) < 3:
+      parser.print_help()
+      sys.exit(0)
+   if options.placeholder[-1] == "_":
+      options.placeholder = options.placeholder[:-1]
+
+   return options, args
+
+def parse_forces(infile):
+   fr = open(infile, 'r')
+   start_parsing = False
+   begin = -1
+   end = -1
+   forces = np.array([])
+   forces_temp = None
+   N = -1
+   counter = -1
+   for line in fr.readlines():
+      l_sp = line.split()
+      if l_sp[0] == 'Full':
+         start_parsing = True
+         counter = 0
+         continue
+      if l_sp[0] == 'Gradient':
+         break
+      if start_parsing:
+         if counter == 0: #atom index line
+            begin = int(l_sp[0])
+            end = int(l_sp[-1])
+            N = end - begin + 1 #number of atoms in this batch
+            forces_temp = np.zeros((N, 3))
+            counter += 1
+         else:
+            for idx in range(N):
+               forces_temp[idx][counter-1] = float(l_sp[idx+1]) #the first index is line number (1/2/3)
+            if counter == 3:
+               if len(forces) == 0:
+                  forces = forces_temp
+               else:
+                  forces = np.vstack((forces, forces_temp))
+               counter = 0
+            else:
+               counter += 1
+   fr.close()
+   return forces
+
+def write_forces(grad_file, forces, AtomList):
+   fw = open(grad_file, 'w')
+   fw.write("%d\n\n" %len(AtomList))
+   for i in range(len(AtomList)):
+      fw.write("%s %12.8f %12.8f %12.8f\n" %(AtomList[i], forces[i, 0], forces[i, 1], forces[i, 2]))
+   fw.close()
+
+def generate_all_forces(AtomList, options):
+   outfile_list = glob.glob('*.out')
+   for outfile in outfile_list:
+      tmpfile = "tmp.txt"
+      command = "sed -n '/Full Analytical/,/Gradient time/p' " + outfile + " > " + tmpfile
+      os.system(command)
+      forces = parse_forces(tmpfile)
+      if forces.shape[0] != len(AtomList):
+         print ("Length of AtomList: %d; rows in forces: %d" %(len(AtomList), forces.shape[0])) 
+      if options.placeholder != None:
+         l = re.search(options.placeholder+'_(\d+)_([^_]+)', outfile)
+         job_idx = int(l.group(1))
+         if l.group(2).lower() == 'gs':
+            grad_type = 'gs'
+         else:
+            grad_type = 'ex'
+         grad_file = 'grad_' + grad_type + "{:03n}".format(job_idx) + '.txt'
+      else:  #general mode
+         grad_file = outfile[:-4] + '.grad'
+      write_forces(grad_file, forces, AtomList)
+   os.system('rm '+tmpfile)
+
+options, args = ParseInput(sys.argv)
+target_dir = args[1]
+xyzfile = args[2] #note: the only use of this xyzfile is to get the atom list
+AtomList, Coords = xyzgeom.parse_xyz_file(xyzfile)
+print ("%d atoms in total" %len(AtomList))
+curdir = os.getcwd()
+os.chdir(target_dir)
+generate_all_forces(AtomList, options)
+os.chdir(curdir)

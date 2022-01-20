@@ -7,7 +7,7 @@ def parse_xyz_file(filename):
    CoordList = []
    fr = open(filename, 'r')
    for line in fr.readlines():
-      l = re.search('^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$', line)
+      l = re.search('^\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*$', line)
       if l!=None:
          AtomList.append(l.group(1))
          coord = float(l.group(2)),float(l.group(3)),float(l.group(4))
