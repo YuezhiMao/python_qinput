@@ -30,6 +30,8 @@ def ParseInput(ArgsIn):
    parser.add_option('--tot_virt',dest='tot_virt',action='store',type='int',default=0,help='total number of virts')
    parser.add_option('--cc_mem',dest='cc_mem',action='store',type='int',default=16000,help='value of CC memory')
    parser.add_option('--cc_sp',dest='cc_sp',action='store_true',default=False,help='doing CCMAN2 with single-precision (recommended by Anna Krylov')
+   parser.add_option('--sym',dest='sym',action='store_true',default=False,help='running job with sym_ignore = false')
+   parser.add_option('--thresh',dest='thresh',action='store',type='int',default=14,help='set integral thresh (default 14)')
 
    options, args = parser.parse_args(ArgsIn)
    if len(args) < 2 and (options.all or options.keyword!=None):
@@ -60,6 +62,7 @@ def XYZ_to_Input(fw, XYZ, curREM, options):
 def set_rems_ccsd(myrems, options):
    if options.force != None:
       qrems.ModRem('JOBTYPE', 'FORCE', myrems)
+      qrems.ModRem('SCF_CONVERGENCE', '9', myrems)
    if options.state_prop:
       qrems.ModRem('CC_REF_PROP', 'TRUE', myrems)
    if options.act_virt > 0:
@@ -71,9 +74,12 @@ def set_rems_ccsd(myrems, options):
       qrems.ModRem('CC_SP_T_CONV', '4', myrems)
       qrems.ModRem('CC_SP_E_CONV', '6', myrems)
       qrems.ModRem('CC_ERASE_DP_INTEGRALS', '1', myrems)
+   if options.sym:
+      qrems.ModRem('SYM_IGNORE', 'FALSE', myrems)
       
    qrems.ModRem('CC_MEMORY', str(options.cc_mem), myrems)
    qrems.ModRem('MEM_TOTAL', str(options.cc_mem+2000), myrems)
+   qrems.ModRem('THRESH', str(options.thresh), myrems)
 
 def set_rems_eomccsd(myrems, options):
    if options.eomip != None:
@@ -87,8 +93,11 @@ def set_rems_eomccsd(myrems, options):
    if options.eomea != None:
       qrems.ModRem('EA_STATES', str(options.eomea), myrems)
 
+   if options.sym:
+      qrems.ModRem('SYM_IGNORE', 'FALSE', myrems)
    if options.force != None:
       qrems.ModRem('JOBTYPE', 'FORCE', myrems)
+      qrems.ModRem('SCF_CONVERGENCE', '9', myrems)
       qrems.ModRem('CC_STATE_TO_OPT', options.force, myrems)
    if options.state_prop:
       qrems.ModRem('CC_EOM_PROP', 'TRUE', myrems)
@@ -110,6 +119,7 @@ def set_rems_eomccsd(myrems, options):
       
    qrems.ModRem('CC_MEMORY', str(options.cc_mem), myrems)
    qrems.ModRem('MEM_TOTAL', str(options.cc_mem+2000), myrems)
+   qrems.ModRem('THRESH', str(options.thresh), myrems)
 
 options, args = ParseInput(sys.argv)
 xyz_path =''
