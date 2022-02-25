@@ -63,13 +63,14 @@ def ParseMolecule(MoleculeFile):
 
 def WriteMolecule(fw,MyMOLECULE,CoordinateValue):
    #the MyMOLECULE object is assumed to be structred like that produced by ParseMolecule
-   fw.write('$molecule\n') 
+   #fw.write('$molecule\n') 
    for line in range(MyMOLECULE["nlines"]):
       if (MyMOLECULE["has_scan"]) and (MyMOLECULE["scan_line_number"] == line):
          fw.write("scan = "+str(CoordinateValue)+"\n")
       else:
          fw.write(MyMOLECULE["the_line"][str(line)])
-   fw.write("$\end\n\n")
+   fw.write("\n")
+   #fw.write("$end\n\n")
 
 
 ######################################################################################
