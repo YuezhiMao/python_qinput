@@ -59,7 +59,7 @@ def write_data(data, csvfile, datatype):
       fw = open(csvfile, 'w')
       fw.write('scan_param,frequency\n')
       for scan_param in sorted(data):
-         fw.write("%.2f,%.1f\n" %(scan_param, data[scan_param]['freq']))
+         fw.write("%.2f,%.2f\n" %(scan_param, data[scan_param]['freq']))
       fw.close()
    elif datatype == "bond_freq":
       fw = open(csvfile, 'w')

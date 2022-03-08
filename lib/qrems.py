@@ -231,7 +231,7 @@ def add_d3_tail(method, curREM):
    elif 'CSO' in tail.upper():
       ModRem('DFT_D', 'D3_CSO', curREM)
    else:
-      ModRem('DFT_D', 'EMPIRICAL_GRIMME3', curREM)
+      ModRem('DFT_D', 'D3_ZERO', curREM)
 
 def add_aux_basis(basis, curREM):
    if basis.upper() == 'CC-PVTZ':
