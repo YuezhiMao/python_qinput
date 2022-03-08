@@ -7,6 +7,7 @@ from optparse import OptionParser
 def ParseInput(ArgsIn):
    UseMsg = '''
    make_input_stark_in_silico [xyz_file] [field_min] [field_max] [input_dir]
+   Note: when field_min is negative (e.g. -20 MV/cm), write " -20" in the command
    '''
    parser = OptionParser(usage=UseMsg)
    parser.add_option('-m','--method',dest='method',action='store',type='string', default='B3LYP', help='The method to use (default: B3LYP)')
