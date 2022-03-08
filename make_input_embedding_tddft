@@ -1,0 +1,129 @@
+#! /usr/bin/env python
+
+import os, glob, re, sys
+import subprocess as sp
+import numpy as np
+from optparse import OptionParser
+import qrems, qmol
+
+def ParseInput(ArgsIn):
+   UseMsg = '''
+   make_input_sp_geom [options] [xyz_path]
+   '''
+   parser = OptionParser(usage=UseMsg)
+   parser.add_option('-a','--all',dest='all',action='store_true',default=False,help='run all the xyz files under the xyz_path')
+   parser.add_option('-k','--keyword',dest='keyword',action='store',type='string',default=None,help='create inputs for xyz files containing the keyword')
+   parser.add_option('-t','--target',dest='target',action='callback',callback=string_sp_callback,type='string',default=None,help='create input for certain xyz files')
+   parser.add_option('-b','--basis',dest='basis',action='store', type='string', default='dp',help='The basis set (default: 6-31+G(d))')
+   parser.add_option('-m','--method',dest='method',action='store',type='string', default=None, help='The methods (density functionals) to use')
+   parser.add_option('-i','--input_path',dest='input_path',action='store',type='string', default='input/',help='The directory storing the generated inputs')
+   parser.add_option('--charge',dest='charge',action='store',type='int',default=0,help='total charge of the system')
+   parser.add_option('--mult',dest='mult',action='store',type='int',default=1,help='total multiplicity of the system') 
+   parser.add_option('--n_embed',dest='n_embed',action='store',type='int',default=-1,help='total number of embedded atoms')
+   parser.add_option('--env_method',dest='env_method',action='store',type='string',default='PBE',help='lower-level method for the environment (default: PBE)')
+   parser.add_option('--concentric',dest='concentric',action='store',type='int',default=1,help='Specific n_zeta for concentric localization (default: 1; set 0 to turn off CL)')
+   parser.add_option('--nroots',dest='nroots',action='store',type='int',default=4,help='number of roots (default 4)')
+   parser.add_option('--triplets',dest='triplets',action='store_true',default=False,help='calculate triplet roots')
+   parser.add_option('--rpa',dest='rpa',action='store_true',default=False,help='use full TDDFT (instead of TDA)')
+   parser.add_option('--spinflip',dest='spinflip',action='store_true',default=False,help='do spin-flip')
+
+   options, args = parser.parse_args(ArgsIn)
+   if len(args) < 2 and (options.all or options.keyword!=None):
+      parser.print_help()
+      sys.exit(0)
+   if not options.all and options.target==None and options.keyword==None:
+      print("The target directory must be specified: one or some or all")
+      parser.print_help()
+      sys.exit(1)
+   if options.n_embed < 0:
+      print("Specify the number of embedded atoms")
+      parser.print_help()
+      sys.exit(1)
+   if options.method == None:
+      print("Specify the method for the embedded system")
+      parser.print_help()
+      sys.exit(1)
+   return options, args
+
+def string_sp_callback(option, opt, value, parser):
+   setattr(parser.values, option.dest, value.split(','))
+
+def generate_FRGM(XYZ, natoms_frgm1, xyz_path):
+   natoms_total = XYZ.NAtom
+   natoms_frgm2 = natoms_total - natoms_frgm1
+   frgm_file = xyz_path + XYZ.Name + '.frgm'
+   fw = open(frgm_file, 'w')
+   fw.write('%d\n%d\n%d 0\n%d 1\n' %(options.charge, options.mult, options.charge, options.mult))
+   fw.write('%d %d' %(natoms_frgm1, natoms_frgm2)) 
+   fw.close()
+   FRGM = qmol.FRGM(frgm_file)
+   return FRGM
+
+def set_rems_embedding_tddft(myrems, options):
+   qrems.ModRem('ENV_METHOD', options.env_method, myrems)
+   qrems.ModRem('MEM_STATIC', '2000', myrems)
+   qrems.ModRem('MEM_TOTAL', '20000', myrems)
+   if options.concentric <= 0:
+      qrems.ModRem('CONCENTRIC_VIRTS', 'FALSE', myrems)
+   else:
+      qrems.ModRem('CONCENTRIC_VIRTS', 'TRUE', myrems)
+      qrems.ModRem('CONCENTRIC_VIRTS_ZETA', str(options.concentric), myrems)
+   if options.nroots != None:
+      qrems.ModRem('CIS_N_ROOTS', str(options.nroots), myrems)
+   if options.triplets:
+      qrems.ModRem('CIS_TRIPLETS', 'TRUE', myrems)
+   else:
+      qrems.ModRem('CIS_TRIPLETS', 'FALSE', myrems)
+   if options.spinflip:
+      qrems.ModRem('SPIN_FLIP', 'TRUE', myrems)
+      options.mult += 2
+   if options.rpa:
+      qrems.ModRem('RPA', '1', myrems)
+
+
+def XYZ_to_Input(fw, parsed_XYZ, FRGM, myrems):
+   qmol.WriteMolecule_Frgm(fw, parsed_XYZ, FRGM)
+   qrems.AppendRem(fw, myrems)
+
+options, args = ParseInput(sys.argv)
+xyz_path =''
+if len(args) > 1:
+   xyz_path = args[1]
+   if xyz_path[-1:] != '/':
+      xyz_path += '/'
+
+#determine xyz_file
+curdir = os.getcwd()
+xyzfile_list = []
+if options.all:
+   xyzfile_list = glob.glob(xyz_path+'*.xyz')
+elif options.keyword:
+   xyzfile_list = glob.glob(xyz_path+'*'+options.keyword+'*.xyz')
+if options.target!=None:
+   for xyz_file in options.target:
+      if xyz_file not in xyzfile_list:
+         xyzfile_list.append(xyz_file)
+
+#check the input_path
+input_path = options.input_path
+if input_path[-1:] != '/':
+   input_path += '/'
+if not os.path.exists(input_path):
+   sp.call(['mkdir', input_path])
+
+rem_file = os.path.expandvars('$QREMPATH')+'/rem_embed'
+ex_method = 'tda'
+if options.rpa:
+   ex_method = 'tddft'
+elif options.spinflip:
+   ex_method = 'sftda'
+myrems = qrems.ParseRems(rem_file)
+qrems.set_rems_common(myrems, options.method, options.basis, loose=True) 
+set_rems_embedding_tddft(myrems, options)
+for xyz_file in xyzfile_list:
+   parsed_XYZ = qmol.XYZ(xyz_file)
+   FRGM = generate_FRGM(parsed_XYZ, options.n_embed, xyz_path)
+   inputfile = input_path+parsed_XYZ.Name+'_'+ex_method+'_'+options.method+'_in_'+options.env_method+'_'+qrems.basis_abbr(options.basis)+'.in'
+   fw = open(inputfile, 'w')
+   XYZ_to_Input(fw, parsed_XYZ, FRGM, myrems)
+   fw.close()

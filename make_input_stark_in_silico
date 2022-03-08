@@ -9,7 +9,10 @@ def ParseInput(ArgsIn):
    make_input_stark_in_silico [xyz_file] [field_min] [field_max] [input_dir]
    '''
    parser = OptionParser(usage=UseMsg)
+   parser.add_option('-m','--method',dest='method',action='store',type='string', default='B3LYP', help='The method to use (default: B3LYP)')
+   parser.add_option('-b','--basis',dest='basis',action='store',type='string',default='dp',help='The target basis (default: 6-31+G(d))')
    parser.add_option('--increment',dest='increment',type='int',action='store',default=10,help='increment of field scan (default: 10)')
+   parser.add_option('--field_dir',dest='field_dir',action='store',type='string',default='Z',help='The direction of the applied field (default: Z)')
    parser.add_option('--sol',dest='sol',type='string',action='store',default=None,help='doing PCM; specify the relevant input section')
    parser.add_option('--noopt',dest='noopt',action='store_true',default=False,help='skip the geometry optimization before frequency calculation')
    options, args = parser.parse_args(ArgsIn)
@@ -30,7 +33,7 @@ for field in range(field_min, field_max+1, increment):
       command = "make_input_sp_geom --freq"
    else:
       command = "make_input_sp_geom --opt_freq"
-   command += " --tight -t " + xyz_file + " -m B3LYP -b 6-31+gdp -i " + input_dir + " --dipole_field=" + str(field)
+   command += " --tight -t " + xyz_file + " -m B3LYP -b 6-31+gdp -i " + input_dir + " --dipole_field=" + str(field) + " --field_dir=" + str(options.field_dir)
    if options.sol != None:
       command += ' --sol=PCM --sol_file='+options.sol
    print (command)

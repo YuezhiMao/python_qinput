@@ -135,13 +135,13 @@ def basis_abbr(BasName):    #generating abbreviated name for basis sets, using f
       return 'apc2'
    elif fullname == 'aug-pc-3':
       return 'apc3'
-   elif fullname == '3-21g':
+   elif fullname == '3-21g' or fullname == '321g':
       return '321g'
-   elif fullname == '6-31gd':
+   elif fullname == '6-31gd' or fullname == '631gd':
       return '631gd'
-   elif fullname == '6-31+gd':
+   elif fullname == '6-31+gd' or fullname == '631+gd':
       return '631+gd'
-   elif fullname == '6-31+gdp':
+   elif fullname == '6-31+gdp' or fullname == '631+gdp':
       return '631+gdp'
    elif fullname == 'dp':
       return 'dp'
@@ -152,10 +152,10 @@ def basis_abbr(BasName):    #generating abbreviated name for basis sets, using f
    elif fullname == 'lp':
       return 'lp'
    else:
-      print("unrecognized basis choice")
+      print("unrecognized basis choice: %s" %fullname)
       sys.exit(1)
 
-def set_rems_common(curREM, method, basis, loose=False):
+def add_basis_set(curREM, basis):
    if basis.upper() == 'SVP':
       ModRem('BASIS','DEF2-SVP',curREM)
    elif basis.upper() == 'SVPD':
@@ -176,11 +176,13 @@ def set_rems_common(curREM, method, basis, loose=False):
       ModRem('BASIS','DEF2-QZVPD',curREM)
    elif basis.upper() == 'QZVPPD':
       ModRem('BASIS','DEF2-QZVPPD',curREM)
-   elif basis.upper() == '6-31GD':
+   elif basis.upper() == '321G':
+      ModRem('BASIS','3-21G',curREM)
+   elif basis.upper() == '6-31GD' or basis.upper() == '631GD':
       ModRem('BASIS', '6-31G(D)', curREM)
-   elif basis.upper() == '6-31+GD':
+   elif basis.upper() == '6-31+GD' or basis.upper() == '631+GD':
       ModRem('BASIS', '6-31+G(D)', curREM)
-   elif basis.upper() == '6-31+GDP':
+   elif basis.upper() == '6-31+GDP' or basis.upper() == '631+GDP':
       ModRem('BASIS', '6-31+G(D,P)', curREM)
    elif basis.upper() == 'DP': #double-zeta Pople: 6-31+G(d)
       ModRem('BASIS','6-31+G(d)', curREM)
@@ -193,6 +195,8 @@ def set_rems_common(curREM, method, basis, loose=False):
    else: #copy the name of standard basis
       ModRem('BASIS', basis, curREM)
 
+def set_rems_common(curREM, method, basis, loose=False):
+   add_basis_set(curREM, basis)
    if loose:
       #ModRem('THRESH', '12', curREM)
       ModRem('MEM_TOTAL', '16000', curREM)

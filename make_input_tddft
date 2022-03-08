@@ -33,6 +33,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--nto',dest='nto', action='store_true', default=False, help='perform nto analysis and save to fchk file')
    parser.add_option('--diab',dest='diab',type='string',action='callback',default=None,callback=string_sp_callback,help='perform GMH and FCD diabatization (specify the number of atoms on fragment 1 and total number of atoms)')
    parser.add_option('--dipole_field',dest='dipole_field',action='store',type='int',default=None,help='apply a dipolar field along Z direction (in MV/cm)')
+   parser.add_option('--field_dir',dest='field_dir',action='store',type='string',default='Z',help='The direction of the applied field (default: Z)')
    parser.add_option('--isotope',dest='isotope',action='store',type='string',default=None,help='Doing isotope substitution for vib analysis; specify the file for isotope section')
 
    options, args = parser.parse_args(ArgsIn)
@@ -49,6 +50,9 @@ def ParseInput(ArgsIn):
    if options.sol_file != None and (not os.path.exists(options.sol_file)):
       print("Specified sol_file does not exist")
       sys.exit(0)
+   if options.field_dir.upper() != 'X' and options.field_dir.upper() != 'Y' and options.field_dir.upper() != 'Z':
+      print ("Invalid specification of dipole field direction: %s" %options.field_dir)
+      sys.exit(0)
    return options, args
 
 def string_sp_callback(option, opt, value, parser):
@@ -64,7 +68,7 @@ def XYZ_to_Input(fw, XYZ, curREM, options):
       else:
          qrems.copy_section_over(fw, options.sol_file)
    if options.dipole_field != None and options.dipole_field != 0:
-      qrems.apply_dipolar_field(fw, options.dipole_field)
+      qrems.apply_dipolar_field(fw, options.dipole_field, options.field_dir)
    if options.freq and options.isotope:
       qrems.copy_section_over(fw, options.isotope)
 
@@ -87,7 +91,7 @@ def XYZ_to_Input_optfreq(fw, XYZ, curREM, options):
       else:
          qrems.copy_section_over(fw, options.sol_file)
    if options.dipole_field != None and options.dipole_field != 0:
-      qrems.apply_dipolar_field(fw, options.dipole_field)
+      qrems.apply_dipolar_field(fw, options.dipole_field, options.field_dir)
    if options.isotope:
       qrems.copy_section_over(fw, options.isotope)
 
