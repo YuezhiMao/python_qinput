@@ -35,6 +35,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--dipole_field',dest='dipole_field',action='store',type='int',default=None,help='apply a dipolar field along Z direction (in MV/cm)')
    parser.add_option('--field_dir',dest='field_dir',action='store',type='string',default='Z',help='The direction of the applied field (default: Z)')
    parser.add_option('--isotope',dest='isotope',action='store',type='string',default=None,help='Doing isotope substitution for vib analysis; specify the file for isotope section')
+   parser.add_option('--pop_anal',dest='pop_anal',action='store_true',default='False',help='Calculating excited state Mulliken and ESP charges')
 
    options, args = parser.parse_args(ArgsIn)
    if len(args) < 2 and (options.all or options.keyword!=None):
@@ -137,6 +138,10 @@ def set_rems_tddft(myrems, options):
       acceptor_range = str(int(options.diab[0])+1)+'-'+options.diab[1]
       qrems.ModRem('STS_DONOR', donor_range, myrems)
       qrems.ModRem('STS_ACCEPTOR', acceptor_range, myrems)
+   if options.pop_anal:
+      qrems.ModRem('CIS_RELAXED_DENSITY', 'TRUE', myrems) #use relaxed density exclusively for now
+      qrems.ModRem('POP_MULLIKEN', '-1', myrems)
+      qrems.ModRem('ESP_CHARGES', '1', myrems)
 
 
 options, args = ParseInput(sys.argv)
