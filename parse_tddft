@@ -29,7 +29,7 @@ def parse_tddft_results(target_dir, options):
       if not (len(l_sp) > 1):
          continue
       if l_sp[1] == 'Excited': #first useful line for a given job
-         frame_idx = int(re.search(options.placeholder+"(\d+)_", l_sp[0]).group(1))
+         frame_idx = int(re.search(options.placeholder+"([^_]+)_", l_sp[0]).group(1))
          if frame_idx not in data_tddft:
             data_tddft[frame_idx] = {}
          state_idx = int(l_sp[3][:-1]) #get rid of the ":"

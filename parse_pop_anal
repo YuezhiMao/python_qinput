@@ -1,0 +1,139 @@
+#! /usr/bin/env python
+
+import os, sys, glob, re
+import numpy as np
+from optparse import OptionParser
+
+def ParseInput(ArgsIn):
+   UseMsg = "parse_eom_results [options] [target_dir]"
+   parser = OptionParser(usage=UseMsg)
+   parser.add_option('--do_mulliken', dest='do_mulliken', action='store_true', default=False, help='parse Mulliken population for each state')
+   parser.add_option('--do_esp', dest='do_esp', action='store_true', default=False, help='parse ESP charges for each state')
+
+   options, args = parser.parse_args(ArgsIn)
+   if len(args) < 2:
+      parser.print_help()
+      sys.exit(0)
+   return options, args
+
+def parse_mulliken_pop(outfile):
+   tmpfile = "mulliken.tmp"
+   command = "sed -n \"/Mulliken Net Atomic/,/Sum of atomic/p\" " + outfile + " > " + tmpfile
+   os.system(command)
+   data = {}
+   data["atoms"] = []
+   fr = open(tmpfile, 'r')
+   cur_state = -1
+   for line in fr.readlines():
+      l_sp = line.split()
+      if len(l_sp) < 2:
+         continue
+      if l_sp[0] == 'Ground-State':
+         cur_state = 0
+         data[cur_state] = []
+      if l_sp[1] == 'Excited':
+         cur_state = int(l_sp[3][:-1])
+         data[cur_state] = []
+      if len(l_sp) == 3 and re.match("\d+", l_sp[0]) != None:
+         if cur_state == 0:
+            data["atoms"].append(l_sp[1])
+         data[cur_state].append(float(l_sp[2]))
+   fr.close()
+   os.system("rm " + tmpfile)
+
+   popfile = outfile[:-4] + ".mulliken"
+   nstates = cur_state + 1
+   fw = open(popfile, 'w')
+   fw.write("Atom")
+   for istat in range(nstates):
+      fw.write(",state_%d" %istat)
+   fw.write("\n")
+   natoms = len(data["atoms"])
+   for iatm in range(natoms):
+      fw.write("%s" %data["atoms"][iatm])
+      for istat in range(nstates):
+         fw.write(",%.6f" %data[istat][iatm])
+      fw.write("\n")
+   fw.close()
+       
+def parse_esp_charges(outfile):
+   tmpfile = "esp.tmp"
+   #do the ground state first
+   command = "sed -n \"/Merz-Kollman ESP/,/Sum of atomic/p\" " + outfile + " > " + tmpfile
+   os.system(command)
+   data = {}
+   data["atoms"] = []
+   data[0] = []
+   fr = open(tmpfile, 'r')
+   cur_state = -1
+   for line in fr.readlines():
+      l_sp = line.split()
+      if len(l_sp) < 2:
+         continue
+      if len(l_sp) == 3 and re.match("\d+", l_sp[0]) != None:
+         data["atoms"].append(l_sp[1])
+         data[0].append(float(l_sp[2]))
+   fr.close()
+   natoms = len(data["atoms"])
+   #the parse the excited states
+   cur_state = 0
+   command = "sed -n \"/ESP charges for/,/---/p\" " + outfile + " > " + tmpfile
+   os.system(command)
+   fr = open(tmpfile, 'r')
+   begin = -1
+   end = -1
+   N = -1
+   counter = -1 #counter for atoms
+   for line in fr.readlines():
+      l_sp = line.split()
+      if l_sp[0] == 'ESP':
+         counter = 0
+         continue
+      if re.match("---", l_sp[0]):
+         break
+      if counter == 0: #atom index line
+         begin = int(l_sp[0])
+         end = int(l_sp[1])
+         N = end - begin + 1 #number of states for this batch
+         counter += 1
+      else:
+         for istat in range(1, N+1):
+            if cur_state+istat not in data:
+               data[cur_state+istat] = []
+            data[cur_state+istat].append(float(l_sp[istat]))
+         if counter == natoms:
+            counter = 0
+            cur_state += N
+         else:
+            counter += 1
+   fr.close()
+   os.system("rm " + tmpfile)
+
+   popfile = outfile[:-4] + ".espchg"
+   nstates = cur_state + 1
+   fw = open(popfile, 'w')
+   fw.write("Atom")
+   for istat in range(nstates):
+      fw.write(",state_%d" %istat)
+   fw.write("\n")
+   for iatm in range(natoms):
+      fw.write("%s" %data["atoms"][iatm])
+      for istat in range(nstates):
+         fw.write(",%.6f" %data[istat][iatm])
+      fw.write("\n")
+   fw.close()
+
+options, args = ParseInput(sys.argv)
+target_dir = args[1]
+cur_dir = os.getcwd()
+os.chdir(target_dir)
+outfile_list = glob.glob("*.out")
+for outfile in outfile_list:
+   if options.do_mulliken:
+      parse_mulliken_pop(outfile)
+   elif options.do_esp:
+      parse_esp_charges(outfile)
+   
+
+os.chdir(cur_dir)
+
