@@ -10,7 +10,7 @@ def ParseInput(ArgsIn):
    UseMsg = "rotate_bond_to_axis [options] [xyzfile]"
    parser = OptionParser(usage=UseMsg)
    parser.add_option('--bond_atoms', dest='bond_atoms', action='callback', type='string', callback=string_sp_callback, default=None, help='specify the two bond atoms')
-   parser.add_option('--outfile',dest='outfile',action='store',type='string', default=None, help='Name of the rotated xyz file')
+   parser.add_option('-o','--outfile',dest='outfile',action='store',type='string', default=None, help='Name of the rotated xyz file')
    options, args = parser.parse_args(ArgsIn)
    if options.bond_atoms == None:
       print ("The two bond atoms must be specified")

@@ -16,9 +16,14 @@ def ParseInput(ArgsIn):
    parser.add_option('--field_dir',dest='field_dir',action='store',type='string',default='Z',help='The direction of the applied field (default: Z)')
    parser.add_option('--sol',dest='sol',type='string',action='store',default=None,help='doing PCM; specify the relevant input section')
    parser.add_option('--noopt',dest='noopt',action='store_true',default=False,help='skip the geometry optimization before frequency calculation')
+   parser.add_option('--nofreq',dest='nofreq',action='store_true',default=False,help='doing geometry optimization only')
+   parser.add_option('--charge',dest='charge',action='store',type='int',default=0,help='total charge of the system')
    options, args = parser.parse_args(ArgsIn)
    if len(args) < 5:
       parser.print_help()
+      sys.exit(0)
+   if options.noopt and options.nofreq:
+      print("Can't do both noopt and nofreq")
       sys.exit(0)
    return options, args
 
@@ -32,11 +37,15 @@ increment = options.increment
 for field in range(field_min, field_max+1, increment):
    if options.noopt:
       command = "make_input_sp_geom --freq"
+   elif options.nofreq:
+      command = "make_input_sp_geom --opt"
    else:
       command = "make_input_sp_geom --opt_freq"
-   command += " --tight -t " + xyz_file + " -m B3LYP -b 6-31+gdp -i " + input_dir + " --dipole_field=" + str(field) + " --field_dir=" + str(options.field_dir)
+   command += " --tight -t " + xyz_file + " -m " + options.method + " -b " + options.basis + " -i " + input_dir + " --dipole_field=" + str(field) + " --field_dir=" + str(options.field_dir)
    if options.sol != None:
       command += ' --sol=PCM --sol_file='+options.sol
+   if options.charge != 0:
+      command += ' --charge='+str(options.charge)
    print (command)
    os.system(command)
 

@@ -93,7 +93,7 @@ def parse_esp_charges(outfile):
          break
       if counter == 0: #atom index line
          begin = int(l_sp[0])
-         end = int(l_sp[1])
+         end = int(l_sp[-1])
          N = end - begin + 1 #number of states for this batch
          counter += 1
       else:
@@ -131,7 +131,7 @@ outfile_list = glob.glob("*.out")
 for outfile in outfile_list:
    if options.do_mulliken:
       parse_mulliken_pop(outfile)
-   elif options.do_esp:
+   if options.do_esp:
       parse_esp_charges(outfile)
    
 
