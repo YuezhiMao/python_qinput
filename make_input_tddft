@@ -35,7 +35,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--dipole_field',dest='dipole_field',action='store',type='int',default=None,help='apply a dipolar field along Z direction (in MV/cm)')
    parser.add_option('--field_dir',dest='field_dir',action='store',type='string',default='Z',help='The direction of the applied field (default: Z)')
    parser.add_option('--isotope',dest='isotope',action='store',type='string',default=None,help='Doing isotope substitution for vib analysis; specify the file for isotope section')
-   parser.add_option('--pop_anal',dest='pop_anal',action='store_true',default='False',help='Calculating excited state Mulliken and ESP charges')
+   parser.add_option('--pop_anal',dest='pop_anal',action='store_true',default=False,help='Calculating excited state Mulliken and ESP charges')
 
    options, args = parser.parse_args(ArgsIn)
    if len(args) < 2 and (options.all or options.keyword!=None):
@@ -111,6 +111,8 @@ def set_rems_tddft(myrems, options):
          qrems.ModRem('CIS_STATE_DERIV', str(options.opt_freq), myrems)
    if options.freq != None:
       qrems.ModRem('JOBTYPE', 'FREQ', myrems)
+      qrems.ModRem('IDERIV', '1', myrems) #use finite-diff by default for now
+      qrems.ModRem('CIS_STATE_DERIV', str(options.freq), myrems)
       if options.isotope != None:
          qrems.ModRem('ISOTOPES', 'TRUE', myrems)
    if options.tight:
