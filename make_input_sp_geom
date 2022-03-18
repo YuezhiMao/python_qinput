@@ -34,6 +34,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--dipole_field',dest='dipole_field',action='store',type='int',default=None,help='apply a dipolar field along X/Y/Z direction (in MV/cm)')
    parser.add_option('--field_dir',dest='field_dir',action='store',type='string',default='Z',help='The direction of the applied field (default: Z)')
    parser.add_option('--isotope',dest='isotope',action='store',type='string',default=None,help='Doing isotope substitution for vib analysis; specify the file for isotope section')
+   parser.add_option('--cdft',dest='cdft',action='store',type='string',default=None,help='Doing CDFT; specify the $cdft section')
 
    options, args = parser.parse_args(ArgsIn)
    if len(args) < 2 and (options.all or options.keyword!=None):
@@ -77,6 +78,8 @@ def XYZ_to_Input(fw, XYZ, curREM, options):
       qrems.apply_dipolar_field(fw, options.dipole_field, options.field_dir)
    if options.freq and options.isotope:
       qrems.copy_section_over(fw, options.isotope)
+   if options.cdft:
+      qrems.copy_section_over(fw, options.cdft)
 
 def XYZ_to_Input_optfreq(fw, XYZ, curREM, options):
    #geom opt job
@@ -86,7 +89,7 @@ def XYZ_to_Input_optfreq(fw, XYZ, curREM, options):
    qmol.WriteMolecule_Read(fw)
    qrems.ModRem('JOBTYPE', 'FREQ', curREM)
    qrems.ModRem('SCF_GUESS', 'READ', curREM)
-   if options.dipole_field != None and options.dipole_field != 0:
+   if (options.dipole_field != None and options.dipole_field != 0) or options.cdft != None:
       qrems.ModRem('IDERIV', '1', curREM)
    if options.isotope != None:
       qrems.ModRem('ISOTOPES', 'TRUE', curREM)
@@ -101,11 +104,18 @@ def XYZ_to_Input_optfreq(fw, XYZ, curREM, options):
       qrems.apply_dipolar_field(fw, options.dipole_field, options.field_dir)
    if options.isotope:
       qrems.copy_section_over(fw, options.isotope)
+   if options.cdft:
+      qrems.copy_section_over(fw, options.cdft)
 
 def set_tight_opt_criterion(curREM):
    qrems.ModRem('GEOM_OPT_TOL_GRADIENT','100', curREM)
    qrems.ModRem('GEOM_OPT_TOL_DISPLACEMENT', '100', curREM)
    qrems.ModRem('GEOM_OPT_TOL_ENERGY', '10', curREM)
+
+def set_cdft_rems(curREM):
+   qrems.ModRem('CDFT', 'TRUE', curREM)
+   qrems.ModRem('CDFT_THRESH', '6', curREM)
+   qrems.ModRem('BECKE_SHIFT', 'UNSHIFTED', curREM)
 
 options, args = ParseInput(sys.argv)
 xyz_path =''
@@ -156,28 +166,33 @@ if options.stab:
 if options.efield:
    qrems.ModRem('ESP_GRID', '0', myrems)
    qrems.ModRem('ESP_EFIELD', '1', myrems)
+if options.cdft != None:
+   set_cdft_rems(myrems)
 
 for method in options.method:
    for basis in options.basis:
       qrems.set_rems_common(myrems, method, basis, options.coarse)
       for xyz_file in xyzfile_list:
          parsed_XYZ = qmol.XYZ(xyz_file)
+         inputfile = input_path + parsed_XYZ.Name  #common piece
+         if options.cdft != None:
+            inputfile += '_cdft'
          if options.dipole_field != None:
             if options.dipole_field > 0:
-               inputfile = input_path+parsed_XYZ.Name+'_+'+str(options.dipole_field)+'.in'
+               inputfile += '_+'+str(options.dipole_field)+'.in'
             elif options.dipole_field == 0:
-               inputfile = input_path+parsed_XYZ.Name+'_0.in'
+               inputfile += '_0.in'
             else:
-               inputfile = input_path+parsed_XYZ.Name+'_'+str(options.dipole_field)+'.in'
+               inputfile += '_'+str(options.dipole_field)+'.in'
          else:
             if options.opt:
-               inputfile = input_path+parsed_XYZ.Name+'_geom_'+method+'_'+qrems.basis_abbr(basis)+'.in'
+               inputfile += '_geom_'+method+'_'+qrems.basis_abbr(basis)+'.in'
             elif options.freq:
-               inputfile = input_path+parsed_XYZ.Name+'_freq_'+method+'_'+qrems.basis_abbr(basis)+'.in'
+               inputfile += '_freq_'+method+'_'+qrems.basis_abbr(basis)+'.in'
             elif options.opt_freq:
-               inputfile = input_path+parsed_XYZ.Name+'_optfreq_'+method+'_'+qrems.basis_abbr(basis)+'.in'
+               inputfile += '_optfreq_'+method+'_'+qrems.basis_abbr(basis)+'.in'
             else:
-               inputfile = input_path+parsed_XYZ.Name+'_'+method+'_'+qrems.basis_abbr(basis)+'.in'
+               inputfile += '_'+method+'_'+qrems.basis_abbr(basis)+'.in'
          fw = open(inputfile, 'w')
          if options.opt_freq:
             XYZ_to_Input_optfreq(fw, parsed_XYZ, myrems, options)

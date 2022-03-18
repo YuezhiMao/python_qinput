@@ -18,6 +18,8 @@ def ParseInput(ArgsIn):
    parser.add_option('--noopt',dest='noopt',action='store_true',default=False,help='skip the geometry optimization before frequency calculation')
    parser.add_option('--nofreq',dest='nofreq',action='store_true',default=False,help='doing geometry optimization only')
    parser.add_option('--charge',dest='charge',action='store',type='int',default=0,help='total charge of the system')
+   parser.add_option('--isotope',dest='isotope',action='store',type='string',default=None,help='Doing isotope substitution for vib analysis; specify the file for isotope section')
+   parser.add_option('--cdft',dest='cdft',action='store',type='string',default=None,help='Doing CDFT; specify the $cdft section')
    options, args = parser.parse_args(ArgsIn)
    if len(args) < 5:
       parser.print_help()
@@ -46,6 +48,10 @@ for field in range(field_min, field_max+1, increment):
       command += ' --sol=PCM --sol_file='+options.sol
    if options.charge != 0:
       command += ' --charge='+str(options.charge)
+   if options.isotope != None:
+      command += ' --isotope='+str(options.isotope)
+   if options.cdft != None:
+      command += ' --cdft='+str(options.cdft)
    print (command)
    os.system(command)
 
