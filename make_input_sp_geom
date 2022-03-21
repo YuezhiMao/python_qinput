@@ -154,6 +154,8 @@ elif options.freq:
    qrems.ModRem('JOBTYPE', 'FREQ', myrems)
    if options.isotope != None:
       qrems.ModRem('ISOTOPES', 'TRUE', myrems)
+   if (options.dipole_field != None and options.dipole_field != 0) or options.cdft != None:
+      qrems.ModRem('IDERIV', '1', myrems)
 if options.tight:
    set_tight_opt_criterion(myrems)
 if options.sym:

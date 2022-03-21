@@ -7,7 +7,6 @@ symmetry false
 sym_ignore true
 mem_total 8000
 mem_static 2000
-MAX_SUB_FILE_NUM 16000
 BASIS_LIN_DEP_THRESH 6
 thresh 14
 SCF_CONVERGENCE 8
