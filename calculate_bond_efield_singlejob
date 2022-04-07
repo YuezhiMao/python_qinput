@@ -1,0 +1,52 @@
+#! /usr/bin/env python
+
+import os, sys, re, glob
+import xyzgeom, efield
+import numpy as np
+import subprocess as sp
+from optparse import OptionParser
+
+def ParseInput(ArgsIn):
+   UseMsg = "python [script] [options] [outfile] [xyzfile]"
+   parser = OptionParser(usage=UseMsg)
+   parser.add_option('--bond_atoms', dest='bond_atoms', action='callback', type='string', callback=string_sp_callback, default=None, help='specify the two bond atoms')
+   parser.add_option('--second_only', dest='second_only', action='store_true', default=False, help='only parse the efield produced by the second job (note: only needed when both jobs calculate fields)')
+   options, args = parser.parse_args(ArgsIn)
+   if options.bond_atoms == None:
+      print ("The bond atoms must be specified")
+      parser.print_help()
+      sys.exit(0)
+   if len(options.bond_atoms) < 2 or len(options.bond_atoms) > 3:
+      print ("The number of bond atoms must be 2 or 3")
+      parser.print_help()
+      sys.exit(0)
+   if len(sys.argv) < 3:
+      parser.print_help()
+      sys.exit(0)
+
+   return options, args
+
+def string_sp_callback(option, opt, value, parser):
+   setattr(parser.values, option.dest, value.split(','))
+
+options, args = ParseInput(sys.argv)
+outfile = args[1]
+xyzfile = args[2]
+efld_file = outfile + ".efld"
+efield.generate_efield_file(efld_file, outfile, options.second_only)
+esp_file = outfile + ".esp"
+efield.generate_esp_file(esp_file, outfile)
+
+if len(options.bond_atoms) == 2:
+   bond_idx1, bond_idx2 = int(options.bond_atoms[0]), int(options.bond_atoms[1])
+   E_field = efield.calculate_efield_on_bond(efld_file, xyzfile, bond_idx1, bond_idx2)
+   E_field_fromESP = efield.calculate_efield_from_esp(esp_file, xyzfile, bond_idx1, bond_idx2)
+   print('E-field: %.3f; E-field(ESP): %.3f' %(E_field, E_field_fromESP))
+else:
+   bond_idx1, bond_idx2, bond_idx3 = int(options.bond_atoms[0]), int(options.bond_atoms[1]), int(options.bond_atoms[2])
+   E_field_12 = efield.calculate_efield_on_bond(efld_file, xyzfile, bond_idx1, bond_idx2)
+   E_field_fromESP_12 = efield.calculate_efield_from_esp(esp_file, xyzfile, bond_idx1, bond_idx2)
+   print('Bond 1-2: E-field: %.3f; E-field(ESP): %.3f' %(E_field_12, E_field_fromESP_12))
+   E_field_13 = efield.calculate_efield_on_bond(efld_file, xyzfile, bond_idx1, bond_idx3)
+   E_field_fromESP_13 = efield.calculate_efield_from_esp(esp_file, xyzfile, bond_idx1, bond_idx3)
+   print('Bond 1-3: E-field: %.3f; E-field(ESP): %.3f' %(E_field_13, E_field_fromESP_13))

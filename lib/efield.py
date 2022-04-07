@@ -71,6 +71,16 @@ def calculate_efield_on_bond(outfile, xyzfile, bond_idx1, bond_idx2, second_only
    E_bond = 0.5 * (E_atom1 + E_atom2)
    return E_bond
 
+#This function is useful when multiple bonds are needed for one output (more efficient)
+def calculate_efield_on_bond(efld_file, xyzfile, bond_idx1, bond_idx2):
+   au_to_MVcm = 5.142E+3
+   dir_bond = get_bond_direction(xyzfile, bond_idx1, bond_idx2)
+   efield_all = np.loadtxt(efld_file)
+   E_atom1 = np.dot(efield_all[bond_idx1-1, :], dir_bond) * au_to_MVcm
+   E_atom2 = np.dot(efield_all[bond_idx2-1, :], dir_bond) * au_to_MVcm
+   E_bond = 0.5 * (E_atom1 + E_atom2)
+   return E_bond
+
 def parse_esp(esp_file, tmpfile):
    fr = open(tmpfile, 'r')
    raw_data = []
@@ -103,6 +113,16 @@ def get_bond_length(xyzfile, atom_idx1, atom_idx2):
 def calculate_efield_from_esp(outfile, xyzfile, atom_idx1, atom_idx2):
    esp_file = outfile + ".esp"
    generate_esp_file(esp_file, outfile)
+   au_to_MVcm = 5.142E+3
+   esp_all = np.loadtxt(esp_file)
+   V_1 = esp_all[atom_idx1-1]
+   V_2 = esp_all[atom_idx2-1]
+   r_bond = get_bond_length(xyzfile, atom_idx1, atom_idx2) * 1.88973 #convert from A to Bohr (au)
+   E_bond = (V_1 - V_2) / r_bond * au_to_MVcm
+   return E_bond
+
+#This function is useful when multiple bonds are needed for one output (more efficient)
+def calculate_efield_from_esp(esp_file, xyzfile, atom_idx1, atom_idx2):
    au_to_MVcm = 5.142E+3
    esp_all = np.loadtxt(esp_file)
    V_1 = esp_all[atom_idx1-1]
