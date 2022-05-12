@@ -4,7 +4,7 @@ import numpy as np
 
 class XYZ:  #class for XYZ coordinates
    def __init__(self, xyz_file):
-      #print xyz_file
+      #print (xyz_file)
       self.Name = re.search("([^/]+).xyz$", xyz_file).group(1)
       f = open(xyz_file, 'r')
       self.AtomList = []
