@@ -32,8 +32,7 @@ def CheckComplete_Single(target_path, flag, unfinished_list):
    for jobname in jobname_list:
       job_status[jobname]= False
    tmp = 'tmp.txt'
-   #os.system('grep \"Have a nice day\" *.out > ' + tmp)
-   os.system('grep \"'+flag+'\" *.out > ' + tmp)
+   os.system('grep -H \"'+flag+'\" *.out > ' + tmp)
    f = open('tmp.txt')
    #initialize the counts
    n_fail = n_jobs
@@ -50,12 +49,9 @@ def CheckComplete_Single(target_path, flag, unfinished_list):
       target_root = re.search('result/(\S+)', target_path).group(1)
    #print out the failures
    for jobname in job_status:
-      if job_status[jobname]!=True:
+      if job_status[jobname] != True:
          print(jobname+': Failed')
-         sp.call(['rm', jobname])
-         inputname = jobname[:-4]+'.in'
-         inputpath = "input_"+target_root
-         unfinished_list.append((inputpath, inputname))
+         unfinished_list.append((target_path, jobname))
    #print out the summary
    print("%d jobs in total: %d completed, %d failed" %(n_jobs, n_complete, n_fail))
    os.chdir(cur_dir)
@@ -73,7 +69,7 @@ def CheckComplete_Multi(target_path, multiple, flag, unfinished_list):
       job_status[jobname]["status"] = False
       job_status[jobname]["counts"] = 0     #counts of complete flag
    tmp = 'tmp.txt'
-   os.system('grep \"'+flag+'\" *.out > ' + tmp)
+   os.system('grep -H \"'+flag+'\" *.out > ' + tmp)
    f = open('tmp.txt')
     
    n_fail = n_jobs
@@ -89,23 +85,19 @@ def CheckComplete_Multi(target_path, multiple, flag, unfinished_list):
    sp.call(['rm', tmp])
    #print out the failures
    for jobname in job_status:
-      if job_status[jobname]["status"]!=True:
+      if job_status[jobname]["status"] != True:
          print(jobname+': Only %d/%d complete flags detected, failed' %(job_status[jobname]["counts"], options.multi))
-         inputname = jobname
-         inputpath = target_path
-         unfinished_list.append((inputpath, inputname))
+         unfinished_list.append((target_path, jobname))
    print("%d jobs in total: %d completed, %d failed" %(n_jobs, n_complete, n_fail))
    os.chdir(cur_dir)
 
 def delete_failed(unfinished_list):
    curdir = os.getcwd()
    for unfinished_job in unfinished_list:
-      inputpath = unfinished_job[0]
-      inputfile = unfinished_job[1]
-      #print "resubmit "+inputpath+inputfile
-      os.chdir(inputpath)
-      #sp.call(['submitSLURM', '-t', 'openmp', '-p', '8', '--exclude=n0036.mhg0', inputfile])
-      sp.call(['rm', inputfile])
+      target_path = unfinished_job[0]
+      jobname = unfinished_job[1]
+      os.chdir(target_path)
+      sp.call(['rm', jobname])
       os.chdir(curdir)
 
 #The script
@@ -133,7 +125,7 @@ if options.all or options.keyword!=None:
          CheckComplete_Multi(outdir, options.multi, options.flag, unfinished_list)
    os.chdir(cur_dir)
 
-elif options.target!=None:
+elif options.target != None:
    cur_dir = os.getcwd()
    if not options.multi:
       CheckComplete_Single(options.target, options.flag, unfinished_list)
@@ -142,6 +134,5 @@ elif options.target!=None:
    os.chdir(cur_dir)
 
 if options.delete and len(unfinished_list) > 0:
+   print("Deleting %d failed output files for resubmission" %len(unfinished_list))
    delete_failed(unfinished_list)
-
-                                                                    
