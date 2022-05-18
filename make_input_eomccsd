@@ -24,14 +24,17 @@ def ParseInput(ArgsIn):
    parser.add_option('--ee',dest='eomee',action='store',type='string',default=None,help='number of EOM-EE states')
    parser.add_option('--ea',dest='eomea',action='store',type='string',default=None,help='number of EOM-EA states')
    parser.add_option('--gs',dest='gs',action='store_true',default=False,help='do ground state CCSD')
+   parser.add_option('--ref_prop',dest='ref_prop',action='store_true',default=False,help='calculating the properties for the reference state')
    parser.add_option('--state_prop',dest='state_prop',action='store_true',default=False,help='calculating excited state properties')
    parser.add_option('--trans_prop',dest='trans_prop',type='int',action='store',default=0,help='value for cc_trans_prop (1: gs-ex; 2: ex-ex; 3: all)')
    parser.add_option('--act_virt',dest='act_virt',action='store',type='int',default=0,help='number of active virts')
    parser.add_option('--tot_virt',dest='tot_virt',action='store',type='int',default=0,help='total number of virts')
-   parser.add_option('--cc_mem',dest='cc_mem',action='store',type='int',default=16000,help='value of CC memory')
+   parser.add_option('--cc_mem',dest='cc_mem',action='store',type='int',default=16000,help='value of CC memory (default: 16000 (16GB))')
    parser.add_option('--cc_sp',dest='cc_sp',action='store_true',default=False,help='doing CCMAN2 with single-precision (recommended by Anna Krylov')
    parser.add_option('--sym',dest='sym',action='store_true',default=False,help='running job with sym_ignore = false')
    parser.add_option('--thresh',dest='thresh',action='store',type='int',default=14,help='set integral thresh (default 14)')
+   parser.add_option('--sol',dest='sol',action='store',type='string',default=None,help='specify the solvent model to use')
+   parser.add_option('--sol_file', dest='sol_file', action='store', type='string', default=None, help='file for the solvent model input section')
 
    options, args = parser.parse_args(ArgsIn)
    if len(args) < 2 and (options.all or options.keyword!=None):
@@ -49,6 +52,9 @@ def ParseInput(ArgsIn):
       print("Active virt: %d, Total virt: %d" %(options.act_virt, options.tot_virt))
       print("Invalid number of active virtuals")
       sys.exit(1)
+   if options.sol_file != None and (not os.path.exists(options.sol_file)):
+      print("Specified sol_file does not exist")
+      sys.exit(0)
 
    return options, args
 
@@ -58,6 +64,8 @@ def string_sp_callback(option, opt, value, parser):
 def XYZ_to_Input(fw, XYZ, curREM, options):
    qmol.WriteMolecule(fw, XYZ, options.charge, options.mult)
    qrems.AppendRem(fw, curREM)
+   if options.sol_file != None:
+      qrems.copy_section_over(fw, options.sol_file)
 
 def set_rems_ccsd(myrems, options):
    if options.force != None:
@@ -76,6 +84,8 @@ def set_rems_ccsd(myrems, options):
       qrems.ModRem('CC_ERASE_DP_INTEGRALS', '1', myrems)
    if options.sym:
       qrems.ModRem('SYM_IGNORE', 'FALSE', myrems)
+   if options.sol:
+      qrems.ModRem('SOLVENT_METHOD', options.sol, myrems)
       
    qrems.ModRem('CC_MEMORY', str(options.cc_mem), myrems)
    qrems.ModRem('MEM_TOTAL', str(options.cc_mem+2000), myrems)
@@ -99,6 +109,8 @@ def set_rems_eomccsd(myrems, options):
       qrems.ModRem('JOBTYPE', 'FORCE', myrems)
       qrems.ModRem('SCF_CONVERGENCE', '9', myrems)
       qrems.ModRem('CC_STATE_TO_OPT', options.force, myrems)
+   if options.ref_prop:
+      qrems.ModRem('CC_REF_PROP', 'TRUE', myrems)
    if options.state_prop:
       qrems.ModRem('CC_EOM_PROP', 'TRUE', myrems)
    if options.trans_prop > 0:
@@ -116,6 +128,8 @@ def set_rems_eomccsd(myrems, options):
       qrems.ModRem('CC_SP_T_CONV', '4', myrems)
       qrems.ModRem('CC_SP_E_CONV', '6', myrems)
       qrems.ModRem('CC_ERASE_DP_INTEGRALS', '1', myrems)
+   if options.sol:
+      qrems.ModRem('SOLVENT_METHOD', options.sol, myrems)
       
    qrems.ModRem('CC_MEMORY', str(options.cc_mem), myrems)
    qrems.ModRem('MEM_TOTAL', str(options.cc_mem+2000), myrems)
