@@ -1,21 +1,26 @@
 #! /usr/bin/env python
 
-import os, sys, re, glob
+import os, sys, re, glob, math
 import xyzgeom, efield
 import numpy as np
 import subprocess as sp
+import pandas as pd
 from optparse import OptionParser
 
 def ParseInput(ArgsIn):
    UseMsg = "python [script] [options] [outdir] [xyzgeom_dir]"
    parser = OptionParser(usage=UseMsg)
    parser.add_option('--bond_atoms', dest='bond_atoms', action='callback', type='string', callback=string_sp_callback, default=None, help='specify the two bond atoms')
-   parser.add_option('--method',dest='method',action='store',type='string',default='frozen_orb',help='The method used to calculate E-field. Options: frozen_orb (default); almo')
+   parser.add_option('--method',dest='method',action='store',type='string',default='frozen_orb',help='The method used to calculate E-field. Options: spade (default); almo')
    parser.add_option('--index_key',dest='index_key',action='store',type='string',default='dist',help='String keyword before the index (default: dist)')
    parser.add_option('--index_type',dest='index_type',action='store',type='string',default='float',help='data type of the index (default: float)')
    options, args = parser.parse_args(ArgsIn)
    if options.bond_atoms == None:
-      print ("The two bond atoms must be specified")
+      print ("The bond atoms must be specified")
+      parser.print_help()
+      sys.exit(0)
+   if len(options.bond_atoms) < 2 or len(options.bond_atoms) > 3:
+      print ("The number of bond atoms must be 2 or 3")
       parser.print_help()
       sys.exit(0)
    if len(sys.argv) < 3:
@@ -34,25 +39,111 @@ if outdir[-1] == "/":
    outdir = outdir[:-1]
 if xyzgeom_dir[-1] == "/":
    xyzgeom_dir = xyzgeom_dir[:-1]
-bond_idx1, bond_idx2 = int(options.bond_atoms[0]), int(options.bond_atoms[1])
 
-outfile_list = glob.glob(outdir+"/*.out")
-data_efield = {}
-for outfile in outfile_list:
-   xyzfile = xyzgeom_dir + "/" + re.search(outdir+"\/(\S+)_"+options.method, outfile).group(1) + ".xyz"
-   if options.index_type == 'int':
-      index = int(re.search(options.index_key+"([^_]+)_", outfile).group(1)) 
-   else:
-      index = float(re.search(options.index_key+"([^_]+)_", outfile).group(1)) 
-   data_efield[index] = {}
-   data_efield[index]["efield_avg"] = efield.calculate_efield_on_bond(outfile, xyzfile, bond_idx1, bond_idx2)
-   data_efield[index]["efield_esp"] = efield.calculate_efield_from_esp(outfile, xyzfile, bond_idx1, bond_idx2)
+if len(options.bond_atoms) == 2:
+   bond_idx1, bond_idx2 = int(options.bond_atoms[0]), int(options.bond_atoms[1])
+   outfile_list = glob.glob(outdir+"/*.out")
+   data_efield = {}
+   
+   #parse all output files
+   for outfile in outfile_list:
+      efld_file = outfile + ".efld"
+      efield.generate_efield_file(efld_file, outfile)
+      esp_file = outfile + ".esp"
+      efield.generate_esp_file(esp_file, outfile)
 
-fw = open(outdir+"/efield_scan.csv", "w")  
-fw.write("index,efield_avg,efield_esp\n")
-for index in sorted(data_efield):
-   if options.index_type == 'int':
-      fw.write("%d,%.3f,%.3f\n" %(index, data_efield[index]["efield_avg"], data_efield[index]["efield_esp"]))
-   else:
-      fw.write("%.2f,%.3f,%.3f\n" %(index, data_efield[index]["efield_avg"], data_efield[index]["efield_esp"]))
-fw.close()
+      xyzfile = xyzgeom_dir + "/" + re.search(outdir+"\/(\S+)_"+options.method, outfile).group(1) + ".xyz"
+      if options.index_type == 'int':
+         index = int(re.search(options.index_key+"([^_]+)_", outfile).group(1)) 
+      else:
+         index = float(re.search(options.index_key+"([^_]+)_", outfile).group(1)) 
+      data_efield[index] = {}
+      data_efield[index]["efield_avg"] = efield.calculate_efield_on_bond(efld_file, xyzfile, bond_idx1, bond_idx2)
+      data_efield[index]["efield_esp"] = efield.calculate_efield_from_esp(esp_file, xyzfile, bond_idx1, bond_idx2)
+
+   #write the per frame data
+   data_file = outdir+"/efield_data.csv"
+   fw = open(data_file, "w")  
+   fw.write("index,efield_avg,efield_esp\n")
+   for index in sorted(data_efield):
+      if options.index_type == 'int':
+         fw.write("%d,%.3f,%.3f\n" %(index, data_efield[index]["efield_avg"], data_efield[index]["efield_esp"]))
+      else:
+         fw.write("%.2f,%.3f,%.3f\n" %(index, data_efield[index]["efield_avg"], data_efield[index]["efield_esp"]))
+   fw.close()
+   #statistics
+   df_efield = pd.read_csv(data_file)
+   fw = open(outdir+"/efield_stat.csv", "w")
+   fw.write("method,mean,stdev,stderr\n")
+   method_list = ['avg', 'esp']
+   for method in method_list:
+      col_key = 'efield_' + method
+      mean   = df_efield[col_key].mean()
+      stdev  = df_efield[col_key].std(ddof = 0)
+      n_frames = df_efield[col_key].count()
+      stderr = stdev / math.sqrt(float(n_frames))
+      if method == 'avg':
+         print ("Statistics for E-field calculated using average of atomic field projections (%d frames):" %n_frames)
+      else:
+         print ("Statistics for E-field calculated using the ESP difference between two bond atoms (%d frames):" %n_frames)
+      print ("Mean: %.3f MV/cm, Stdev: %.3f MV/cm, StdErr: %.3f MV/cm" %(mean, stdev, stderr))
+      fw.write("%s,%.3f,%.3f,%.3f\n" %(method, mean, stdev, stderr))
+   fw.close()
+
+elif len(options.bond_atoms) == 3: #doing 1->2 and 1->3
+   bond_idx1, bond_idx2, bond_idx3 = int(options.bond_atoms[0]), int(options.bond_atoms[1]), int(options.bond_atoms[2])
+   outfile_list = glob.glob(outdir+"/*.out")
+   data_efield = {}
+   
+   #parse all output files
+   for outfile in outfile_list:
+      efld_file = outfile + ".efld"
+      efield.generate_efield_file(efld_file, outfile)
+      esp_file = outfile + ".esp"
+      efield.generate_esp_file(esp_file, outfile)
+      print (outfile)
+      xyzfile = xyzgeom_dir + "/" + re.search(outdir+"\/(\S+)_"+options.method, outfile).group(1) + ".xyz"
+      if options.index_type == 'int':
+         index = int(re.search(options.index_key+"([^_]+)_", outfile).group(1)) 
+      else:
+         index = float(re.search(options.index_key+"([^_]+)_", outfile).group(1)) 
+      data_efield[index] = {}
+      data_efield[index]["efield_avg_12"] = efield.calculate_efield_on_bond(efld_file, xyzfile, bond_idx1, bond_idx2)
+      data_efield[index]["efield_avg_13"] = efield.calculate_efield_on_bond(efld_file, xyzfile, bond_idx1, bond_idx3)
+      data_efield[index]["efield_esp_12"] = efield.calculate_efield_from_esp(esp_file, xyzfile, bond_idx1, bond_idx2)
+      data_efield[index]["efield_esp_13"] = efield.calculate_efield_from_esp(esp_file, xyzfile, bond_idx1, bond_idx3)
+   #write the per frame data
+   data_file = outdir+"/efield_data.csv"
+   fw = open(data_file, "w")  
+   fw.write("index,efield_avg_12,efield_avg_13,efield_esp_12,efield_esp_13\n")
+   for index in sorted(data_efield):
+      if options.index_type == 'int':
+         fw.write("%d,%.3f,%.3f,%.3f,%.3f\n" %(index, data_efield[index]["efield_avg_12"], data_efield[index]["efield_avg_13"], data_efield[index]["efield_esp_12"], data_efield[index]["efield_esp_13"]))
+      else:
+         fw.write("%.2f,%.3f,%.3f,%.3f,%.3f\n" %(index, data_efield[index]["efield_avg_12"], data_efield[index]["efield_avg_13"], data_efield[index]["efield_esp_12"], data_efield[index]["efield_esp_13"]))
+   fw.close()
+   #statistics
+   df_efield = pd.read_csv(data_file)
+   fw = open(outdir+"/efield_stat.csv", "w")
+   fw.write("method,mean_12,stdev_12,stderr_12,mean_13,stdev_13,stderr_13\n")
+   method_list = ['avg', 'esp']
+   bond_list = ['12', '13']
+   for method in method_list:
+      for bond in bond_list:
+         col_key = 'efield_' + method + '_' + bond
+         mean   = df_efield[col_key].mean()
+         stdev  = df_efield[col_key].std(ddof = 0)
+         n_frames = df_efield[col_key].count()
+         stderr = stdev / math.sqrt(float(n_frames))
+         if method == 'avg' and bond == '12': #only print for the first bond
+            print ("Statistics for E-field calculated using average of atomic field projections (%d frames):" %n_frames)
+         elif method == 'esp' and bond == '12':
+            print ("Statistics for E-field calculated using the ESP difference between two bond atoms (%d frames):" %n_frames)
+         if bond == '12':
+            print ("Bond 1->2:")
+            fw.write("%s,%.3f,%.3f,%.3f," %(method, mean, stdev, stderr))
+         elif bond == '13':
+            print ("Bond 1->3:")
+            fw.write("%.3f,%.3f,%.3f\n" %(mean, stdev, stderr))
+         print ("Mean: %.3f MV/cm, Stdev: %.3f MV/cm, StdErr: %.3f MV/cm" %(mean, stdev, stderr))
+   fw.close()

@@ -2,7 +2,7 @@ import os, glob, sys, re, math
 import numpy as np
 import xyzgeom
 
-def parse_efield(efld_file, infile, second_only = False):
+def parse_efield(efld_file, infile, second_only=False):
     fr = open(infile, 'r')
     start_parsing = False
     begin = -1
@@ -47,7 +47,7 @@ def parse_efield(efld_file, infile, second_only = False):
     #dump field to file
     np.savetxt(efld_file, efield, fmt="%.7f")
 
-def generate_efield_file(efld_file, outfile, second_only):
+def generate_efield_file(efld_file, outfile, second_only=False):
     tmpfile = outfile+".tmp"
     command = "sed -n " + "'/ EField /,/DONE ESP/p' " + outfile + " > " + tmpfile
     os.system(command)
@@ -60,7 +60,7 @@ def get_bond_direction(xyzfile, atom_idx1, atom_idx2):
     direction /= np.linalg.norm(direction)
     return direction
 
-def calculate_efield_on_bond(outfile, xyzfile, bond_idx1, bond_idx2, second_only=False):
+def calculate_efield_on_bond_qcout(outfile, xyzfile, bond_idx1, bond_idx2, second_only=False):
    efld_file = outfile + ".efld"
    generate_efield_file(efld_file, outfile, second_only)
    au_to_MVcm = 5.142E+3
@@ -110,7 +110,7 @@ def get_bond_length(xyzfile, atom_idx1, atom_idx2):
     bond_length = xyzgeom.compute_distance(coords, atom_idx1, atom_idx2)
     return bond_length
 
-def calculate_efield_from_esp(outfile, xyzfile, atom_idx1, atom_idx2):
+def calculate_efield_from_esp_qcout(outfile, xyzfile, atom_idx1, atom_idx2):
    esp_file = outfile + ".esp"
    generate_esp_file(esp_file, outfile)
    au_to_MVcm = 5.142E+3
