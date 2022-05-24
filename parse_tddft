@@ -70,7 +70,7 @@ def parse_state_dipole_libwfa(target_dir, options):
    tmpfile = "state_dipole.tmp"
    command = "grep -A 1 \"Dipole moment \[D\]:\" *.out > " + tmpfile
    os.system(command)
-   data_eom = {}
+   data_tddft = {}
    fr = open(tmpfile, 'r')
    for line in fr.readlines():
       l_sp = line.split()
@@ -78,22 +78,37 @@ def parse_state_dipole_libwfa(target_dir, options):
          continue
       elif l_sp[1] == 'Cartesian':
          frame_idx = int(re.search(options.placeholder+"(\d+)_", l_sp[0]).group(1))
-         if frame_idx not in data_eom:
-            data_eom[frame_idx] = {}
+         if frame_idx not in data_tddft:
+            data_tddft[frame_idx] = {}
             state_idx = 0
-         data_eom[frame_idx][state_idx] = {}
+         data_tddft[frame_idx][state_idx] = {}
          mu_x, mu_y, mu_z = float(l_sp[-3][1:-1]), float(l_sp[-2][:-1]), float(l_sp[-1][:-1])
-         data_eom[frame_idx][state_idx]["dipole"] = np.array([mu_x, mu_y, mu_z])
+         data_tddft[frame_idx][state_idx]["dipole"] = np.array([mu_x, mu_y, mu_z])
          state_idx += 1
    fr.close()
    os.system("rm " + tmpfile)
    fw = open("state_dipole.csv", "w")
    fw.write("frame,state,mu_x,mu_y,mu_z\n")
-   for frame_idx in sorted(data_eom):
-      for state_idx in sorted(data_eom[frame_idx]):
+   for frame_idx in sorted(data_tddft):
+      for state_idx in sorted(data_tddft[frame_idx]):
          if options.spec_state > 0 and state_idx > 0 and state_idx != options.spec_state:
             continue
-         fw.write("%d,%d,%.6f,%.6f,%.6f\n" %(frame_idx, state_idx, data_eom[frame_idx][state_idx]["dipole"][0], data_eom[frame_idx][state_idx]["dipole"][1], data_eom[frame_idx][state_idx]["dipole"][2]))
+         fw.write("%d,%d,%.6f,%.6f,%.6f\n" %(frame_idx, state_idx, data_tddft[frame_idx][state_idx]["dipole"][0], data_tddft[frame_idx][state_idx]["dipole"][1], data_tddft[frame_idx][state_idx]["dipole"][2]))
+   fw.close()
+
+   fw = open("state_diff_dipole.csv", "w")
+   fw.write("frame,state,mu_x,mu_y,mu_z\n")
+   for frame_idx in sorted(data_tddft):
+      for state_idx in sorted(data_tddft[frame_idx]):
+         if state_idx == 0:
+            continue
+         elif options.spec_state > 0 and state_idx != options.spec_state:
+            continue
+         else:
+            dmu_x = data_tddft[frame_idx][state_idx]["dipole"][0] - data_tddft[frame_idx][0]["dipole"][0]
+            dmu_y = data_tddft[frame_idx][state_idx]["dipole"][1] - data_tddft[frame_idx][0]["dipole"][1]
+            dmu_z = data_tddft[frame_idx][state_idx]["dipole"][2] - data_tddft[frame_idx][0]["dipole"][2]
+            fw.write("%d,%d,%.6f,%.6f,%.6f\n" %(frame_idx, state_idx, dmu_x, dmu_y, dmu_z))
    fw.close()
    os.chdir(curdir)
 

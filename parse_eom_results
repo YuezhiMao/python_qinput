@@ -126,6 +126,20 @@ def parse_state_dipole_libwfa(target_dir, options):
       for state_idx in sorted(data_eom[frame_idx]):
          fw.write("%d,%d,%.6f,%.6f,%.6f\n" %(frame_idx, state_idx, data_eom[frame_idx][state_idx]["dipole"][0], data_eom[frame_idx][state_idx]["dipole"][1], data_eom[frame_idx][state_idx]["dipole"][2]))
    fw.close()
+
+   if not options.wfa_noref:
+      fw = open("state_diff_dipole.csv", "w")
+      fw.write("frame,state,mu_x,mu_y,mu_z\n")
+      for frame_idx in sorted(data_eom):
+         for state_idx in sorted(data_eom[frame_idx]):
+            if state_idx == 0:
+               continue
+            else:
+               dmu_x = data_eom[frame_idx][state_idx]["dipole"][0] - data_eom[frame_idx][0]["dipole"][0]
+               dmu_y = data_eom[frame_idx][state_idx]["dipole"][1] - data_eom[frame_idx][0]["dipole"][1]
+               dmu_z = data_eom[frame_idx][state_idx]["dipole"][2] - data_eom[frame_idx][0]["dipole"][2]
+               fw.write("%d,%d,%.6f,%.6f,%.6f\n" %(frame_idx, state_idx, dmu_x, dmu_y, dmu_z))
+      fw.close()
    os.chdir(curdir)
 
 
