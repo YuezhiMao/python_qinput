@@ -23,9 +23,11 @@ def ParseInput(ArgsIn):
    parser.add_option('--env_method',dest='env_method',action='store',type='string',default='PBE',help='lower-level method for the environment (default: PBE)')
    parser.add_option('--concentric',dest='concentric',action='store',type='int',default=1,help='Specific n_zeta for concentric localization (default: 1; set 0 to turn off CL)')
    parser.add_option('--eestates',dest='eestates',action='store',type='string',default=None,help='number of EOM-EE states')
+   parser.add_option('--state_prop',dest='state_prop',action='store_true',default=False,help='calculating excited state properties')
    parser.add_option('--trans_prop',dest='trans_prop',action='store_true',default=False,help='doing CC transition properties')
    parser.add_option('--cc_mem',dest='cc_mem',action='store',type='int',default=16000,help='value of CC memory')
    parser.add_option('--cc_sp',dest='cc_sp',action='store_true',default=False,help='doing CCMAN2 with single-precision (recommended by Anna Krylov')
+   parser.add_option('--libwfa',dest='libwfa',action='store_true',default=False,help='do wavefunction analysis through libwfa')
 
    options, args = parser.parse_args(ArgsIn)
    if len(args) < 2 and (options.all or options.keyword!=None):
@@ -44,10 +46,14 @@ def ParseInput(ArgsIn):
       parser.print_help()
       sys.exit(1)
    if options.method.upper() == 'EOM-CCSD':
-      if options.eestates == None:
+      if options.eestates == None: #currently only support EOM-EE
          print("Specify the number of EOM-EE states")
          parser.print_help()
          sys.exit(1)
+   if options.libwfa:
+      options.state_prop = True
+      if options.eestates > 0:
+         options.trans_prop = True
    return options, args
 
 def string_sp_callback(option, opt, value, parser):
@@ -77,8 +83,14 @@ def set_rems_embedding(myrems, options):
    if options.eestates != None:
       qrems.ModRem('EE_STATES', options.eestates, myrems)
       qrems.ModRem('EOM_DAVIDSON_CONVERGENCE', '6', myrems)
+   if options.state_prop:
+      qrems.ModRem('CC_REF_PROP', 'TRUE', myrems)
+      if options.eestates != None:
+         qrems.ModRem('CC_EOM_PROP', 'TRUE', myrems)
    if options.trans_prop:
       qrems.ModRem('CC_TRANS_PROP', 'TRUE', myrems)
+   if options.libwfa:
+      qrems.ModRem('STATE_ANALYSIS', 'TRUE', myrems)
    if options.cc_sp:
       qrems.ModRem('CC_SINGLE_PREC', '1', myrems)
       qrems.ModRem('EOM_SINGLE_PREC', '1', myrems)

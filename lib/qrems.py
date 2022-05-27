@@ -198,9 +198,9 @@ def add_basis_set(curREM, basis):
 def set_rems_common(curREM, method, basis, loose=False):
    add_basis_set(curREM, basis)
    if loose:
-      #ModRem('THRESH', '12', curREM)
-      ModRem('MEM_TOTAL', '16000', curREM)
-      ModRem('MEM_STATIC','8000', curREM)
+      ModRem('THRESH', '12', curREM)
+      ModRem('MEM_TOTAL', '10000', curREM)
+      ModRem('MEM_STATIC','4000', curREM)
    else:
       ModRem('THRESH', '14', curREM)
       ModRem('MEM_TOTAL', '8000', curREM)

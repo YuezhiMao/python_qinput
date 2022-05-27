@@ -26,6 +26,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--triplets',dest='triplets',action='store_true',default=False,help='calculate triplet roots')
    parser.add_option('--rpa',dest='rpa',action='store_true',default=False,help='use full TDDFT (instead of TDA)')
    parser.add_option('--spinflip',dest='spinflip',action='store_true',default=False,help='do spin-flip')
+   parser.add_option('--libwfa',dest='libwfa',action='store_true',default=False,help='do wavefunction analysis through libwfa')
 
    options, args = parser.parse_args(ArgsIn)
    if len(args) < 2 and (options.all or options.keyword!=None):
@@ -79,6 +80,8 @@ def set_rems_embedding_tddft(myrems, options):
       options.mult += 2
    if options.rpa:
       qrems.ModRem('RPA', '1', myrems)
+   if options.libwfa:
+      qrems.ModRem('STATE_ANALYSIS', 'TRUE', myrems)
 
 
 def XYZ_to_Input(fw, parsed_XYZ, FRGM, myrems):
