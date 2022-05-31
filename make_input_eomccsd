@@ -35,6 +35,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--thresh',dest='thresh',action='store',type='int',default=14,help='set integral thresh (default 14)')
    parser.add_option('--sol',dest='sol',action='store',type='string',default=None,help='specify the solvent model to use')
    parser.add_option('--sol_file', dest='sol_file', action='store', type='string', default=None, help='file for the solvent model input section')
+   parser.add_option('--libwfa',dest='libwfa',action='store_true',default=False,help='do wavefunction analysis through libwfa')
 
    options, args = parser.parse_args(ArgsIn)
    if len(args) < 2 and (options.all or options.keyword!=None):
@@ -55,6 +56,10 @@ def ParseInput(ArgsIn):
    if options.sol_file != None and (not os.path.exists(options.sol_file)):
       print("Specified sol_file does not exist")
       sys.exit(0)
+   if options.libwfa: #turn on all the property stuff when doing state analysis
+      options.state_prop = True
+      if not options.gs:
+         options.trans_prop = True
 
    return options, args
 
@@ -86,6 +91,8 @@ def set_rems_ccsd(myrems, options):
       qrems.ModRem('SYM_IGNORE', 'FALSE', myrems)
    if options.sol:
       qrems.ModRem('SOLVENT_METHOD', options.sol, myrems)
+   if options.libwfa:
+      qrems.ModRem('STATE_ANALYSIS', 'TRUE', myrems)
       
    qrems.ModRem('CC_MEMORY', str(options.cc_mem), myrems)
    qrems.ModRem('MEM_TOTAL', str(options.cc_mem+2000), myrems)
@@ -109,9 +116,8 @@ def set_rems_eomccsd(myrems, options):
       qrems.ModRem('JOBTYPE', 'FORCE', myrems)
       qrems.ModRem('SCF_CONVERGENCE', '9', myrems)
       qrems.ModRem('CC_STATE_TO_OPT', options.force, myrems)
-   if options.ref_prop:
-      qrems.ModRem('CC_REF_PROP', 'TRUE', myrems)
    if options.state_prop:
+      qrems.ModRem('CC_REF_PROP', 'TRUE', myrems)
       qrems.ModRem('CC_EOM_PROP', 'TRUE', myrems)
    if options.trans_prop > 0:
       qrems.ModRem('CC_TRANS_PROP', str(options.trans_prop), myrems)
@@ -130,6 +136,8 @@ def set_rems_eomccsd(myrems, options):
       qrems.ModRem('CC_ERASE_DP_INTEGRALS', '1', myrems)
    if options.sol:
       qrems.ModRem('SOLVENT_METHOD', options.sol, myrems)
+   if options.libwfa:
+      qrems.ModRem('STATE_ANALYSIS', 'TRUE', myrems)
       
    qrems.ModRem('CC_MEMORY', str(options.cc_mem), myrems)
    qrems.ModRem('MEM_TOTAL', str(options.cc_mem+2000), myrems)
