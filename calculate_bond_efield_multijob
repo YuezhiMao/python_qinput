@@ -101,7 +101,6 @@ elif len(options.bond_atoms) == 3: #doing 1->2 and 1->3
       efield.generate_efield_file(efld_file, outfile)
       esp_file = outfile + ".esp"
       efield.generate_esp_file(esp_file, outfile)
-      print (outfile)
       xyzfile = xyzgeom_dir + "/" + re.search(outdir+"\/(\S+)_"+options.method, outfile).group(1) + ".xyz"
       if options.index_type == 'int':
          index = int(re.search(options.index_key+"([^_]+)_", outfile).group(1)) 
