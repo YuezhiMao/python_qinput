@@ -1,0 +1,42 @@
+#!/usr/bin/env python
+
+import os, re, sys, glob
+import subprocess as sp
+from optparse import OptionParser
+
+def ParseInput(ArgsIn):
+   UseMsg = '''
+   split_xyz [options] [full_traj_xyz] [target_dir]
+   '''
+   parser = OptionParser(usage=UseMsg)
+   parser.add_option('--nameroot',dest='nameroot',action='store',type='string',default='frame', help='name root for the obtained xyz files (default: frame)')
+   options, args = parser.parse_args(ArgsIn)
+   if len(args) < 3:
+      parser.print_help()
+      sys.exit(0)
+   return options, args
+
+options, args = ParseInput(sys.argv)
+full_traj_file = args[1]
+target_dir = args[2]
+if not os.path.exists(target_dir):
+   os.system("mkdir " + target_dir)
+
+fr = open(full_traj_file, 'r')
+count = 0
+fw = None
+for line in fr.readlines():
+   l_sp = line.split()
+   if len(l_sp) == 1:
+      count += 1
+      if fw != None: #finish writing the previous
+         fw.close()
+      xyzfile = target_dir + '/' + options.nameroot + "{:03n}.xyz".format(count)
+      fw = open(xyzfile, 'w')
+      fw.write(line)
+      fw.write("\n")
+   elif len(l_sp) == 4:
+      fw.write(line)
+
+fw.close()
+fr.close()
