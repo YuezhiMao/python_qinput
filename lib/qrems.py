@@ -195,6 +195,48 @@ def add_basis_set(curREM, basis):
    else: #copy the name of standard basis
       ModRem('BASIS', basis, curREM)
 
+def add_aux_basis(curREM, basis):
+   if basis.upper() == 'CC-PVDZ':
+      ModRem('AUX_BASIS', 'RIMP2-CC-PVDZ', curREM)
+   elif basis.upper() == 'AUG-CC-PVDZ':
+      ModRem('AUX_BASIS', 'RIMP2-AUG-CC-PVDZ', curREM)
+   elif basis.upper() == 'CC-PVTZ':
+      ModRem('AUX_BASIS', 'RIMP2-CC-PVTZ', curREM)
+   elif basis.upper() == 'AUG-CC-PVTZ':
+      ModRem('AUX_BASIS', 'RIMP2-AUG-CC-PVTZ', curREM)
+   elif basis.upper() == 'CC-PVQZ':
+      ModRem('AUX_BASIS', 'RIMP2-CC-PVQZ', curREM)
+   elif basis.upper() == 'AUG-CC-PVQZ':
+      ModRem('AUX_BASIS', 'RIMP2-AUG-CC-PVQZ', curREM)
+   elif basis.upper() == 'SVP' or basis.upper() == 'DEF2-SVP':
+      ModRem('AUX_BASIS', 'RIMP2-DEF2-SVP', curREM)
+   elif basis.upper() == 'SVPD' or basis.upper() == 'DEF2-SVPD':
+      ModRem('AUX_BASIS', 'RIMP2-DEF2-SVPD', curREM)
+   elif basis.upper() == 'TZVP' or basis.upper() == 'DEF2-TZVP':
+      ModRem('AUX_BASIS', 'RIMP2-DEF2-TZVP', curREM)
+   elif basis.upper() == 'TZVPP' or basis.upper() == 'DEF2-TZVPP':
+      ModRem('AUX_BASIS', 'RIMP2-DEF2-TZVPP', curREM)
+   elif basis.upper() == 'TZVPD' or basis.upper() == 'DEF2-TZVPD':
+      ModRem('AUX_BASIS', 'RIMP2-DEF2-TZVPD', curREM)
+   elif basis.upper() == 'TZVPPD' or basis.upper() == 'DEF2-TZVPPD':
+      ModRem('AUX_BASIS', 'RIMP2-DEF2-TZVPPD', curREM)
+   elif basis.upper() == 'QZVP' or basis.upper() == 'DEF2-QZVP':
+      ModRem('AUX_BASIS', 'RIMP2-DEF2-QZVP', curREM)
+   elif basis.upper() == 'QZVPP' or basis.upper() == 'DEF2-QZVPP':
+      ModRem('AUX_BASIS', 'RIMP2-DEF2-QZVPP', curREM)
+   elif basis.upper() == 'QZVPD' or basis.upper() == 'DEF2-QZVPD':
+      ModRem('AUX_BASIS', 'RIMP2-DEF2-QZVPPD', curREM) #note: there is no rimp2-def2-qzvpd
+   elif basis.upper() == 'QZVPPD' or basis.upper() == 'DEF2-QZVPPD':
+      ModRem('AUX_BASIS', 'RIMP2-DEF2-QZVPPD', curREM)
+   else:
+      print("No corresponding auxiliary basis for "+basis+" yet")
+
+def need_aux_basis(method):
+   if method.upper() == "RIMP2": #note: there could be other instances
+      return True
+   else:
+      return False
+
 def set_rems_common(curREM, method, basis, loose=False):
    add_basis_set(curREM, basis)
    if loose:
@@ -207,6 +249,8 @@ def set_rems_common(curREM, method, basis, loose=False):
       ModRem('MEM_STATIC','2000', curREM)
    ModRem('SCF_GUESS', 'SAD', curREM)
    ModRem('METHOD', method, curREM)	
+   if need_aux_basis(method):
+      add_aux_basis(curREM, basis)
    if (method != 'HF'):
       if loose:
          ModRem('XC_GRID', '000075000302', curREM)
@@ -232,22 +276,6 @@ def add_d3_tail(method, curREM):
       ModRem('DFT_D', 'D3_CSO', curREM)
    else:
       ModRem('DFT_D', 'D3_ZERO', curREM)
-
-def add_aux_basis(basis, curREM):
-   if basis.upper() == 'CC-PVTZ':
-      ModRem('AUX_BASIS', 'RIMP2-CC-PVTZ', curREM)
-   elif basis.upper() == 'AUG-CC-PVTZ':
-      ModRem('AUX_BASIS', 'RIMP2-AUG-CC-PVTZ', curREM)
-   elif basis.upper() == 'CC-PVDZ':
-      ModRem('AUX_BASIS', 'RIMP2-CC-PVDZ', curREM)
-   elif basis.upper() == 'AUG-CC-PVDZ':
-      ModRem('AUX_BASIS', 'RIMP2-AUG-CC-PVDZ', curREM)
-   elif basis.upper() == 'CC-PVQZ':
-      ModRem('AUX_BASIS', 'RIMP2-CC-PVQZ', curREM)
-   elif basis.upper() == 'AUG-CC-PVQZ':
-      ModRem('AUX_BASIS', 'RIMP2-AUG-CC-PVQZ', curREM)
-   else:
-      print("No corresponding auxiliary basis for "+basis+" yet")
 
 def apply_single_geom_constraint(fw, geom_param, constraint_template):
    fr = open(constraint_template, 'r')

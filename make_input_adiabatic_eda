@@ -80,8 +80,6 @@ def set_rems_adiabatic_eda(curREM, method, basis, options):
       qrems.ModRem('SYM_IGNORE', 'TRUE', curREM)
    else:
       qrems.ModRem('SYM_IGNORE', 'FALSE', curREM)
-   if method.upper() == 'RIMP2':
-      qrems.add_aux_basis(basis, curREM)
    if options.sol != None:
       qrems.ModRem('SOLVENT_METHOD', options.sol, curREM)
 
