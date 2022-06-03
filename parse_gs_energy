@@ -1,0 +1,84 @@
+#! /usr/bin/env python
+
+import os, sys, glob, re
+import numpy as np
+from optparse import OptionParser
+
+def ParseInput(ArgsIn):
+   UseMsg = "parse_eom_results [options] [target_dir]"
+   parser = OptionParser(usage=UseMsg)
+   parser.add_option('--placeholder', dest='placeholder', action='store', type='string', default='snapshot', help='The keyword in the output names right in front of the indexing parameter (default: snapshot)')
+   parser.add_option('--energy_type', dest='energy_type', action='store', type='string', default='dft', help='The type of energy to parse: e.g. dft, rimp2, ccsd, etc.')
+
+   options, args = parser.parse_args(ArgsIn)
+   if len(args) < 2:
+      parser.print_help()
+      sys.exit(0)
+   return options, args
+
+def parse_scf_energies(target_dir, key):
+   curdir = os.getcwd()
+   os.chdir(target_dir)
+   tmpfile = 'scf.tmp'
+   command = "grep \"Total energy in\" *.out > " + tmpfile
+   os.system(command)
+   data_scf = {}
+   fr = open(tmpfile, 'r')
+   for line in fr.readlines():
+      l_sp = line.split()
+      if not (len(l_sp) > 1): #just in case
+         continue
+      else:
+         frame_idx = int(re.search(key+"([^_]+)_", l_sp[0]).group(1))
+         if frame_idx not in data_scf:
+            data_scf[frame_idx] = {}
+         data_scf[frame_idx]["energy"] = float(l_sp[-1])
+   fr.close()
+   os.system("rm " + tmpfile)
+
+   fw = open("scf_energy.csv", 'w')
+   fw.write("frame,energy\n")
+   for frame_idx in sorted(data_scf):
+      fw.write("%d,%.10f\n" %(frame_idx, data_scf[frame_idx]["energy"]))
+   fw.close()
+   os.chdir(curdir)
+
+def parse_rimp2_energies(target_dir, key):
+   curdir = os.getcwd()
+   os.chdir(target_dir)
+   tmpfile = 'rimp2.tmp'
+   command = "grep -A 1 \"Total  RIMP2\" *.out > " + tmpfile
+   os.system(command)
+   data_rimp2 = {}
+   fr = open(tmpfile, 'r')
+   for line in fr.readlines():
+      l_sp = line.split()
+      if not (len(l_sp) > 1): #just in case
+         continue
+      else:
+         frame_idx = int(re.search(key+"([^_]+)_", l_sp[0]).group(1))
+         if frame_idx not in data_rimp2:
+            data_rimp2[frame_idx] = {}
+         if l_sp[3] == 'correlation':
+            data_rimp2[frame_idx]["E_corr"] = float(l_sp[-2])
+         elif l_sp[2] == 'total':
+            data_rimp2[frame_idx]["E_tot"] = float(l_sp[-2])
+   fr.close()
+   os.system("rm " + tmpfile)
+   
+   fw = open("rimp2_energy.csv", 'w') 
+   fw.write("frame,E_tot,E_corr\n")
+   for frame_idx in sorted(data_rimp2):
+      fw.write("%d,%.10f,%.10f\n" %(frame_idx, data_rimp2[frame_idx]["E_tot"], data_rimp2[frame_idx]["E_corr"]))
+   fw.close()
+   os.chdir(curdir)
+
+options, args = ParseInput(sys.argv)
+target_dir = args[1]
+if options.energy_type.lower() == 'dft':
+   parse_scf_energies(target_dir, options.placeholder)
+elif options.energy_type.lower() == 'rimp2':
+   parse_rimp2_energies(target_dir, options.placeholder)
+else:
+   print ("Energy type %s not supported yet" %options.energy_type)
+   sys.exit(1)
