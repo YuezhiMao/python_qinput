@@ -9,6 +9,7 @@ def ParseInput(ArgsIn):
    parser = OptionParser(usage=UseMsg)
    parser.add_option('--do_mulliken', dest='do_mulliken', action='store_true', default=False, help='parse Mulliken population for each state')
    parser.add_option('--do_esp', dest='do_esp', action='store_true', default=False, help='parse ESP charges for each state')
+   parser.add_option('--do_hirsh', dest='do_hirsh', action='store_true', default=False, help='parse the Hirshfeld charges (GS only)')
 
    options, args = parser.parse_args(ArgsIn)
    if len(args) < 2:
@@ -125,6 +126,29 @@ def parse_esp_charges(outfile):
       fw.write("\n")
    fw.close()
 
+def parse_hirshfeld_charges(outfile):
+   tmpfile = "hirsh.tmp"
+   command = "sed -n \"/Hirshfeld Atomic Charges/,/Sum of atomic/p\" " + outfile + " > " + tmpfile
+   os.system(command)
+   atom_list = []
+   charge_list = [] #only have GS, pretty simple
+   fr = open(tmpfile, 'r')
+   for line in fr.readlines():
+      l_sp = line.split()
+      if len(l_sp) == 3 and re.match("\d+", l_sp[0]) != None:
+         atom_list.append(l_sp[1])
+         charge_list.append(float(l_sp[2]))
+   fr.close()
+   os.system("rm " + tmpfile)
+
+   popfile = outfile[:-4] + ".hirshfeld"
+   fw = open(popfile, 'w')
+   fw.write("atom,charge\n")
+   natoms = len(atom_list)
+   for iatm in range(natoms):
+      fw.write("%s,%.6f\n" %(atom_list[iatm], charge_list[iatm]))
+   fw.close()
+
 options, args = ParseInput(sys.argv)
 target_dir = args[1]
 cur_dir = os.getcwd()
@@ -135,7 +159,8 @@ for outfile in outfile_list:
       parse_mulliken_pop(outfile)
    if options.do_esp:
       parse_esp_charges(outfile)
-   
+   if options.do_hirsh:
+      parse_hirshfeld_charges(outfile)
 
 os.chdir(cur_dir)
 

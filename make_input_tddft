@@ -141,7 +141,8 @@ def set_rems_tddft(myrems, options):
       acceptor_range = str(int(options.diab[0])+1)+'-'+options.diab[1]
       qrems.ModRem('STS_DONOR', donor_range, myrems)
       qrems.ModRem('STS_ACCEPTOR', acceptor_range, myrems)
-   if options.pop_anal:
+   if options.pop_anal: 
+      #note: Mulliken and ESP are the only two pop anal schemes available for TDDFT states
       qrems.ModRem('CIS_RELAXED_DENSITY', 'TRUE', myrems) #use relaxed density exclusively for now
       qrems.ModRem('POP_MULLIKEN', '-1', myrems)
       qrems.ModRem('ESP_CHARGES', '1', myrems)

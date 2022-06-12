@@ -247,7 +247,8 @@ def set_rems_common(curREM, method, basis, loose=False):
       ModRem('THRESH', '14', curREM)
       ModRem('MEM_TOTAL', '8000', curREM)
       ModRem('MEM_STATIC','2000', curREM)
-   ModRem('SCF_GUESS', 'SAD', curREM)
+   #Maybe it is wiser to just use Q-chem's default
+   #ModRem('SCF_GUESS', 'SAD', curREM)
    ModRem('METHOD', method, curREM)	
    if need_aux_basis(method):
       add_aux_basis(curREM, basis)
@@ -315,6 +316,22 @@ def AppendSolvationSecs(fw, pcm_epsilon=0.0, smd_solvent=None):
    else:
       print("why here!?")
       sys.exit(0)
+
+def set_popanal_rems(curREM, pop_scheme_list):
+   for pop_scheme in pop_scheme_list: 
+      if pop_scheme.lower() == 'esp':
+         qrems.ModRem('ESP_CHARGES', '1', curREM)
+      elif pop_scheme.lower() == 'chelpg':
+         qrems.ModRem('CHELPG', 'TRUE', curREM)
+      elif pop_scheme.lower() == 'hirshfeld':
+         qrems.ModRem('HIRSHFELD', 'TRUE', curREM)
+      elif pop_scheme.lower() == 'iterhirsh':
+         qrems.ModRem('HIRSHITER', 'TRUE', curREM)
+      elif pop_scheme.lower() == 'cm5':
+         qrems.ModRem('CM5', 'TRUE', curREM)
+      else:
+         print("Population scheme %s: unrecognized or nothing needs to be done; skip it" %pop_scheme)
+         continue
 
 def apply_dipolar_field(fw, field_strength, direction='Z'):
    if direction.upper() != 'X' and direction.upper() != 'Y' and direction.upper() != 'Z':

@@ -36,6 +36,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--field_dir',dest='field_dir',action='store',type='string',default='Z',help='The direction of the applied field (default: Z)')
    parser.add_option('--isotope',dest='isotope',action='store',type='string',default=None,help='Doing isotope substitution for vib analysis; specify the file for isotope section')
    parser.add_option('--cdft',dest='cdft',action='store',type='string',default=None,help='Doing CDFT; specify the $cdft section')
+   parser.add_option('--pop_anal',dest='pop_anal',action='callback',callback=string_sp_callback,type='string',default=None,help='specify population analysis schemes to run')
 
    options, args = parser.parse_args(ArgsIn)
    if len(args) < 2 and (options.all or options.keyword!=None):
@@ -100,6 +101,37 @@ def XYZ_to_Input_optfreq(fw, XYZ, curREM, options):
    if options.cdft:
       qrems.copy_section_over(fw, options.cdft)
 
+def set_gs_rems(curREM, options):
+   if options.opt or options.opt_freq: #the latter also starts with OPT
+      qrems.ModRem('JOBTYPE', 'OPT', curREM)
+      qrems.ModRem('GEOM_OPT_MAX_CYCLES', '200', curREM)
+   elif options.force:
+      qrems.ModRem('JOBTYPE', 'FORCE', curREM)
+   elif options.freq:
+      qrems.ModRem('JOBTYPE', 'FREQ', curREM)
+      if options.isotope != None:
+         qrems.ModRem('ISOTOPES', 'TRUE', curREM)
+      if (options.dipole_field != None and options.dipole_field != 0) or options.cdft != None:
+         qrems.ModRem('IDERIV', '1', curREM)
+   if options.mem_total > 8000:
+      qrems.ModRem('MEM_TOTAL', str(options.mem_total), curREM)
+   if options.tight:
+      set_tight_opt_criterion(curREM)
+   if options.sym:
+      qrems.ModRem('SYM_IGNORE', 'FALSE', curREM)
+   if options.sol != None:
+      qrems.ModRem('SOLVENT_METHOD', options.sol, curREM)
+   if options.stab:
+      qrems.ModRem('SCF_ALGORITHM', 'GDM', curREM)
+      qrems.ModRem('INTERNAL_STABILITY', 'TRUE', curREM)
+   if options.efield:
+      qrems.ModRem('ESP_GRID', '0', curREM)
+      qrems.ModRem('ESP_EFIELD', '1', curREM)
+   if options.cdft != None:
+      set_cdft_rems(curREM)
+   if options.pop_anal != None:
+      qrems.set_popanal_rems(curREM, options.pop_anal)
+
 def set_tight_opt_criterion(curREM):
    qrems.ModRem('GEOM_OPT_TOL_GRADIENT','100', curREM)
    qrems.ModRem('GEOM_OPT_TOL_DISPLACEMENT', '100', curREM)
@@ -109,6 +141,7 @@ def set_cdft_rems(curREM):
    qrems.ModRem('CDFT', 'TRUE', curREM)
    qrems.ModRem('CDFT_THRESH', '6', curREM)
    qrems.ModRem('BECKE_SHIFT', 'UNSHIFTED', curREM)
+
 
 options, args = ParseInput(sys.argv)
 xyz_path =''
@@ -138,37 +171,12 @@ if not os.path.exists(input_path):
 
 rem_file = os.path.expandvars('$QREMPATH')+'/rem_stdscf'
 myrems = qrems.ParseRems(rem_file)
-if options.opt or options.opt_freq: #the latter also starts with OPT
-   qrems.ModRem('JOBTYPE', 'OPT', myrems)
-   qrems.ModRem('GEOM_OPT_MAX_CYCLES', '200', myrems)
-elif options.force:
-   qrems.ModRem('JOBTYPE', 'FORCE', myrems)
-elif options.freq:
-   qrems.ModRem('JOBTYPE', 'FREQ', myrems)
-   if options.isotope != None:
-      qrems.ModRem('ISOTOPES', 'TRUE', myrems)
-   if (options.dipole_field != None and options.dipole_field != 0) or options.cdft != None:
-      qrems.ModRem('IDERIV', '1', myrems)
-if options.tight:
-   set_tight_opt_criterion(myrems)
-if options.sym:
-   qrems.ModRem('SYM_IGNORE', 'FALSE', myrems)
-if options.sol != None:
-   qrems.ModRem('SOLVENT_METHOD', options.sol, myrems)
-if options.stab:
-   qrems.ModRem('SCF_ALGORITHM', 'GDM', myrems)
-   qrems.ModRem('INTERNAL_STABILITY', 'TRUE', myrems)
-if options.efield:
-   qrems.ModRem('ESP_GRID', '0', myrems)
-   qrems.ModRem('ESP_EFIELD', '1', myrems)
-if options.cdft != None:
-   set_cdft_rems(myrems)
+
 
 for method in options.method:
    for basis in options.basis:
       qrems.set_rems_common(myrems, method, basis, options.coarse)
-      if options.mem_total > 8000:
-         qrems.ModRem('MEM_TOTAL', str(options.mem_total), myrems)
+      set_gs_rems(myrems, options)
       for xyz_file in xyzfile_list:
          parsed_XYZ = qmol.XYZ(xyz_file)
          inputfile = input_path + parsed_XYZ.Name  #common piece
