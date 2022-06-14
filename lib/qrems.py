@@ -320,15 +320,15 @@ def AppendSolvationSecs(fw, pcm_epsilon=0.0, smd_solvent=None):
 def set_popanal_rems(curREM, pop_scheme_list):
    for pop_scheme in pop_scheme_list: 
       if pop_scheme.lower() == 'esp':
-         qrems.ModRem('ESP_CHARGES', '1', curREM)
+         ModRem('ESP_CHARGES', '1', curREM)
       elif pop_scheme.lower() == 'chelpg':
-         qrems.ModRem('CHELPG', 'TRUE', curREM)
+         ModRem('CHELPG', 'TRUE', curREM)
       elif pop_scheme.lower() == 'hirshfeld':
-         qrems.ModRem('HIRSHFELD', 'TRUE', curREM)
+         ModRem('HIRSHFELD', 'TRUE', curREM)
       elif pop_scheme.lower() == 'iterhirsh':
-         qrems.ModRem('HIRSHITER', 'TRUE', curREM)
+         ModRem('HIRSHITER', 'TRUE', curREM)
       elif pop_scheme.lower() == 'cm5':
-         qrems.ModRem('CM5', 'TRUE', curREM)
+         ModRem('CM5', 'TRUE', curREM)
       else:
          print("Population scheme %s: unrecognized or nothing needs to be done; skip it" %pop_scheme)
          continue
