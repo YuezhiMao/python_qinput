@@ -237,26 +237,31 @@ def need_aux_basis(method):
    else:
       return False
 
-def set_rems_common(curREM, method, basis, loose=False):
+def set_rems_common(curREM, method, basis, coarse_level):
    add_basis_set(curREM, basis)
-   if loose:
-      ModRem('THRESH', '12', curREM)
-      ModRem('MEM_TOTAL', '10000', curREM)
-      ModRem('MEM_STATIC','4000', curREM)
-   else:
+   #coarse_level: 0 (thresh = 14, 99590); 1 (thresh = 14, 75302); 2 (thresh = 12, SG-1)
+   if coarse_level == 0 or coarse_level == 1:
       ModRem('THRESH', '14', curREM)
       ModRem('MEM_TOTAL', '8000', curREM)
       ModRem('MEM_STATIC','2000', curREM)
+   elif coarse_level == 2:
+      ModRem('THRESH', '12', curREM)
+      ModRem('MEM_TOTAL', '12000', curREM)
+      ModRem('MEM_STATIC','4000', curREM)
+   else:
+      print ("coarse_level = %d is not implemented" %coarse_level)
    #Maybe it is wiser to just use Q-chem's default
    #ModRem('SCF_GUESS', 'SAD', curREM)
    ModRem('METHOD', method, curREM)	
    if need_aux_basis(method):
       add_aux_basis(curREM, basis)
    if (method != 'HF'):
-      if loose:
-         ModRem('XC_GRID', '000075000302', curREM)
-      else:
+      if coarse_level == 0:
          ModRem('XC_GRID', '000099000590', curREM)
+      elif coarse_level == 1:
+         ModRem('XC_GRID', '000075000302', curREM)
+      elif coarse_level == 2:
+         ModRem('XC_GRID', '1', curREM)
       ModRem ('NL_GRID', '1', curREM)
    #deal with -D3 in the method
    if "-D3" in method.upper():

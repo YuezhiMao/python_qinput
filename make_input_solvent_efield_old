@@ -20,7 +20,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--almo',dest='almo',action='store_true',default=False,help='Use ALMO method to compute E-field')
    parser.add_option('--charge',dest='charge',action='store',type='int',default=0,help='total charge of the system')
    parser.add_option('--mult',dest='mult',action='store',type='int',default=1,help='total multiplicity of the system') 
-   parser.add_option('--coarse',dest='coarse',action='store_true',default=False,help='use less tight integral thresh and less fine grid for SCF calculations')
+   parser.add_option('--coarse',dest='coarse',action='store',type='int',default=0,help='use less tight integral thresh and less fine grid for SCF calculations')
    parser.add_option('--efield',dest='efield',action='store_true',default=False,help='calculate electric field')
    parser.add_option('--both_field',dest='both_field',action='store_true',default=False,help='calculate electric field in both jobs')
    parser.add_option('--solute',dest='solute',action='store',type='int',default=22,help='number of atoms on solute')
