@@ -143,7 +143,7 @@ def parse_hirshfeld_charges(outfile):
 
    popfile = outfile[:-4] + ".hirshfeld"
    fw = open(popfile, 'w')
-   fw.write("atom,charge\n")
+   fw.write("atom,state_0\n")
    natoms = len(atom_list)
    for iatm in range(natoms):
       fw.write("%s,%.6f\n" %(atom_list[iatm], charge_list[iatm]))
