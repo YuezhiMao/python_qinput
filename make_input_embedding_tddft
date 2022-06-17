@@ -121,7 +121,7 @@ if options.rpa:
 elif options.spinflip:
    ex_method = 'sftda'
 myrems = qrems.ParseRems(rem_file)
-qrems.set_rems_common(myrems, options.method, options.basis, loose=True) 
+qrems.set_rems_common(myrems, options.method, options.basis, coarse_level=1) #thresh = 14, xc_grid = 75, 302 
 set_rems_embedding_tddft(myrems, options)
 for xyz_file in xyzfile_list:
    parsed_XYZ = qmol.XYZ(xyz_file)

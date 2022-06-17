@@ -237,7 +237,7 @@ def need_aux_basis(method):
    else:
       return False
 
-def set_rems_common(curREM, method, basis, coarse_level):
+def set_rems_common(curREM, method, basis, coarse_level=0):
    add_basis_set(curREM, basis)
    #coarse_level: 0 (thresh = 14, 99590); 1 (thresh = 14, 75302); 2 (thresh = 12, SG-1)
    if coarse_level == 0 or coarse_level == 1:

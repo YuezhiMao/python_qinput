@@ -36,6 +36,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--sol',dest='sol',action='store',type='string',default=None,help='specify the solvent model to use')
    parser.add_option('--sol_file', dest='sol_file', action='store', type='string', default=None, help='file for the solvent model input section')
    parser.add_option('--libwfa',dest='libwfa',action='store_true',default=False,help='do wavefunction analysis through libwfa')
+   parser.add_option('--relaxden',dest='relaxden',action='store_true',default=False,help='calculating relaxed densities for ccsd/eom-ccsd')
 
    options, args = parser.parse_args(ArgsIn)
    if len(args) < 2 and (options.all or options.keyword!=None):
@@ -121,6 +122,8 @@ def set_rems_eomccsd(myrems, options):
       qrems.ModRem('CC_EOM_PROP', 'TRUE', myrems)
    if options.trans_prop > 0:
       qrems.ModRem('CC_TRANS_PROP', str(options.trans_prop), myrems)
+   if options.relaxden:
+      qrems.ModRem('CC_FULLRESPONSE', 'TRUE', myrems)
 
    if options.act_virt > 0:
       n_frozen = options.tot_virt - options.act_virt

@@ -36,6 +36,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--field_dir',dest='field_dir',action='store',type='string',default='Z',help='The direction of the applied field (default: Z)')
    parser.add_option('--isotope',dest='isotope',action='store',type='string',default=None,help='Doing isotope substitution for vib analysis; specify the file for isotope section')
    parser.add_option('--pop_anal',dest='pop_anal',action='store_true',default=False,help='Calculating excited state Mulliken and ESP charges')
+   parser.add_option('--relaxden',dest='relaxden',action='store_true',default=False,help='Calculating CIS/TDDFT relaxed density')
    parser.add_option('--libwfa',dest='libwfa',action='store_true',default=False,help='do wavefunction analysis through libwfa')
 
    options, args = parser.parse_args(ArgsIn)
@@ -146,6 +147,8 @@ def set_rems_tddft(myrems, options):
       qrems.ModRem('CIS_RELAXED_DENSITY', 'TRUE', myrems) #use relaxed density exclusively for now
       qrems.ModRem('POP_MULLIKEN', '-1', myrems)
       qrems.ModRem('ESP_CHARGES', '1', myrems)
+   if options.relaxden:
+      qrems.ModRem('CIS_RELAXED_DENSITY', 'TRUE', myrems)
    if options.libwfa:
       qrems.ModRem('STATE_ANALYSIS', 'TRUE', myrems)
 
