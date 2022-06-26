@@ -38,7 +38,7 @@ def ParseInput(ArgsIn):
 def string_sp_callback(option, opt, value, parser):
    setattr(parser.values, option.dest, value.split(','))
 
-def generate_FRGM(XYZ, natoms_frgm1, xyz_path, total_chg, solute_chg=0):
+def generate_FRGM(XYZ, natoms_frgm1, xyz_path, total_chg, solute_chg):
    natoms_total = XYZ.NAtom
    natoms_frgm2 = natoms_total - natoms_frgm1
    env_chg = total_chg - solute_chg
@@ -125,7 +125,7 @@ for method in options.method:
       qrems.ModRem('ESP_EFIELD', '1', myrems_2)
       for xyz_file in xyzfile_list:
          parsed_XYZ = qmol.XYZ(xyz_file)
-         FRGM = generate_FRGM(parsed_XYZ, options.solute, xyz_path, options.charge)
+         FRGM = generate_FRGM(parsed_XYZ, options.solute, xyz_path, options.charge, options.solute_chg)
          if options.almo:
             inputfile = input_path+parsed_XYZ.Name+'_almo_'+method+'_'+qrems.basis_abbr(basis)+'.in' 
          else:
