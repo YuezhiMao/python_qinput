@@ -12,7 +12,7 @@ def ParseInput(ArgsIn):
    '''
    parser = OptionParser(usage=UseMsg)
    parser.add_option('--opt',dest='opt',action='store',type='int',default=None,help='specify the state to perform geom opt')
-   parser.add_option('--freq',dest='freq',action='store',type='int',default=None,help='specify the state do do harmonic frequency calculation')
+   parser.add_option('--freq',dest='freq',action='store',type='int',default=None,help='specify the state to do harmonic frequency calculation')
    parser.add_option('--opt_freq',dest='opt_freq',action='store',type='int',default=None,help='specify the state to do geometry optimization followed by harmonic frequency calculation')
    parser.add_option('-a','--all',dest='all',action='store_true',default=False,help='run all the xyz files under the xyz_path')
    parser.add_option('-k','--keyword',dest='keyword',action='store',type='string',default=None,help='create inputs for xyz files containing the keyword')
