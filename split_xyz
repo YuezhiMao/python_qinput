@@ -9,7 +9,8 @@ def ParseInput(ArgsIn):
    split_xyz [options] [full_traj_xyz] [target_dir]
    '''
    parser = OptionParser(usage=UseMsg)
-   parser.add_option('--nameroot',dest='nameroot',action='store',type='string',default='frame', help='name root for the obtained xyz files (default: frame)')
+   parser.add_option('--nameroot',dest='nameroot',action='store',type='string',default='frame',help='name root for the obtained xyz files (default: frame)')
+   parser.add_option('--offset',dest='offset',action='store',type='int',default=0,help='offset for the frame index (default: 0)')
    options, args = parser.parse_args(ArgsIn)
    if len(args) < 3:
       parser.print_help()
@@ -23,7 +24,7 @@ if not os.path.exists(target_dir):
    os.system("mkdir " + target_dir)
 
 fr = open(full_traj_file, 'r')
-count = 0
+count = options.offset
 fw = None
 for line in fr.readlines():
    l_sp = line.split()

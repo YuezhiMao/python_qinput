@@ -106,6 +106,7 @@ def set_gs_rems(curREM, options):
    if options.opt or options.opt_freq: #the latter also starts with OPT
       qrems.ModRem('JOBTYPE', 'OPT', curREM)
       qrems.ModRem('GEOM_OPT_MAX_CYCLES', '200', curREM)
+      qrems.ModRem('GEOM_OPT_DRIVER', 'OPTIMIZE', curREM)
    elif options.force:
       qrems.ModRem('JOBTYPE', 'FORCE', curREM)
    elif options.freq:

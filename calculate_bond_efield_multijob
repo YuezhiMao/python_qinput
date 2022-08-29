@@ -62,7 +62,7 @@ if len(options.bond_atoms) == 2:
       data_efield[index]["efield_esp"] = efield.calculate_efield_from_esp(esp_file, xyzfile, bond_idx1, bond_idx2)
 
    #write the per frame data
-   data_file = outdir+"/efield_data.csv"
+   data_file = outdir+"/efield_data_"+str(bond_idx1)+"_"+str(bond_idx2)+".csv"
    fw = open(data_file, "w")  
    fw.write("index,efield_avg,efield_esp\n")
    for index in sorted(data_efield):
@@ -73,7 +73,7 @@ if len(options.bond_atoms) == 2:
    fw.close()
    #statistics
    df_efield = pd.read_csv(data_file)
-   fw = open(outdir+"/efield_stat.csv", "w")
+   fw = open(outdir+"/efield_stat_"+str(bond_idx1)+"_"+str(bond_idx2)+".csv", "w")
    fw.write("method,mean,stdev,stderr\n")
    method_list = ['avg', 'esp']
    for method in method_list:
@@ -112,7 +112,7 @@ elif len(options.bond_atoms) == 3: #doing 1->2 and 1->3
       data_efield[index]["efield_esp_12"] = efield.calculate_efield_from_esp(esp_file, xyzfile, bond_idx1, bond_idx2)
       data_efield[index]["efield_esp_13"] = efield.calculate_efield_from_esp(esp_file, xyzfile, bond_idx1, bond_idx3)
    #write the per frame data
-   data_file = outdir+"/efield_data.csv"
+   data_file = outdir+"/efield_data_"+str(bond_idx1)+"_"+str(bond_idx2)+"_"+str(bond_idx3)+".csv"
    fw = open(data_file, "w")  
    fw.write("index,efield_avg_12,efield_avg_13,efield_esp_12,efield_esp_13\n")
    for index in sorted(data_efield):
@@ -123,7 +123,7 @@ elif len(options.bond_atoms) == 3: #doing 1->2 and 1->3
    fw.close()
    #statistics
    df_efield = pd.read_csv(data_file)
-   fw = open(outdir+"/efield_stat.csv", "w")
+   fw = open(outdir+"/efield_stat_"+str(bond_idx1)+"_"+str(bond_idx2)+"_"+str(bond_idx3)+".csv", "w")
    fw.write("method,mean_12,stdev_12,stderr_12,mean_13,stdev_13,stderr_13\n")
    method_list = ['avg', 'esp']
    bond_list = ['12', '13']

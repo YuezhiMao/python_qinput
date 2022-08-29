@@ -107,6 +107,7 @@ def set_rems_tddft(myrems, options):
    qrems.ModRem('XC_GRID', '000075000302', myrems)
    if options.opt != None or options.opt_freq != None:
       qrems.ModRem('JOBTYPE', 'OPT', myrems)
+      qrems.ModRem('GEOM_OPT_DRIVER', 'OPTIMIZE', myrems)
       if options.opt != None:
          qrems.ModRem('CIS_STATE_DERIV', str(options.opt), myrems)
       else:

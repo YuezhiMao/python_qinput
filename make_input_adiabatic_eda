@@ -53,6 +53,7 @@ def string_sp_callback(option, opt, value, parser):
 def set_rems_adiabatic_eda(curREM, method, basis, options): 
    qrems.set_rems_common(curREM, method, basis)
    qrems.ModRem('JOBTYPE', 'OPT', curREM)
+   qrems.ModRem('GEOM_OPT_DRIVER', 'OPTIMIZE', curREM)
    qrems.ModRem('SCF_GUESS', 'FRAGMO', curREM)
    qrems.ModRem('IDERIV', '1', curREM)
    if options.loose:
