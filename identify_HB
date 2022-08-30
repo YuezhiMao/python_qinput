@@ -1,0 +1,97 @@
+#! /usr/bin/env python
+
+import os, sys, re, glob
+import numpy as np
+import xyzgeom
+import subprocess as sp
+from optparse import OptionParser
+
+def ParseInput(ArgsIn):
+   UseMsg = '''
+   Usage: python [script] [options] [target_dir]
+   '''
+   parser = OptionParser(usage=UseMsg)
+   parser.add_option('--solute',dest='solute',action='callback',type='string',callback=string_sp_callback,default=None,help='Specify solute information: n_tot, idx_D, idx_H')
+   parser.add_option('--solvent',dest='solvent',action='callback',type='string',callback=string_sp_callback,default=None,help='Specify solvent information: n_tot, idx_A')
+   parser.add_option('--grouping',dest='grouping',action='store_true',default=False,help='Group the xyz files and copy them into separate directories')
+   parser.add_option('--r_cut',dest='r_cut',action='store',type='float',default=3.5,help='Distance cutoff for HBs')
+   parser.add_option('--theta_cut',dest='theta_cut',action='store',type='float',default='30.0',help='Angular cutoff for HBs')
+
+   options, args = parser.parse_args(ArgsIn)
+   if len(args) < 2:
+      parser.print_help()
+      sys.exit(0)
+   if options.solute == None:
+      print ("Specify solute information: 3 entries needed")
+      parser.print_help()
+      sys.exit(0)
+   elif len(options.solute) < 3:
+      print ("Specify solute information: 3 entries needed")
+      parser.print_help()
+      sys.exit(0)
+   if options.solvent == None:
+      print ("Specify solvent information: 2 entries needed")
+      parser.print_help()
+      sys.exit(0)
+   elif len(options.solvent) < 2:
+      print ("Specify solvent information: 2 entries needed")
+      parser.print_help()
+      sys.exit(0)
+   return options, args
+
+def string_sp_callback(option, opt, value, parser):
+   setattr(parser.values, option.dest, value.split(','))
+
+def identify_HB_solvent(xyzfile, ntot_solute, ntot_solvent, idx_D, idx_H, idx_A, r_cut, theta_cut):
+   AtomList, Coords = xyzgeom.parse_xyz_file(xyzfile)
+   natoms_tot = len(AtomList)
+   cur_front = ntot_solute
+   found_HB = False
+   solvent_count = 0
+   while cur_front < natoms_tot:
+      solvent_count += 1
+      dist_DA = xyzgeom.compute_distance(Coords, idx_D, cur_front+idx_A)
+      angle_HDA = xyzgeom.compute_angle(Coords, idx_H, idx_D, cur_front+idx_A)
+      if (dist_DA < r_cut) and (angle_HDA < theta_cut):
+         print ("Found HB in %s; solvent index: %d" %(xyzfile, solvent_count))
+         found_HB = True
+         break
+      cur_front += ntot_solvent
+
+   return found_HB
+      
+options, args = ParseInput(sys.argv)
+target_dir = args[1]
+solute_data = options.solute
+solvent_data = options.solvent
+do_grouping = options.grouping
+ntot_solute, idx_D, idx_H = int(solute_data[0]), int(solute_data[1]), int(solute_data[2])
+ntot_solvent, idx_A = int(solvent_data[0]), int(solvent_data[1])
+r_cut, theta_cut = options.r_cut, options.theta_cut
+curdir = os.getcwd()
+os.chdir(target_dir)
+HB_dir = 'HB'
+noHB_dir = 'noHB'
+if do_grouping:
+   if os.path.exists(HB_dir):
+      os.system("rm -rf " + HB_dir)
+   if os.path.exists(noHB_dir):
+      os.system("rm -rf " + noHB_dir)
+   os.system("mkdir " + HB_dir)
+   os.system("mkdir " + noHB_dir)
+xyzfile_list = glob.glob('*.xyz')
+count_HB_frame = 0
+for xyzfile in sorted(xyzfile_list):
+   found_HB = identify_HB_solvent(xyzfile, ntot_solute, ntot_solvent, idx_D, idx_H, idx_A, r_cut, theta_cut)
+   if found_HB:
+      count_HB_frame += 1
+   if do_grouping:
+      if found_HB:
+         command = "mv " + xyzfile + " " + HB_dir 
+         os.system(command)
+      else:
+         command = "mv " + xyzfile + " " + noHB_dir 
+         os.system(command)
+os.chdir(curdir)
+nframes_total = len(xyzfile_list)
+print ("Total number of frames: %d; HB: %d; non-HB: %d" %(nframes_total, count_HB_frame, nframes_total-count_HB_frame))
