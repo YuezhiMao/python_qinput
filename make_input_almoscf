@@ -1,0 +1,98 @@
+#! /usr/bin/env python
+
+import os, glob, re, sys
+import subprocess as sp
+import numpy as np
+from optparse import OptionParser
+import qrems, qmol
+
+def ParseInput(ArgsIn):
+   UseMsg = '''
+   make_input_sp_geom [options] [xyz_path]
+   '''
+   parser = OptionParser(usage=UseMsg)
+   parser.add_option('-a','--all',dest='all',action='store_true',default=False,help='run all the xyz files under the xyz_path')
+   parser.add_option('-k','--keyword',dest='keyword',action='store',type='string',default=None,help='create inputs for xyz files containing the keyword')
+   parser.add_option('-t','--target',dest='target',action='callback',callback=string_sp_callback,type='string',default=None,help='create input for certain xyz files')
+   parser.add_option('-b','--basis',dest='basis',action='callback',callback=string_sp_callback, type='string', default='aug-cc-pvtz',help='The target basis (default is aug-cc-pVTZ)')
+   parser.add_option('-m','--method',dest='method',action='callback',type='string', default=None, callback=string_sp_callback,help='The methods (density functionals) to use')
+   parser.add_option('-i','--input_path',dest='input_path',action='store',type='string', default='input/',help='The directory storing the generated inputs')
+   parser.add_option('--charge',dest='charge',action='store',type='int',default=0,help='total charge of the entire system')
+   parser.add_option('--mult',dest='mult',action='store',type='int',default=1,help='total multiplicity of the system') 
+   parser.add_option('--coarse',dest='coarse',action='store',type='int',default=0,help='use less tight integral thresh and less fine grid for SCF calculations')
+   parser.add_option('--solute',dest='solute',action='store',type='int',default=-1,help='number of atoms on solute')
+   parser.add_option('--solute_chg',dest='solute_chg',action='store',type='int',default=0,help='net charge of the solute')
+   options, args = parser.parse_args(ArgsIn)
+   if len(args) < 2 and (options.all or options.keyword!=None):
+      parser.print_help()
+      sys.exit(0)
+   if not options.all and options.target==None and options.keyword==None:
+      print("The xyz files must be specified: one or some/all in one folder")
+      parser.print_help()
+      sys.exit(1)
+   if options.solute <= 0:
+      print("Specify the number of solute atoms")
+      parser.print_help()
+      sys.exit(1)
+
+   return options, args
+
+def string_sp_callback(option, opt, value, parser):
+   setattr(parser.values, option.dest, value.split(','))
+
+def generate_FRGM(XYZ, natoms_frgm1, xyz_path, total_chg, solute_chg):
+   natoms_total = XYZ.NAtom
+   natoms_frgm2 = natoms_total - natoms_frgm1
+   env_chg = total_chg - solute_chg
+   frgm_file = xyz_path + XYZ.Name + '.frgm'
+   fw = open(frgm_file, 'w')
+   fw.write('%d\n1\n%d %d\n1 1\n' %(total_chg, solute_chg, env_chg))
+   fw.write('%d %d' %(natoms_frgm1, natoms_frgm2)) 
+   fw.close()
+   FRGM = qmol.FRGM(frgm_file)
+   return FRGM
+
+def XYZ_to_Input(fw, parsed_XYZ, FRGM, myrems, options):
+   qmol.WriteMolecule_Frgm(fw, parsed_XYZ, FRGM)
+   qrems.AppendRem(fw, myrems)
+
+options, args = ParseInput(sys.argv)
+xyz_path =''
+if len(args) > 1:
+   xyz_path = args[1]
+   if xyz_path[-1:] != '/':
+      xyz_path += '/'
+
+#determine xyz_file
+curdir = os.getcwd()
+xyzfile_list = []
+if options.all:
+   xyzfile_list = glob.glob(xyz_path+'*.xyz')
+elif options.keyword:
+   xyzfile_list = glob.glob(xyz_path+'*'+options.keyword+'*.xyz')
+if options.target!=None:
+   for xyz_file in options.target:
+      if xyz_file not in xyzfile_list:
+         xyzfile_list.append(xyz_file)
+
+#check the input_path
+input_path = options.input_path
+if input_path[-1:] != '/':
+   input_path += '/'
+if not os.path.exists(input_path):
+   sp.call(['mkdir', input_path])
+
+rem_file = os.path.expandvars('$QREMPATH')+'/rem_stdscf'
+myrems = qrems.ParseRems(rem_file)
+for method in options.method:
+   for basis in options.basis:
+      qrems.set_rems_common(myrems, method, basis, options.coarse)
+      qrems.ModRem('FRGM_METHOD', 'STOLL', myrems)
+      qrems.ModRem('SCFMI_MODE', '1', myrems)
+      for xyz_file in xyzfile_list:
+         parsed_XYZ = qmol.XYZ(xyz_file)
+         FRGM = generate_FRGM(parsed_XYZ, options.solute, xyz_path, options.charge, options.solute_chg)
+         inputfile = input_path+parsed_XYZ.Name+'_almo_'+method+'_'+qrems.basis_abbr(basis)+'.in' 
+         fw = open(inputfile, 'w')
+         XYZ_to_Input(fw, parsed_XYZ, FRGM, myrems, options)
+         fw.close()
