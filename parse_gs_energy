@@ -50,6 +50,39 @@ def parse_scf_energies(target_dir, key):
    fw.close()
    os.chdir(curdir)
 
+def parse_frozen_energies(target_dir, key):
+   curdir = os.getcwd()
+   os.chdir(target_dir)
+   tmpfile = 'frozen.tmp'
+   command = "grep \"Energy prior to\" *.out > " + tmpfile
+   os.system(command)
+   data_frz = {}
+   fr = open(tmpfile, 'r')
+   for line in fr.readlines():
+      l_sp = line.split()
+      if not (len(l_sp) > 1): #just in case
+         continue
+      else:
+         if options.index_type == 'int':
+            index = int(re.search(key+"([^_]+)_", l_sp[0]).group(1))
+         else:
+            index = float(re.search(key+"([^_]+)_", l_sp[0]).group(1))
+         if index not in data_frz:
+            data_frz[index] = {}
+         data_frz[index]["energy"] = float(l_sp[-1])
+   fr.close()
+   os.system("rm " + tmpfile)
+
+   fw = open("frz_energy.csv", 'w')
+   fw.write("index,energy\n")
+   for index in sorted(data_frz):
+      if options.index_type == 'int':
+         fw.write("%d,%.10f\n" %(index, data_frz[index]["energy"]))
+      else:
+         fw.write("%.4f,%.10f\n" %(index, data_frz[index]["energy"]))
+   fw.close()
+   os.chdir(curdir)
+
 def parse_rimp2_energies(target_dir, key):
    curdir = os.getcwd()
    os.chdir(target_dir)
@@ -90,6 +123,8 @@ options, args = ParseInput(sys.argv)
 target_dir = args[1]
 if options.energy_type.lower() == 'dft':
    parse_scf_energies(target_dir, options.index_key)
+elif options.energy_type.lower() == 'frozen':
+   parse_frozen_energies(target_dir, options.index_key)
 elif options.energy_type.lower() == 'rimp2':
    parse_rimp2_energies(target_dir, options.index_key)
 else:
