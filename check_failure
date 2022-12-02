@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #This script is to check whether a job is normally terminated or not
 
 import os, glob, re, sys
