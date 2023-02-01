@@ -12,11 +12,15 @@ def ParseInput(ArgsIn):
    '''
    parser = OptionParser(usage=UseMsg)
    parser.add_option('--placeholder',dest='placeholder',action='store',type='string',default=None,help='keyword for parsing the job index')
+   parser.add_option('--method',dest='method',action='store',type='string',default='scf',help='electronic structure method that generates the forces (default: scf)')
 
    options, args = parser.parse_args(ArgsIn)
    if len(args) < 3:
       parser.print_help()
       sys.exit(0)
+   if options.placeholder == None:
+      print ("The placeholder needs to be specified")
+      sys.exit(1)
    if options.placeholder[-1] == "_":
       options.placeholder = options.placeholder[:-1]
 
@@ -33,11 +37,13 @@ def parse_forces(infile):
    counter = -1
    for line in fr.readlines():
       l_sp = line.split()
-      if l_sp[0] == 'Full':
+      if l_sp[0] == 'Full' or l_sp[0] == 'Gradient':
          start_parsing = True
          counter = 0
          continue
-      if l_sp[0] == 'Gradient':
+      if l_sp[0] == 'Max': #for SCF jobs
+         break
+      if l_sp[0] == 'Gradient' and counter > 0: #for other methods
          break
       if start_parsing:
          if counter == 0: #atom index line
@@ -71,18 +77,27 @@ def generate_all_forces(AtomList, options):
    outfile_list = glob.glob('*.out')
    for outfile in outfile_list:
       tmpfile = "tmp.txt"
-      command = "sed -n '/Full Analytical/,/Gradient time/p' " + outfile + " > " + tmpfile
+      if options.method.lower() == 'scf': #default
+         command = "sed -n '/Gradient of SCF Energy/,/Gradient time/p' " + outfile + " > " + tmpfile
+      elif options.method.lower() == 'tddft':
+         command = "sed -n '/Gradient of the state energy/,/Gradient time/p' " + outfile + " > " + tmpfile
+      elif options.method.lower() == 'ccsd' or options.method.lower() == 'eom-ccsd':
+         command = "sed -n '/Full Analytical/,/Gradient time/p' " + outfile + " > " + tmpfile
+      else:
+         print ("Electronic structure method not supported by this script")
+         sys.exit(1)
       os.system(command)
       forces = parse_forces(tmpfile)
+      #print (forces)
       if forces.shape[0] != len(AtomList):
          print ("Length of AtomList: %d; rows in forces: %d" %(len(AtomList), forces.shape[0])) 
       if options.placeholder != None:
          l = re.search(options.placeholder+'_(\d+)_([^_]+)', outfile)
          job_idx = int(l.group(1))
-         if l.group(2).lower() == 'gs':
-            grad_type = 'gs'
-         else:
+         if options.method.lower() == 'tddft' or options.method.lower() == 'eom-ccsd':
             grad_type = 'ex'
+         else:
+            grad_type = 'gs'
          grad_file = 'grad_' + grad_type + "{:03n}".format(job_idx) + '.txt'
       else:  #general mode
          grad_file = outfile[:-4] + '.grad'
