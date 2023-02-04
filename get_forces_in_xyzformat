@@ -12,7 +12,8 @@ def ParseInput(ArgsIn):
    '''
    parser = OptionParser(usage=UseMsg)
    parser.add_option('--placeholder',dest='placeholder',action='store',type='string',default=None,help='keyword for parsing the job index')
-   parser.add_option('--method',dest='method',action='store',type='string',default='scf',help='electronic structure method that generates the forces (default: scf)')
+   parser.add_option('--method',dest='method',action='store',type='string',default='scf',
+      help='electronic structure method that generates the forces (default: scf; also support: tddft, ccsd, eom-ccsd)')
 
    options, args = parser.parse_args(ArgsIn)
    if len(args) < 3:
