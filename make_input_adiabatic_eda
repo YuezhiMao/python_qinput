@@ -104,7 +104,7 @@ def append_single_geom_constraint(fw, constraint_template, XYZ, placeholder='dis
    l = re.search(placeholder+'_(\S+)', XYZ.Name)
    if l == None:
       print((XYZ.Name))
-      print ("No geom_param specified in xyz file name. Try different placeholder or you are fucked")
+      print ("No geom_param specified in xyz file name. Try different placeholder or you are screwed")
       sys.exit(0)
    geom_param = float(l.group(1))
    qrems.apply_single_geom_constraint(fw, geom_param, constraint_template)

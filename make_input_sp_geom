@@ -61,7 +61,7 @@ def string_sp_callback(option, opt, value, parser):
 def append_single_geom_constraint(fw, constraint_template, XYZ, placeholder):
    l = re.search(placeholder+'_([^_]+)_', XYZ.Name)
    if l == None:
-      print("No geom_param specified in xyz file name. Try different placeholder or you are fucked")
+      print("No geom_param specified in xyz file name. Try different placeholder or you are screwed")
       sys.exit(0)
    geom_param = float(l.group(1))
    qrems.apply_single_geom_constraint(fw, geom_param, constraint_template)
@@ -70,7 +70,10 @@ def XYZ_to_Input(fw, XYZ, curREM, options):
    qmol.WriteMolecule(fw, XYZ, options.charge, options.mult)
    qrems.AppendRem(fw, curREM)
    if options.geom_constr != None:
-      append_single_geom_constraint(fw, options.geom_constr, XYZ, options.constr_key)
+      if options.constr_key == "void":
+         qrems.copy_section_over(fw, options.geom_constr)
+      else:
+         append_single_geom_constraint(fw, options.geom_constr, XYZ, options.constr_key)
    if options.sol_file != None:
       qrems.copy_section_over(fw, options.sol_file)
    if options.dipole_field != None and options.dipole_field != 0:
