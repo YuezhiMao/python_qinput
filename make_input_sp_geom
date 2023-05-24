@@ -3,6 +3,7 @@
 import os, glob, re, sys
 import subprocess as sp
 import numpy as np
+import copy
 from optparse import OptionParser
 import qrems, qmol
 
@@ -83,7 +84,8 @@ def XYZ_to_Input(fw, XYZ, curREM, options):
    if options.cdft:
       qrems.copy_section_over(fw, options.cdft)
 
-def XYZ_to_Input_optfreq(fw, XYZ, curREM, options):
+def XYZ_to_Input_optfreq(fw, XYZ, myrems, options):
+   curREM = copy.deepcopy(myrems)
    #geom opt job
    XYZ_to_Input(fw, XYZ, curREM, options)
    #freq job
