@@ -3,6 +3,7 @@
 import os, glob, re, sys
 import subprocess as sp
 import numpy as np
+import copy
 from optparse import OptionParser
 import qrems, qmol
 
@@ -14,7 +15,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--opt',dest='opt',action='store',type='int',default=None,help='specify the state to perform geom opt')
    parser.add_option('--freq',dest='freq',action='store',type='int',default=None,help='specify the state to do harmonic frequency calculation')
    parser.add_option('--opt_freq',dest='opt_freq',action='store',type='int',default=None,help='specify the state to do geometry optimization followed by harmonic frequency calculation')
-   parser.add_option('--force',dest='force',action='store_true',default=False,help='specify the state to calculate force')
+   parser.add_option('--force',dest='force',action='store',type='int',default=None,help='specify the state to calculate force')
    parser.add_option('-a','--all',dest='all',action='store_true',default=False,help='run all the xyz files under the xyz_path')
    parser.add_option('-k','--keyword',dest='keyword',action='store',type='string',default=None,help='create inputs for xyz files containing the keyword')
    parser.add_option('-t','--target',dest='target',action='callback',callback=string_sp_callback,type='string',default=None,help='create input for certain xyz files')
@@ -77,7 +78,8 @@ def XYZ_to_Input(fw, XYZ, curREM, options):
    if options.freq and options.isotope:
       qrems.copy_section_over(fw, options.isotope)
 
-def XYZ_to_Input_optfreq(fw, XYZ, curREM, options): 
+def XYZ_to_Input_optfreq(fw, XYZ, myrems, options): 
+   curREM = copy.deepcopy(myrems)
    #geom opt job
    XYZ_to_Input(fw, XYZ, curREM, options)
    #freq job
