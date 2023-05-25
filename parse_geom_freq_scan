@@ -87,9 +87,11 @@ else:
    if options.bond_atoms != None:
       idx_1, idx_2 = int(options.bond_atoms[0]), int(options.bond_atoms[1])
       get_bond_length_data(data, idx_1, idx_2)
-      write_data(data, "bond_length_scan.csv", "bond")
+      csvfile_name = "bond_legnth_scan_" + str(idx_1) + "_" + str(idx_2) + ".csv"
+      write_data(data, csvfile_name, "bond")
    elif options.vib_mode != None:
       mode_idx = options.vib_mode
       get_frequency_data(data, mode_idx)
-      write_data(data, "frequency_scan.csv", "freq")
+      csvfile_name = "frequency_scan_mode_" + str(mod_idx) + ".csv"
+      write_data(data, csvfile_name, "freq")
 os.chdir(curdir)

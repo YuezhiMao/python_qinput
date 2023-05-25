@@ -37,6 +37,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--field_dir',dest='field_dir',action='store',type='string',default='Z',help='The direction of the applied field (default: Z)')
    parser.add_option('--isotope',dest='isotope',action='store',type='string',default=None,help='Doing isotope substitution for vib analysis; specify the file for isotope section')
    parser.add_option('--pop_anal',dest='pop_anal',action='store_true',default=False,help='Calculating excited state Mulliken and ESP charges')
+   parser.add_option('--do_resp',dest='do_resp',action='store_true',default=False,help='calculate the RESP charges for ground and excited states instead of ESP charges')
    parser.add_option('--relaxden',dest='relaxden',action='store_true',default=False,help='Calculating CIS/TDDFT relaxed density')
    parser.add_option('--libwfa',dest='libwfa',action='store_true',default=False,help='do wavefunction analysis through libwfa')
 
@@ -151,7 +152,10 @@ def set_rems_tddft(myrems, options):
       #note: Mulliken and ESP are the only two pop anal schemes available for TDDFT states
       qrems.ModRem('CIS_RELAXED_DENSITY', 'TRUE', myrems) #use relaxed density exclusively for now
       qrems.ModRem('POP_MULLIKEN', '-1', myrems)
-      qrems.ModRem('ESP_CHARGES', '1', myrems)
+      if options.do_resp:
+         qrems.ModRem('RESP_CHARGES', '1', myrems)
+      else:
+         qrems.ModRem('ESP_CHARGES', '1', myrems)
    if options.relaxden:
       qrems.ModRem('CIS_RELAXED_DENSITY', 'TRUE', myrems)
    if options.libwfa:
