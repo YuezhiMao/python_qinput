@@ -92,6 +92,6 @@ else:
    elif options.vib_mode != None:
       mode_idx = options.vib_mode
       get_frequency_data(data, mode_idx)
-      csvfile_name = "frequency_scan_mode_" + str(mod_idx) + ".csv"
+      csvfile_name = "frequency_scan_mode_" + str(mode_idx) + ".csv"
       write_data(data, csvfile_name, "freq")
 os.chdir(curdir)
