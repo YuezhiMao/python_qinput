@@ -87,7 +87,7 @@ else:
    if options.bond_atoms != None:
       idx_1, idx_2 = int(options.bond_atoms[0]), int(options.bond_atoms[1])
       get_bond_length_data(data, idx_1, idx_2)
-      csvfile_name = "bond_legnth_scan_" + str(idx_1) + "_" + str(idx_2) + ".csv"
+      csvfile_name = "bond_length_scan_" + str(idx_1) + "_" + str(idx_2) + ".csv"
       write_data(data, csvfile_name, "bond")
    elif options.vib_mode != None:
       mode_idx = options.vib_mode
