@@ -22,6 +22,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--modelchem',dest='modelchem',action='store_true',default=False,help='parse the model chemistry')
    parser.add_option('--multigeom',dest='multigeom',action='store',type='int',default=None,help='get multiple geometries')
    parser.add_option('--adiab_eda',dest='adiab_eda',action='store_true',default=False,help='split output as adiabatic eda results')
+   parser.add_option('--short_xyz',dest='short_xyz',action='store_true',default=False,help='use trimmed names for extracted XYZ files')
    options, args=parser.parse_args(ArgsIn)
    if len(args) < 2 and options.target==None:
       print("Specify the directory that stores all the results")
@@ -97,7 +98,10 @@ def manipulate_folder_modelchem(target_path, options):
 def get_xyz(output_file, options):
    name = output_file[:-4]
    tmp_file = name+'.tmp'
-   xyz_file = name+'.xyz'
+   if options.short_xyz:
+      xyz_file = re.search('(\S+)_opt', name).group(1) + '.xyz'
+   else:
+      xyz_file = name+'.xyz'
    #os.system('grep -B 100 "OPTIMIZATION CONVERGED" '+output_file+' | grep -A 1000 "Coordinates (Angstroms)" | grep -B 1000 Point | grep -A 1000 ATOM | grep -v ATOM | grep -v Point | awk \'{print $2, $3, $4, $5}\' > '+tmp_file)
    #os.system('grep -A 100 "OPTIMIZATION CONVERGED" '+output_file+' | grep -B 100 "Z-matrix" | grep -A 500 "ATOM" | grep -v "ATOM" | grep -v "Print" > '+tmp_file)
    command = "sed -n " + "'/OPTIMIZATION CONVERGED/,/Z-matrix/p' " + output_file + " > "+tmp_file
