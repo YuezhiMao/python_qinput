@@ -12,7 +12,8 @@ def ParseInput(ArgsIn):
    parser.add_option('--name_root',dest='name_root',action='store',type='str',default=None,help='The name root for the input files generated. Default name_root.frgm->name_root_coordvalue.in')
    parser.add_option('--dest_path',dest='dest_path',action='store',type='str',default='new_dist_scan_xyz',help='The relative path to the directory where the generated files should be dumped.')
    parser.add_option('--type',dest='type',action='store',type='str',default='absolute',help='Type of scan. Options are "absolute" and "percent". An absolut scan goes from --start_abs to --end_abs with the specified increment. A percent scan goes from --start_pct*dist to --end_pct*dist with the specified increment.')
-   parser.add_option('--bond',dest='bond',action='store_true',default=False,help='scan a specific bond length')
+   parser.add_option('--bond',dest='bond',action='store_true',default=False,help='scan a specific bond length; default: set the start_absolute and end_absolute values to the displacement from the equilibrium bond length')
+   parser.add_option('--abs_bond_length',dest='abs_bond_length',action='store_true',default=False,help='set the absolute bond lengths based on start_absolute and end_absolute')
    parser.add_option('--increment',dest='increment',action='store',type='float',default=0.05,help='Set the increment of the scan. Default 0.05 Angs or 5%')
    parser.add_option('--start_absolute',dest='start_absolute',action='store',type='float',default=1.0,help='Set the smallest value for coord. Relevant for the scan option "absolute". Default 1.0')
    parser.add_option('--end_absolute',dest='end_absolute',action='store',type='float',default=6.0,help='Set the largest value for coord. Relevant for the scan option "absolute". Default 6.0')
@@ -110,6 +111,15 @@ def modify_bond_length(XYZ, name_root, anchor_atom, atom2move, displacement, des
       outfile = dest_path + '/' + name_root + '_bond_' + format(displacement, '.4f') + '.xyz'
    xyzgeom.write_xyz_file(outfile, XYZ.AtomList, Coords)
 
+def set_abs_bond_length(XYZ, name_root, anchor_atom, atom2move, length_abs, dest_path):
+   Coords = np.copy(XYZ.CoordList)
+   bond_vector = Coords[atom2move-1] - Coords[anchor_atom-1]
+   bond_vector /= np.linalg.norm(bond_vector, 2)
+   #update the position of atom2move
+   Coords[atom2move-1] = Coords[anchor_atom-1] + length_abs * bond_vector
+   outfile = dest_path + '/' + name_root + '_bond_' + format(length_abs, '.4f') + '.xyz'
+   xyzgeom.write_xyz_file(outfile, XYZ.AtomList, Coords)
+
 #the script
 curdir = os.getcwd()
 options, args = ParseInput(sys.argv)
@@ -142,10 +152,19 @@ if options.bond: #scan a single bond length
       increment = float(options.increment)
       anchor_atom = atom1_idx
       atom2move = atom2_idx
-      displacement = start_value
-      while displacement < end_value + increment/100.0:
-         modify_bond_length(parse_XYZ, name_root, anchor_atom, atom2move, displacement, dest_path, show_abs_bondlength=False)
-         displacement += increment
+      if options.abs_bond_length:
+         length_abs = start_value
+         while length_abs <= end_value + 1E-5:
+            set_abs_bond_length(parse_XYZ, name_root, anchor_atom, atom2move, length_abs, dest_path)
+            length_abs += increment
+      else:
+         displacement = start_value
+         while displacement < end_value + increment/100.0:
+            modify_bond_length(parse_XYZ, name_root, anchor_atom, atom2move, displacement, dest_path, show_abs_bondlength=False)
+            displacement += increment
+   else:
+      print ("The percent or logrithm mode is not supported for bond length scan")
+      sys.exit(0)
 
 else:   #scan intermolecular distance
    frgm_file = args[2]
