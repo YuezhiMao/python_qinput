@@ -41,6 +41,23 @@ def compute_tilt_angle(Coords, idx1, idx2, idx3, idx4):
    theta = np.arccos(np.dot(vec_bisec, vec_21)) * 180.0/np.pi
    return theta
 
+def compute_angle_w_axis(Coords, idx1, idx2, axis='Z'):
+   #bond direction
+   dir_bond = Coords[idx2-1] - Coords[idx1-1]
+   dir_bond /= np.linalg.norm(dir_bond)
+   #angle between bond and the given axis
+   if axis.upper() == 'Z':
+      dir_axis = np.array([0, 0, 1.])
+   elif axis.upper() == 'X':
+      dir_axis = np.array([1., 0, 0])
+   elif axis.upper() == 'Y':
+      dir_axis = np.array([0, 1., 0])
+   else:
+      print ("The give axis %s is not recognizable" %axis)
+      sys.exit(0)
+   angle = np.arccos(np.dot(dir_bond, dir_axis)) * 180.0 / np.pi
+   return angle
+
 def compute_diheral(Coords, idx1, idx2, idx3, idx4):
    #the input index starts from 1
    b1 = Coords[idx2-1] - Coords[idx1-1]
