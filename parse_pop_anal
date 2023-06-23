@@ -10,6 +10,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--do_mulliken', dest='do_mulliken', action='store_true', default=False, help='parse Mulliken population for each state')
    parser.add_option('--do_esp', dest='do_esp', action='store_true', default=False, help='parse ESP charges for each state')
    parser.add_option('--do_resp', dest='do_resp', action='store_true', default=False, help='parse RESP charges for each state')
+   parser.add_option('--do_chelpg', dest='do_chelpg', action='store_true', default=False, help='parse ChelpG charges for each state')
    parser.add_option('--do_hirsh', dest='do_hirsh', action='store_true', default=False, help='parse the Hirshfeld charges (GS only)')
 
    options, args = parser.parse_args(ArgsIn)
@@ -59,6 +60,51 @@ def parse_mulliken_pop(outfile):
          fw.write(",%.6f" %data[istat][iatm])
       fw.write("\n")
    fw.close()
+
+def parse_chelpg_charges(outfile):
+   tmpfile = "chelpg.tmp"
+   command_1 = "sed -n \"/ChElPG Net Atomic/,/Sum of atomic/p\" " + outfile + " > " + tmpfile
+   os.system(command_1)
+   command_2 = "sed -n \"/ChElPG   Net Atomic/,/Sum of atomic/p\" " + outfile + " >> " + tmpfile
+   os.system(command_2)
+   data = {}
+   data["atoms"] = []
+   fr = open(tmpfile, 'r')
+   cur_state = -1
+   for line in fr.readlines():
+      l_sp = line.split()
+      if len(l_sp) < 2:
+         continue
+      if l_sp[0] == 'Ground-State':
+         if cur_state >= 0:  #currently we only do this for the first job
+            break
+         cur_state = 0
+         data[cur_state] = []
+      if l_sp[1] == 'Excited':
+         cur_state = int(l_sp[3][:-1])
+         data[cur_state] = []
+      if len(l_sp) == 3 and re.match("\d+", l_sp[0]) != None:
+         if cur_state == 0:
+            data["atoms"].append(l_sp[1])
+         data[cur_state].append(float(l_sp[2]))
+   fr.close()
+   os.system("rm " + tmpfile)
+
+   popfile = outfile[:-4] + ".chelpg"
+   nstates = cur_state + 1
+   fw = open(popfile, 'w')
+   fw.write("Atom")
+   for istat in range(nstates):
+      fw.write(",state_%d" %istat)
+   fw.write("\n")
+   natoms = len(data["atoms"])
+   for iatm in range(natoms):
+      fw.write("%s" %data["atoms"][iatm])
+      for istat in range(nstates):
+         fw.write(",%.6f" %data[istat][iatm])
+      fw.write("\n")
+   fw.close()
+   
        
 def parse_esp_charges(outfile, do_resp):
    tmpfile = "esp.tmp"
@@ -165,6 +211,8 @@ for outfile in outfile_list:
       parse_esp_charges(outfile, options.do_resp)
    if options.do_hirsh:
       parse_hirshfeld_charges(outfile)
+   if options.do_chelpg:
+      parse_chelpg_charges(outfile)
 
 os.chdir(cur_dir)
 

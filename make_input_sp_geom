@@ -60,7 +60,7 @@ def string_sp_callback(option, opt, value, parser):
    setattr(parser.values, option.dest, value.split(','))
 
 def append_single_geom_constraint(fw, constraint_template, XYZ, placeholder):
-   l = re.search(placeholder+'_([^_]+)_', XYZ.Name)
+   l = re.search(placeholder+'_([^_]+)', XYZ.Name)
    if l == None:
       print("No geom_param specified in xyz file name. Try different placeholder or you are screwed")
       sys.exit(0)
