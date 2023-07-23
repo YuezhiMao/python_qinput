@@ -128,7 +128,7 @@ def get_xyz(output_file, options):
       fw.close()
    else:
       n_geom = options.multigeom
-      NAtom = len(AtomList) / n_geom
+      NAtom = int(len(AtomList) / n_geom)
       for i in range(0, n_geom):
          fw.write("%d\n\n" %NAtom)
          for index in range(0, NAtom):
@@ -159,7 +159,7 @@ def get_xyz_adiab_eda(output_file, options):
    fr.close()
    sp.call(['rm', tmp_file])
    n_geom = options.multigeom
-   NAtom = len(AtomList) / n_geom
+   NAtom = int(len(AtomList) / n_geom)
    for i in range(0, n_geom):
       if i == 0:
          filename = nameroot+'_scfgeom.xyz'
@@ -267,7 +267,7 @@ def get_frequency(options):
          fw.write('\n')
       else:
          n_geom = options.multigeom
-         n_freq_per_geom = freq_data[jobname]["n_freq"] / n_geom
+         n_freq_per_geom = int(freq_data[jobname]["n_freq"] / n_geom)
          offset = 0
          for igeom in range(0, n_geom):
             fw.write('%s,' %jobname)
@@ -288,7 +288,7 @@ def get_frequency(options):
             fw.write('\n')
          else:
             n_geom = options.multigeom
-            n_intens_per_geom = freq_data[jobname]["n_intens"] / n_geom
+            n_intens_per_geom = int(freq_data[jobname]["n_intens"] / n_geom)
             offset = 0
             for igeom in range(0, n_geom):
                fw.write('%s,' %jobname)
@@ -346,7 +346,7 @@ def get_frequency_new(options):
          fw.write('\n')
       else:
          n_geom = options.multigeom
-         n_freq_per_geom = freq_data[jobname]["n_freq"] / n_geom
+         n_freq_per_geom = int(freq_data[jobname]["n_freq"] / n_geom)
          offset = 0
          for igeom in range(0, n_geom):
             fw.write('%s,' %jobname)
@@ -367,7 +367,7 @@ def get_frequency_new(options):
             fw.write('\n')
          else:
             n_geom = options.multigeom
-            n_intens_per_geom = freq_data[jobname]["n_intens"] / n_geom
+            n_intens_per_geom = int(freq_data[jobname]["n_intens"] / n_geom)
             offset = 0
             for igeom in range(0, n_geom):
                fw.write('%s,' %jobname)

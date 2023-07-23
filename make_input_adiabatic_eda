@@ -20,6 +20,7 @@ def ParseInput(ArgsIn):
    parser.add_option('-i','--input_path',dest='input_path',action='store',type='string', default='input/',help='The directory storing the generated inputs')
    parser.add_option('--pes',dest='pestype',action='store',type='string',default='integrated',help='Integrated or separated optimizations on FRZ, POL or fully relaxed PESs')
    parser.add_option('--sym_ignore', dest='sym_ignore', action='store_true', default=False, help='ignore point group symmetry during geometry optimization')
+   parser.add_option('--scfmi_mode', dest='scfmi_mode', type='int', action='store', default=0, help='set scfmi_mode for pol and frz jobs (default 0)')
    parser.add_option('--do_freq', dest='do_freq', action='store_true', default=False, help='do frequency calculation at the minimum of each PES')
    parser.add_option('--do_ferf', dest='do_ferf', action='store_true', default=False, help='use FERF to construct the polarized PES')
    parser.add_option('--loose', dest='loose', action='store_true', default=False, help='Use looser convergence criterion for geom opt')
@@ -50,12 +51,17 @@ def ParseInput(ArgsIn):
 def string_sp_callback(option, opt, value, parser):
    setattr(parser.values, option.dest, value.split(','))
 
-def set_rems_adiabatic_eda(curREM, method, basis, options): 
+def set_rems_adiabatic_eda(curREM, method, basis, surface, options): 
    qrems.set_rems_common(curREM, method, basis)
    qrems.ModRem('JOBTYPE', 'OPT', curREM)
    qrems.ModRem('GEOM_OPT_DRIVER', 'OPTIMIZE', curREM)
    qrems.ModRem('SCF_GUESS', 'FRAGMO', curREM)
    qrems.ModRem('IDERIV', '1', curREM)
+   if surface == 'pol' or surface == 'frz':
+      qrems.ModRem('SCFMI_MODE', str(options.scfmi_mode), curREM)
+   elif surface != 'full':
+      print ("Unrecognized surface type: %s" %surface)
+      sys.exit(1)
    if options.loose:
       qrems.ModRem('SCF_CONVERGENCE', '8', curREM)
       #use default convergence criterion for opt
@@ -149,17 +155,17 @@ def XYZ_to_Input_Integrated(fw, XYZ, FRGM, method, basis, options):
    use_genbas = basis.lower() == 'gen'
    #Fully relaxed PES first 
    curREM = qrems.ParseRems(os.path.expandvars('$QREMPATH')+'/'+'rem_scfgeom')
-   set_rems_adiabatic_eda(curREM, method, basis, options)
+   set_rems_adiabatic_eda(curREM, method, basis, 'full', options)
    XYZ_to_Input(fw, XYZ, FRGM, curREM, read_mol=False, do_freq=options.do_freq, genbas=use_genbas, geom_constr=options.geom_constr)
    fw.write('\n@@@\n\n')
    #Polarized PES
    curREM = qrems.ParseRems(os.path.expandvars('$QREMPATH')+'/'+'rem_polgeom')
-   set_rems_adiabatic_eda(curREM, method, basis, options)
+   set_rems_adiabatic_eda(curREM, method, basis, 'pol', options)
    XYZ_to_Input(fw, XYZ, FRGM, curREM, read_mol=True, do_freq=options.do_freq, do_ferf=options.do_ferf, genbas=use_genbas, geom_constr=options.geom_constr)
    fw.write('\n@@@\n\n')
    #Frozen PES
    curREM = qrems.ParseRems(os.path.expandvars('$QREMPATH')+'/'+'rem_frzgeom')
-   set_rems_adiabatic_eda(curREM, method, basis, options)
+   set_rems_adiabatic_eda(curREM, method, basis, 'frz', options)
    XYZ_to_Input(fw, XYZ, FRGM, curREM, read_mol=True, do_freq=options.do_freq, genbas=use_genbas, geom_constr=options.geom_constr)
 
 #the script
@@ -225,7 +231,7 @@ for method in options.method:
                inputfile += '_frzgeom.in'
             fw = open(inputfile, 'w')
             curREM = qrems.ParseRems(os.path.expandvars('$QREMPATH')+'/'+'rem_frzgeom')
-            set_rems_adiabatic_eda(curREM, method, basis, options)
+            set_rems_adiabatic_eda(curREM, method, basis, 'frz', options)
             XYZ_to_Input(fw, parsed_XYZ, FRGM, curREM, do_freq=options.do_freq, genbas=(basis.lower()=='gen'), geom_constr=options.geom_constr)
             fw.close()
 
@@ -249,7 +255,7 @@ for method in options.method:
 
             fw = open(inputfile, 'w')
             curREM = qrems.ParseRems(os.path.expandvars('$QREMPATH')+'/'+'rem_polgeom')
-            set_rems_adiabatic_eda(curREM, method, basis, options)
+            set_rems_adiabatic_eda(curREM, method, basis, 'pol', options)
             XYZ_to_Input(fw, parsed_XYZ, FRGM, curREM, do_freq=options.do_freq, do_ferf=options.do_ferf, genbas=(basis.lower()=='gen'), geom_constr=options.geom_constr)
             fw.close()
             
@@ -263,7 +269,7 @@ for method in options.method:
                inputfile += '_scfgeom.in'
             fw = open(inputfile, 'w')
             curREM = qrems.ParseRems(os.path.expandvars('$QREMPATH')+'/'+'rem_scfgeom')
-            set_rems_adiabatic_eda(curREM, method, basis, options)
+            set_rems_adiabatic_eda(curREM, method, basis, 'full', options)
             XYZ_to_Input(fw, parsed_XYZ, FRGM, curREM, do_freq=options.do_freq, genbas=(basis.lower()=='gen'), geom_constr=options.geom_constr)
             fw.close()
 
