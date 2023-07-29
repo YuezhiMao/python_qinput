@@ -8,7 +8,7 @@ import qrems, qmol
 
 def ParseInput(ArgsIn):
    UseMsg = '''
-   python make_input_E_bind.py [options] [xyz_path] [frgm_partition]
+   make_input_dfteda [options] [xyz_path] [frgm_file]
    ''' 
    parser = OptionParser(usage=UseMsg)
    parser.add_option('-a','--all',dest='all',action='store_true',default=False,help='run all the xyz files under the xyz_path')
@@ -20,12 +20,12 @@ def ParseInput(ArgsIn):
    parser.add_option('-i','--input_path',dest='input_path',action='store',type='string', default='input/',help='The directory storing the generated inputs')
    parser.add_option('--op',dest='eda_option',action='store',type='int',default=2,help='EDA option; default is 2 (almo-pol)')
    parser.add_option('--bsse',dest='bsse',action='store_true',default=False,help='set EDA_BSSE to true')
-   parser.add_option('--skip_ortho_decomp', dest='skip_ortho_decomp',action='store_true',default=False,help='skip the orthogonal decomposition of frozen interaction')
+   parser.add_option('--skip_ortho_decomp', dest='skip_ortho_decomp',action='store_true',default=False,help='skip the orthogonal decomposition of frozen interaction (frz_ortho_decomp = -1')
    parser.add_option('--dfxc',dest='dfxc',action='store',type='string',default=None, help='choose the DFXC to use')
-   parser.add_option('--rehyb',dest='rehyb',action='store_true',default=False,help='calculate E_rehyb')
+   parser.add_option('--rehyb',dest='rehyb',action='store_true',default=False,help='calculate E_rehyb with eda_separate_rehyb = true')
    parser.add_option('--align_spin',dest='align_spin',action='store_true',default=False,help='set eda_align_frgm_spin = 2')
    parser.add_option('--mbe',dest='mbe',action='store_true',default=False,help='do many body expansion (limited to 3-body systems for now)')
-   parser.add_option('--snap_range', dest='snap_range', action='callback', type='string', default=None, callback=string_sp_callback, help='Only run snapshots in the given range')
+   parser.add_option('--index_range', dest='index_range', action='callback', type='string', default=None, callback=string_sp_callback, help='Only run jobs whose integer index is in a certain range (suitable for cases like MD snapshots)')
    parser.add_option('--smd', dest='smd', action='store', type='string', default=None, help='turn on SMD solvation and specify the solvent')
    parser.add_option('--pcm', dest='pcm', action='store', type='float', default=0., help='turn on PCM solvation and specify the dielectric constant')
    options, args = parser.parse_args(ArgsIn)
@@ -52,9 +52,9 @@ def string_sp_callback_space(option, opt, value, parser):
    setattr(parser.values, option.dest, value.split(' '))
 
 def snapshot_in_range(xyz_file, options):
-   #the local snap_range is a 2-tuple of int
-   range_lower = int(options.snap_range[0])
-   range_upper = int(options.snap_range[1])+1
+   #the local index_range is a 2-tuple of int
+   range_lower = int(options.index_range[0])
+   range_upper = int(options.index_range[1])+1
    snap_index = int(re.search("(\d+).xyz", xyz_file).group(1))
    if snap_index in range(range_lower, range_upper):
       return True
@@ -137,7 +137,7 @@ def set_rems_eda(curREM, method, basis, options):
       qrems.ModRem('SOLVENT_METHOD', 'SMD', curREM)
 
    #default rem_frgm
-   qrems.ModRem_Frgm('MEM_TOTAL', '8000', curREM)
+   qrems.ModRem_Frgm('MEM_TOTAL', '16000', curREM)
    qrems.ModRem_Frgm('MEM_STATIC', '2000', curREM)
    qrems.ModRem_Frgm('SCF_GUESS', 'SAD', curREM)
 
@@ -197,7 +197,7 @@ for method in options.method:
       basis_short = qrems.basis_abbr(basis)
       set_rems_eda(curREM, method, basis, options) 
       for xyz_file in xyzfile_list:
-         if(options.snap_range!=None):
+         if(options.index_range!=None):
             if (not snapshot_in_range(xyz_file, options)):
                continue
          parsed_XYZ = qmol.XYZ(xyz_file)
@@ -222,6 +222,3 @@ for method in options.method:
             #do 1,3, skip 2
             inputfile13 = input_path+parsed_XYZ.Name+'_eda2_op'+str(options.eda_option)+'_mbe13_'+method+'_'+basis_short+'.in'
             XYZ_to_Input(inputfile13, parsed_XYZ, FRGM, curREM, 2) 
-
-
-
