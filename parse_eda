@@ -14,11 +14,6 @@ def ParseInput(ArgsIn):
    parser.add_option('-t','--target',dest='target',action='callback',callback=string_sp_callback,type='string',default=None,help='the output directories to parse (separated by \",\")')
    parser.add_option('-k','--keyword',dest='keyword',action='store',type='string',default=None,help='parse all the output dirs containing the keyword')
    parser.add_option('--noCT',dest='noCT',action='store_true',default=False,help='Do not parse the CT related results (required by the EDA_noCT jobs)')
-   parser.add_option('--fullavail',dest='fullavail',action='store_true',default=False,help='full SCF data for evaluating CT (for noCT jobs only)')
-   parser.add_option('--mp2',dest='mp2',action='store_true',default=False,help='Parse the total binding energy (only) evaluated by MP2 or double hybrid DFT (T-Q extrapolation presumed') #this should ignore a lot of other options
-   parser.add_option('--cdft',dest='cdft',action='store_true',default=False,help='Parse CDFT CT energies; require each job has at least one CDFT and one full SCF calculation')
-   parser.add_option('--single_atom',dest='single_atom',action='store',default=None, help="When parsing the total binding curve, enable the special case in which one monomer is a single atom so one job covers everything. Recognizable options: mon1(monA,1), mon2(monB,2), both")
-   parser.add_option('--old',dest='oldeda',action='store_true',default=False,help='Parsing EDA jobs using the old ALMO-EDA code')
    parser.add_option('--modified',dest='modified',action='store_true',default=False,help='Modified frozen decomposition: E_cls_elec, E_mod_pauli, E_disp')
    parser.add_option('--cls_disp',dest='cls_disp',action='store_true',default=False,help='Use E_cls_disp when E_disp is unavailable or else')
    parser.add_option('--ff',dest='ff',action='store_true',default=False,help='Three terms only: cls_elec, pol, vdw(pauli+disp+ct)')
@@ -32,12 +27,21 @@ def ParseInput(ArgsIn):
    parser.add_option('--bsse',dest='bsse',action='store_true',default=False,help='including the CP-based BSSE manually')
    parser.add_option('--smd',dest='smd',action='store_true',default=False,help='parse the pcm and cds energies of smd')
    parser.add_option('--pcm',dest='pcm',action='store_true',default=False,help='parse the solvent contribution to EDA')
+   parser.add_option('--prep',dest='prep',action='store_true',default=False,help='parse the preparation energy (E_prp) and save that in a separate csv file')
+
+   #The options below should be purged
+   parser.add_option('--old',dest='oldeda',action='store_true',default=False,help='Parsing EDA jobs using the old ALMO-EDA code')
+   parser.add_option('--fullavail',dest='fullavail',action='store_true',default=False,help='full SCF data for evaluating CT (for noCT jobs only)')
+   parser.add_option('--mp2',dest='mp2',action='store_true',default=False,help='Parse the total binding energy (only) evaluated by MP2 or double hybrid DFT (T-Q extrapolation presumed') #this should ignore a lot of other options
+   parser.add_option('--single_atom',dest='single_atom',action='store',default=None, help="When parsing the total binding curve, enable the special case in which one monomer is a single atom so one job covers everything. Recognizable options: mon1(monA,1), mon2(monB,2), both")
+   parser.add_option('--cdft',dest='cdft',action='store_true',default=False,help='Parse CDFT CT energies; require each job has at least one CDFT and one full SCF calculation')
    
    options, args=parser.parse_args(ArgsIn)
    if options.mp2:     #when parsing MP2, we should prevent other options being triggered
       options.neweda = False
       options.noCT = False
       options.fullavail = False
+
    if options.single_atom!=None:
       option_list = ["1","2","mon1","mon2","monA","monB", "both"]
       if options.single_atom not in option_list:
@@ -66,198 +70,6 @@ def ParseInput(ArgsIn):
 def string_sp_callback(option, opt, value, parser):
    setattr(parser.values, option.dest, value.split(','))
 
-def parse_oldeda(options, output_dir):
-#currently parsed: E_frz, E_pol, E_vct; computed quantities: E_bind  
-#for convenience, it has simply assumed all the jobs are finished successfully
-   hart_to_kj = 2625.5311584660003
-   curdir = os.getcwd()
-   os.chdir(output_dir)
-   #shortname is how the directory is called under "result/"
-   shortname = re.search('/([^/]+)/$',output_dir).group(1)
-   placeholder = ''   #little trick for parsing
-   if re.search('dist',output_dir):
-      placeholder = 'dist'
-   elif re.search('angle',output_dir):
-      placeholder = 'angle'
-   else:
-      print("Neither \"dist\" nor \"angle\", the placeholder got confused")
-      sys.exit(1)
-   
-   DataPoints = {}
-   outlist = glob.glob('*.out')
-   #outlist=sorted(outlist, key=str)
-   #print outlist
-   for out in outlist:
-      #print out
-      name_parser = re.search(placeholder+'_([^_]+)_', out)
-      geom_param = name_parser.group(1)
-      #print geom_param
-      DataPoints[geom_param] ={}
-   tmp_filename = 'grep.tmp'
-   
-   #parse E_frz
-   os.system('grep \"E_frz\" *.out > '+tmp_filename)
-   f = open(tmp_filename, 'r')
-   for line in f.readlines():
-      l = re.search(placeholder+'_([^_]+)_\S+:(\S+).+\s+(\S+)$', line)
-      geom_param = l.group(1)
-      item = l.group(2)
-      value = float(l.group(3))
-      if geom_param not in DataPoints:
-         print("geom_param: %s is not in DataPoints dictionary" %geom_param)
-         sys.exit(1)
-      DataPoints[geom_param][item] = value
-   f.close()
-
-   #parse E_pol
-   os.system('grep \"E_pol\" *.out > '+tmp_filename)
-   f = open(tmp_filename, 'r')
-   for line in f.readlines():
-      l = re.search(placeholder+'_([^_]+)_\S+:(\S+).+\s+(\S+)$', line)
-      geom_param = l.group(1)
-      item = l.group(2)
-      value = float(l.group(3))
-      if geom_param not in DataPoints:
-         print("geom_param: %s is not in DataPoints dictionary" %geom_param)
-         sys.exit(1)
-      DataPoints[geom_param][item] = value
-   f.close()
-   
-   #parse E(pfrz)
-   os.system('grep \"E(Pfrz)\" *.out > '+tmp_filename)
-   f = open(tmp_filename, 'r')
-   for line in f.readlines():
-      l = re.search(placeholder+'_([^_]+)_\S+:(\S+).+\s+(\S+)$', line)
-      geom_param = l.group(1)
-      item = l.group(2)
-      value = float(l.group(3))
-      if geom_param not in DataPoints:
-         print("geom_param: %s is not in DataPoints dictionary" %geom_param)
-         sys.exit(1)
-      DataPoints[geom_param][item] = value
-   f.close()
-
-   #parse fragment energies
-   os.system('grep -A 2 -i \"Fragment Energies\" *.out > '+tmp_filename)
-   f = open(tmp_filename, 'r')
-   frag_count = 0
-   for line in f.readlines():
-      if not re.search(placeholder, line):
-         continue
-      new_point = re.search(placeholder+'_([^_]+)_\S+:Fragment Energies', line)
-      if new_point!=None:
-         frag_count = 0
-         continue
-      
-      l = re.search(placeholder+'_([^_]+)_\S+\s+(\S+)$',line)
-      if l!=None:
-         frag_count += 1
-         if frag_count > 2:
-            print("Warning: this script only prints the energies of the first two fragments")
-         item = "E_frag"+str(frag_count)
-         geom_param = l.group(1)
-         value = float(l.group(2))
-         if geom_param not in DataPoints:
-            print("geom_param: %s is not in DataPoints dictionary" %geom_param)
-            sys.exit(1)
-         DataPoints[geom_param][item] = value
-   f.close() 
-   
-      
-   if not options.noCT: 
-      #parse E_vct
-      os.system('grep \"E_vct\" *.out > '+tmp_filename)
-      f = open(tmp_filename, 'r')
-      for line in f.readlines():
-         l = re.search(placeholder+'_([^_]+)_\S+:(\S+).+\s+(\S+)$', line)
-         geom_param = l.group(1)
-         item = l.group(2)
-         value = float(l.group(3))
-         if geom_param not in DataPoints:
-            print("geom_param: %s is not in DataPoints dictionary" %geom_param)
-            sys.exit(1)
-         DataPoints[geom_param][item] = value
-      f.close()
-      #compute E_bind
-      for geom_param in DataPoints:
-         DataPoints[geom_param]["E_bind"] = DataPoints[geom_param]["E_frz"]+DataPoints[geom_param]["E_pol"]+DataPoints[geom_param]["E_vct"]
-   
-   elif options.fullavail:
-      # we need two numbers: pol SCF energy (from the EDA job) and full SCF energy (from the normal scf job)
-      os.system('grep \"ion met\" *eda*.out > '+tmp_filename)
-      f = open(tmp_filename, 'r')
-      for line in f.readlines():
-         l = re.search(placeholder+'_([^_]+)_\S+:\s+\S+\s+(\S+)',line) 
-         geom_param = l.group(1)
-         item = "pol_scf"
-         value = float(l.group(2))
-         if geom_param not in DataPoints:
-            print("geom_param: %s is not in DataPoints dictionary" %geom_param)
-            sys.exit(1)
-         DataPoints[geom_param][item] = value
-      f.close()
-      
-      os.system('grep \"ion met\" *normalscf*.out > '+tmp_filename)
-      f = open(tmp_filename, 'r')
-      for line in f.readlines():
-         l = re.search(placeholder+'_([^_]+)_\S+:\s+\S+\s+(\S+)',line) 
-         geom_param = l.group(1)
-         item = "full_scf"
-         value = float(l.group(2))
-         if geom_param not in DataPoints:
-            print("geom_param: %s is not in DataPoints dictionary" %geom_param)
-            sys.exit(1)
-         DataPoints[geom_param][item] = value
-      f.close()
-
-      #E_ct = E(full_scf) - E(pol_scf)
-      for geom_param in DataPoints:
-         DataPoints[geom_param]["E_vct"] = hart_to_kj*(DataPoints[geom_param]["full_scf"] - DataPoints[geom_param]["pol_scf"])
-         DataPoints[geom_param]["E_bind"] = DataPoints[geom_param]["E_frz"]+DataPoints[geom_param]["E_pol"]+DataPoints[geom_param]["E_vct"]
-          
-   #generate output
-   csvfile = shortname+'.csv'
-   if not options.noCT:   #with CT
-      f = open(csvfile,'w')
-      placeholder1 = placeholder
-      placeholder2 = "E_frz (kJ/mol)"
-      placeholder3 = "E_pol (kJ/mol)"
-      placeholder4 = "E_ct (kJ/mol)"
-      placeholder5 = "E_bind (kJ/mol)"
-      placeholder6 = "E(Pfrz) (Ha)"
-      placeholder7 = "E_frag1 (Ha)"
-      placeholder8 = "E_frag2 (Ha)"
-      f.write("%15s %15s %15s %15s %15s %15s %15s %15s\n" %(placeholder1, placeholder2, placeholder3, placeholder4, placeholder5, placeholder6, placeholder7, placeholder8))
-      for geom_param in sorted(DataPoints,key=lambda geom_param:float(geom_param)):
-         #print geom_param
-         f.write("%15s %15.8f %15.8f %15.8f %15.8f %15.8f %15.8f %15.8f\n" %(geom_param,DataPoints[geom_param]["E_frz"],DataPoints[geom_param]["E_pol"],DataPoints[geom_param]["E_vct"],DataPoints[geom_param]["E_bind"],DataPoints[geom_param]["E(Pfrz)"],DataPoints[geom_param]["E_frag1"],DataPoints[geom_param]["E_frag2"]))
-      f.close()
-   elif options.fullavail:
-      f = open(csvfile,'w')
-      placeholder1 = placeholder
-      placeholder2 = "E_frz (kJ/mol)"
-      placeholder3 = "E_pol (kJ/mol)"
-      placeholder4 = "E_ct (kJ/mol)"
-      placeholder5 = "E_bind (kJ/mol)"
-      f.write("%15s %15s %15s %15s %15s\n" %(placeholder1, placeholder2, placeholder3, placeholder4, placeholder5))
-      for geom_param in sorted(DataPoints,key=lambda geom_param:float(geom_param)):
-         #print geom_param
-         f.write("%15s %15.8f %15.8f %15.8f %15.8f\n" %(geom_param,DataPoints[geom_param]["E_frz"],DataPoints[geom_param]["E_pol"],DataPoints[geom_param]["E_vct"],DataPoints[geom_param]["E_bind"]))
-      f.close()
-
-   else:  #no CT and full SCF not available
-      f = open(csvfile,'w')
-      placeholder1 = placeholder
-      placeholder2 = "E_frz (kJ/mol)"
-      placeholder3 = "E_pol (kJ/mol)"
-      f.write("%15s %15s %15s\n" %(placeholder1, placeholder2, placeholder3))
-      for geom_param in sorted(DataPoints,key=lambda geom_param:float(geom_param)):
-         #print geom_param
-         f.write("%15s %15.8f %15.8f\n" %(geom_param,DataPoints[geom_param]["E_frz"],DataPoints[geom_param]["E_pol"]))
-      f.close()
-   sp.call(['rm',tmp_filename])
-   os.chdir(curdir)
-   return
 
 
 #for parsing a PES scan
@@ -371,79 +183,6 @@ def parse_neweda_pes(options, output_dir, keyword=None):
    os.chdir(curdir)
    return
  
-#for parsing a PES scan of CDFT jobs
-def parse_cdft_pes(options, output_dir, keyword=None):
-   hart_to_kj = 2625.5311584660003
-   hart_to_kcal = 627.5095
-   curdir = os.getcwd()
-   os.chdir(output_dir)
-
-   placeholder = ''  #little trick to get the geom_param
-   if re.search('dist',output_dir):
-      placeholder = 'dist'
-   elif re.search('angle',output_dir):
-      placeholder = 'angle'
-   elif options.placeholder!=None:
-      placeholder = options.placeholder
-   else:
-      print("Neither \"dist\" nor \"angle\", the placeholder got confused")
-      sys.exit(1)
-
-   DataPoints = {}
-   outlist = glob.glob('*.out')
-   for out in outlist:
-      name_parser = re.search(placeholder+'_([^_]+)_', out)
-      geom_param = name_parser.group(1)
-      DataPoints[geom_param] = {}
-      DataPoints[geom_param]["basic_energies"] = []
-      DataPoints[geom_param]["ct_energies"] = []
-
-   #collect the SCF energies
-   tmp_filename = 'grep.tmp'
-   if not keyword:
-      os.system('grep \"ion met\" *.out > '+tmp_filename)
-   else:
-      os.system('grep \"ion met\" *'+keyword+'*.out > '+tmp_filename)
-   f = open(tmp_filename, 'r')
-   for line in f.readlines():
-      l = line.split()
-      geom_param = re.search(placeholder+'_([^_]+)_', l[0]).group(1)
-      value = float(l[2])
-      if geom_param not in DataPoints:
-         print("geom_param: %s is not in DataPoints dictionary. Something is very wrong" %geom_param)
-         sys.exit(1)
-      DataPoints[geom_param]["basic_energies"].append(value)
-   f.close()
-
-   #evaluate the CT energies
-   for geom_param in DataPoints:
-      n_ct = len(DataPoints[geom_param])
-      for i in range(0, n_ct):
-         ct_energy = DataPoints[geom_param]["basic_energies"][-1] - DataPoints[geom_param]["basic_energies"][i]
-         if options.kcal:
-            ct_energy *= hart_to_kcal
-         else:
-            ct_energy *= hart_to_kj
-         DataPoints[geom_param]["ct_energies"].append(ct_energy)
-
-
-   #generate output
-   if not keyword:
-      csvfile_basic = 'CDFT.csv'
-   else:
-      csvfile_basic = 'CDFT_'+keyword+'.csv'
-   f = open(csvfile_basic,'w')
-   for geom_param in sorted(DataPoints, key=lambda geom_param:float(geom_param)):
-      f.write("%s" %geom_param)
-      for ct_energy in DataPoints[geom_param]["ct_energies"]:
-         f.write(",%.4f" %ct_energy)
-      f.write("\n")
-   f.close()
-
-   sp.call(['rm', tmp_filename])
-   os.chdir(curdir)
-   return
-
 
 #parse generic EDA jobs (using full jobname to specify each data point)
 def parse_neweda_generic(options, output_dir, keyword=None): #TODO: make this the update-to-date parser for new EDA jobs
@@ -666,16 +405,22 @@ def parse_neweda_snapshot(options, output_dir, keyword=None):
       placeholder8 = "E_disp" 
       f.write("%s,%s,%s,%s,%s,%s,%s,%s\n" %(placeholder1, placeholder6, placeholder7, placeholder8, placeholder2, placeholder3, placeholder4, placeholder5))
 
-   for geom_param in sorted(DataPoints,key=lambda geom_param:float(geom_param)):
+   for snapID in sorted(DataPoints,key=lambda snapID:float(snapID)):
       if not options.modified:
-         f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(geom_param,DataPoints[geom_param]["E_elec"],DataPoints[geom_param]["E_pauli"],DataPoints[geom_param]["E_disp"],DataPoints[geom_param]["E_cls_elec"],DataPoints[geom_param]["E_frz"],DataPoints[geom_param]["E_pol"],DataPoints[geom_param]["E_vct"],DataPoints[geom_param]["E_int"]))
+         f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(snapID,DataPoints[snapID]["E_elec"],DataPoints[snapID]["E_pauli"],DataPoints[snapID]["E_disp"],DataPoints[snapID]["E_cls_elec"],DataPoints[snapID]["E_frz"],DataPoints[snapID]["E_pol"],DataPoints[snapID]["E_vct"],DataPoints[snapID]["E_int"]))
       elif not options.cls_disp:
-         f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(geom_param,DataPoints[geom_param]["E_cls_elec"],DataPoints[geom_param]["E_mod_pauli"],DataPoints[geom_param]["E_disp"],DataPoints[geom_param]["E_frz"],DataPoints[geom_param]["E_pol"],DataPoints[geom_param]["E_vct"],DataPoints[geom_param]["E_int"]))
+         f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(snapID,DataPoints[snapID]["E_cls_elec"],DataPoints[snapID]["E_mod_pauli"],DataPoints[snapID]["E_disp"],DataPoints[snapID]["E_frz"],DataPoints[snapID]["E_pol"],DataPoints[snapID]["E_vct"],DataPoints[snapID]["E_int"]))
       else:
-         f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(geom_param,DataPoints[geom_param]["E_cls_elec"],DataPoints[geom_param]["E_mod_pauli"],DataPoints[geom_param]["E_cls_disp"],DataPoints[geom_param]["E_frz"],DataPoints[geom_param]["E_pol"],DataPoints[geom_param]["E_vct"],DataPoints[geom_param]["E_int"]))
-
+         f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(snapID,DataPoints[snapID]["E_cls_elec"],DataPoints[snapID]["E_mod_pauli"],DataPoints[snapID]["E_cls_disp"],DataPoints[snapID]["E_frz"],DataPoints[snapID]["E_pol"],DataPoints[snapID]["E_vct"],DataPoints[snapID]["E_int"]))
 
    f.close()
+
+   if options.prep:
+      fw = open('E_prep.csv', 'w')
+      fw.write("ID,E_prp\n")
+      for snapID in sorted(DataPoints,key=lambda snapID:float(snapID)):
+         fw.write("%s,%.4f\n" %(snapID,DataPoints[snapID]["E_prp"]))
+      fw.close()
 
    sp.call(['rm', tmp_filename])
    os.chdir(curdir)
@@ -694,6 +439,276 @@ def compute_3b_terms(outdir):
    data_3b[:,1:] = data_tot[:,1:] - data_mbe12[:,1:] - data_mbe13[:,1:] - data_mbe23[:,1:]
    np.savetxt("3b_term.csv", data_3b, delimiter=',', fmt='%.2f')
    os.chdir(curdir)
+
+
+
+################## Functions to be purged ##################
+def parse_oldeda(options, output_dir):
+#currently parsed: E_frz, E_pol, E_vct; computed quantities: E_bind  
+#for convenience, it has simply assumed all the jobs are finished successfully
+   hart_to_kj = 2625.5311584660003
+   curdir = os.getcwd()
+   os.chdir(output_dir)
+   #shortname is how the directory is called under "result/"
+   shortname = re.search('/([^/]+)/$',output_dir).group(1)
+   placeholder = ''   #little trick for parsing
+   if re.search('dist',output_dir):
+      placeholder = 'dist'
+   elif re.search('angle',output_dir):
+      placeholder = 'angle'
+   else:
+      print("Neither \"dist\" nor \"angle\", the placeholder got confused")
+      sys.exit(1)
+   
+   DataPoints = {}
+   outlist = glob.glob('*.out')
+   #outlist=sorted(outlist, key=str)
+   #print outlist
+   for out in outlist:
+      #print out
+      name_parser = re.search(placeholder+'_([^_]+)_', out)
+      geom_param = name_parser.group(1)
+      #print geom_param
+      DataPoints[geom_param] ={}
+   tmp_filename = 'grep.tmp'
+   
+   #parse E_frz
+   os.system('grep \"E_frz\" *.out > '+tmp_filename)
+   f = open(tmp_filename, 'r')
+   for line in f.readlines():
+      l = re.search(placeholder+'_([^_]+)_\S+:(\S+).+\s+(\S+)$', line)
+      geom_param = l.group(1)
+      item = l.group(2)
+      value = float(l.group(3))
+      if geom_param not in DataPoints:
+         print("geom_param: %s is not in DataPoints dictionary" %geom_param)
+         sys.exit(1)
+      DataPoints[geom_param][item] = value
+   f.close()
+
+   #parse E_pol
+   os.system('grep \"E_pol\" *.out > '+tmp_filename)
+   f = open(tmp_filename, 'r')
+   for line in f.readlines():
+      l = re.search(placeholder+'_([^_]+)_\S+:(\S+).+\s+(\S+)$', line)
+      geom_param = l.group(1)
+      item = l.group(2)
+      value = float(l.group(3))
+      if geom_param not in DataPoints:
+         print("geom_param: %s is not in DataPoints dictionary" %geom_param)
+         sys.exit(1)
+      DataPoints[geom_param][item] = value
+   f.close()
+   
+   #parse E(pfrz)
+   os.system('grep \"E(Pfrz)\" *.out > '+tmp_filename)
+   f = open(tmp_filename, 'r')
+   for line in f.readlines():
+      l = re.search(placeholder+'_([^_]+)_\S+:(\S+).+\s+(\S+)$', line)
+      geom_param = l.group(1)
+      item = l.group(2)
+      value = float(l.group(3))
+      if geom_param not in DataPoints:
+         print("geom_param: %s is not in DataPoints dictionary" %geom_param)
+         sys.exit(1)
+      DataPoints[geom_param][item] = value
+   f.close()
+
+   #parse fragment energies
+   os.system('grep -A 2 -i \"Fragment Energies\" *.out > '+tmp_filename)
+   f = open(tmp_filename, 'r')
+   frag_count = 0
+   for line in f.readlines():
+      if not re.search(placeholder, line):
+         continue
+      new_point = re.search(placeholder+'_([^_]+)_\S+:Fragment Energies', line)
+      if new_point!=None:
+         frag_count = 0
+         continue
+      
+      l = re.search(placeholder+'_([^_]+)_\S+\s+(\S+)$',line)
+      if l!=None:
+         frag_count += 1
+         if frag_count > 2:
+            print("Warning: this script only prints the energies of the first two fragments")
+         item = "E_frag"+str(frag_count)
+         geom_param = l.group(1)
+         value = float(l.group(2))
+         if geom_param not in DataPoints:
+            print("geom_param: %s is not in DataPoints dictionary" %geom_param)
+            sys.exit(1)
+         DataPoints[geom_param][item] = value
+   f.close() 
+   
+      
+   if not options.noCT: 
+      #parse E_vct
+      os.system('grep \"E_vct\" *.out > '+tmp_filename)
+      f = open(tmp_filename, 'r')
+      for line in f.readlines():
+         l = re.search(placeholder+'_([^_]+)_\S+:(\S+).+\s+(\S+)$', line)
+         geom_param = l.group(1)
+         item = l.group(2)
+         value = float(l.group(3))
+         if geom_param not in DataPoints:
+            print("geom_param: %s is not in DataPoints dictionary" %geom_param)
+            sys.exit(1)
+         DataPoints[geom_param][item] = value
+      f.close()
+      #compute E_bind
+      for geom_param in DataPoints:
+         DataPoints[geom_param]["E_bind"] = DataPoints[geom_param]["E_frz"]+DataPoints[geom_param]["E_pol"]+DataPoints[geom_param]["E_vct"]
+   
+   elif options.fullavail:
+      # we need two numbers: pol SCF energy (from the EDA job) and full SCF energy (from the normal scf job)
+      os.system('grep \"ion met\" *eda*.out > '+tmp_filename)
+      f = open(tmp_filename, 'r')
+      for line in f.readlines():
+         l = re.search(placeholder+'_([^_]+)_\S+:\s+\S+\s+(\S+)',line) 
+         geom_param = l.group(1)
+         item = "pol_scf"
+         value = float(l.group(2))
+         if geom_param not in DataPoints:
+            print("geom_param: %s is not in DataPoints dictionary" %geom_param)
+            sys.exit(1)
+         DataPoints[geom_param][item] = value
+      f.close()
+      
+      os.system('grep \"ion met\" *normalscf*.out > '+tmp_filename)
+      f = open(tmp_filename, 'r')
+      for line in f.readlines():
+         l = re.search(placeholder+'_([^_]+)_\S+:\s+\S+\s+(\S+)',line) 
+         geom_param = l.group(1)
+         item = "full_scf"
+         value = float(l.group(2))
+         if geom_param not in DataPoints:
+            print("geom_param: %s is not in DataPoints dictionary" %geom_param)
+            sys.exit(1)
+         DataPoints[geom_param][item] = value
+      f.close()
+
+      #E_ct = E(full_scf) - E(pol_scf)
+      for geom_param in DataPoints:
+         DataPoints[geom_param]["E_vct"] = hart_to_kj*(DataPoints[geom_param]["full_scf"] - DataPoints[geom_param]["pol_scf"])
+         DataPoints[geom_param]["E_bind"] = DataPoints[geom_param]["E_frz"]+DataPoints[geom_param]["E_pol"]+DataPoints[geom_param]["E_vct"]
+          
+   #generate output
+   csvfile = shortname+'.csv'
+   if not options.noCT:   #with CT
+      f = open(csvfile,'w')
+      placeholder1 = placeholder
+      placeholder2 = "E_frz (kJ/mol)"
+      placeholder3 = "E_pol (kJ/mol)"
+      placeholder4 = "E_ct (kJ/mol)"
+      placeholder5 = "E_bind (kJ/mol)"
+      placeholder6 = "E(Pfrz) (Ha)"
+      placeholder7 = "E_frag1 (Ha)"
+      placeholder8 = "E_frag2 (Ha)"
+      f.write("%15s %15s %15s %15s %15s %15s %15s %15s\n" %(placeholder1, placeholder2, placeholder3, placeholder4, placeholder5, placeholder6, placeholder7, placeholder8))
+      for geom_param in sorted(DataPoints,key=lambda geom_param:float(geom_param)):
+         #print geom_param
+         f.write("%15s %15.8f %15.8f %15.8f %15.8f %15.8f %15.8f %15.8f\n" %(geom_param,DataPoints[geom_param]["E_frz"],DataPoints[geom_param]["E_pol"],DataPoints[geom_param]["E_vct"],DataPoints[geom_param]["E_bind"],DataPoints[geom_param]["E(Pfrz)"],DataPoints[geom_param]["E_frag1"],DataPoints[geom_param]["E_frag2"]))
+      f.close()
+   elif options.fullavail:
+      f = open(csvfile,'w')
+      placeholder1 = placeholder
+      placeholder2 = "E_frz (kJ/mol)"
+      placeholder3 = "E_pol (kJ/mol)"
+      placeholder4 = "E_ct (kJ/mol)"
+      placeholder5 = "E_bind (kJ/mol)"
+      f.write("%15s %15s %15s %15s %15s\n" %(placeholder1, placeholder2, placeholder3, placeholder4, placeholder5))
+      for geom_param in sorted(DataPoints,key=lambda geom_param:float(geom_param)):
+         #print geom_param
+         f.write("%15s %15.8f %15.8f %15.8f %15.8f\n" %(geom_param,DataPoints[geom_param]["E_frz"],DataPoints[geom_param]["E_pol"],DataPoints[geom_param]["E_vct"],DataPoints[geom_param]["E_bind"]))
+      f.close()
+
+   else:  #no CT and full SCF not available
+      f = open(csvfile,'w')
+      placeholder1 = placeholder
+      placeholder2 = "E_frz (kJ/mol)"
+      placeholder3 = "E_pol (kJ/mol)"
+      f.write("%15s %15s %15s\n" %(placeholder1, placeholder2, placeholder3))
+      for geom_param in sorted(DataPoints,key=lambda geom_param:float(geom_param)):
+         #print geom_param
+         f.write("%15s %15.8f %15.8f\n" %(geom_param,DataPoints[geom_param]["E_frz"],DataPoints[geom_param]["E_pol"]))
+      f.close()
+   sp.call(['rm',tmp_filename])
+   os.chdir(curdir)
+   return
+
+#for parsing a PES scan of CDFT jobs
+def parse_cdft_pes(options, output_dir, keyword=None):
+   hart_to_kj = 2625.5311584660003
+   hart_to_kcal = 627.5095
+   curdir = os.getcwd()
+   os.chdir(output_dir)
+
+   placeholder = ''  #little trick to get the geom_param
+   if re.search('dist',output_dir):
+      placeholder = 'dist'
+   elif re.search('angle',output_dir):
+      placeholder = 'angle'
+   elif options.placeholder!=None:
+      placeholder = options.placeholder
+   else:
+      print("Neither \"dist\" nor \"angle\", the placeholder got confused")
+      sys.exit(1)
+
+   DataPoints = {}
+   outlist = glob.glob('*.out')
+   for out in outlist:
+      name_parser = re.search(placeholder+'_([^_]+)_', out)
+      geom_param = name_parser.group(1)
+      DataPoints[geom_param] = {}
+      DataPoints[geom_param]["basic_energies"] = []
+      DataPoints[geom_param]["ct_energies"] = []
+
+   #collect the SCF energies
+   tmp_filename = 'grep.tmp'
+   if not keyword:
+      os.system('grep \"ion met\" *.out > '+tmp_filename)
+   else:
+      os.system('grep \"ion met\" *'+keyword+'*.out > '+tmp_filename)
+   f = open(tmp_filename, 'r')
+   for line in f.readlines():
+      l = line.split()
+      geom_param = re.search(placeholder+'_([^_]+)_', l[0]).group(1)
+      value = float(l[2])
+      if geom_param not in DataPoints:
+         print("geom_param: %s is not in DataPoints dictionary. Something is very wrong" %geom_param)
+         sys.exit(1)
+      DataPoints[geom_param]["basic_energies"].append(value)
+   f.close()
+
+   #evaluate the CT energies
+   for geom_param in DataPoints:
+      n_ct = len(DataPoints[geom_param])
+      for i in range(0, n_ct):
+         ct_energy = DataPoints[geom_param]["basic_energies"][-1] - DataPoints[geom_param]["basic_energies"][i]
+         if options.kcal:
+            ct_energy *= hart_to_kcal
+         else:
+            ct_energy *= hart_to_kj
+         DataPoints[geom_param]["ct_energies"].append(ct_energy)
+
+
+   #generate output
+   if not keyword:
+      csvfile_basic = 'CDFT.csv'
+   else:
+      csvfile_basic = 'CDFT_'+keyword+'.csv'
+   f = open(csvfile_basic,'w')
+   for geom_param in sorted(DataPoints, key=lambda geom_param:float(geom_param)):
+      f.write("%s" %geom_param)
+      for ct_energy in DataPoints[geom_param]["ct_energies"]:
+         f.write(",%.4f" %ct_energy)
+      f.write("\n")
+   f.close()
+
+   sp.call(['rm', tmp_filename])
+   os.chdir(curdir)
+   return
+
 
 def parse_mp2(options, output_dir):
    hart_to_kj = 2625.5311584660003
@@ -890,6 +905,7 @@ def parse_mp2(options, output_dir):
    os.chdir(curdir)
    return 
 
+################## End Functions to be purged ##################
 
 #The script
 options, args = ParseInput(sys.argv)
