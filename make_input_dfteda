@@ -20,14 +20,16 @@ def ParseInput(ArgsIn):
    parser.add_option('-i','--input_path',dest='input_path',action='store',type='string', default='input/',help='The directory storing the generated inputs')
    parser.add_option('--op',dest='eda_option',action='store',type='int',default=2,help='EDA option; default is 2 (almo-pol)')
    parser.add_option('--bsse',dest='bsse',action='store_true',default=False,help='set EDA_BSSE to true')
-   parser.add_option('--skip_ortho_decomp', dest='skip_ortho_decomp',action='store_true',default=False,help='skip the orthogonal decomposition of frozen interaction (frz_ortho_decomp = -1')
+   parser.add_option('--nonauf',dest='nonauf',action='store',type='string',default=None,help='Turn on the non-aufbau ALMO-EDA and specify the $scfmi_mom section')
+   parser.add_option('--skip_ortho_decomp',dest='skip_ortho_decomp',action='store_true',default=False,help='skip the orthogonal decomposition of frozen interaction (frz_ortho_decomp = -1')
+   parser.add_option('--skip_ptd',dest='skip_ptd',action='store_true',default=False,help='skip the polarize-then-depolarize procedure by setting frz_relax = -1')
    parser.add_option('--dfxc',dest='dfxc',action='store',type='string',default=None, help='choose the DFXC to use')
    parser.add_option('--rehyb',dest='rehyb',action='store_true',default=False,help='calculate E_rehyb with eda_separate_rehyb = true')
    parser.add_option('--align_spin',dest='align_spin',action='store_true',default=False,help='set eda_align_frgm_spin = 2')
    parser.add_option('--mbe',dest='mbe',action='store_true',default=False,help='do many body expansion (limited to 3-body systems for now)')
-   parser.add_option('--index_range', dest='index_range', action='callback', type='string', default=None, callback=string_sp_callback, help='Only run jobs whose integer index is in a certain range (suitable for cases like MD snapshots)')
    parser.add_option('--smd', dest='smd', action='store', type='string', default=None, help='turn on SMD solvation and specify the solvent')
    parser.add_option('--pcm', dest='pcm', action='store', type='float', default=0., help='turn on PCM solvation and specify the dielectric constant')
+   parser.add_option('--index_range', dest='index_range', action='callback', type='string', default=None, callback=string_sp_callback, help='Only run jobs whose integer index is in a certain range (suitable for cases like MD snapshots)')
    options, args = parser.parse_args(ArgsIn)
   
    if not options.onsite:
@@ -106,6 +108,7 @@ def set_rems_eda(curREM, method, basis, options):
    #set EDA2-specific rems
    qrems.ModRem('JOBTYPE', 'EDA', curREM)
    qrems.ModRem('EDA2', str(options.eda_option), curREM)
+   qrems.ModRem('SCF_GUESS', 'FRAGMO', curREM)
    if options.bsse:
       qrems.ModRem('EDA_BSSE', 'TRUE', curREM)
    if options.skip_ortho_decomp:
@@ -125,8 +128,13 @@ def set_rems_eda(curREM, method, basis, options):
          qrems.ModRem('DISP_FREE_C', 'LYP', curREM)
       else:
          print("Requested DFXC: %s is not recognized" %options.dfxc)
-
-   qrems.ModRem('SCF_GUESS', 'FRAGMO', curREM)
+   if options.nonauf != None: #non-aufbau ALMO-EDA
+      qrems.ModRem('EDA2_MOM', 'TRUE', curREM)
+      qrems.ModRem('MOM_METHOD', 'IMOM', curREM) #use IMOM by default
+      qrems.ModRem('FRZ_RELAX', '-1', curREM)
+      qrems.ModRem('UNRESTRICTED', 'TRUE', curREM) #has to turn on unrestricted for delta SCF calculations
+   if options.skip_ptd:
+      qrems.ModRem('FRZ_RELAX', '-1', curREM)
    if options.rehyb:
       qrems.ModRem('EDA_SEPARATE_REHYB', 'TRUE', curREM)
    if options.align_spin:
@@ -153,6 +161,8 @@ def XYZ_to_Input(inputfile, XYZ, FRGM, curREM, skipfrgm=0):
    if options.pcm > 0.0 or options.smd != None:
       qrems.AppendSolvationSecs(fw, options.pcm, options.smd)
    #qrems.AppendRemFrgm(fw,curREM)
+   if options.nonauf:
+      qrems.copy_section_over(fw, options.nonauf)
    fw.close()
 
 #the script 

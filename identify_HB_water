@@ -13,8 +13,8 @@ def ParseInput(ArgsIn):
    parser = OptionParser(usage=UseMsg)
    parser.add_option('--solute',dest='natoms_solute',action='store',type='int',default=-1,help='The number of solute atoms')
    parser.add_option('--acceptor',dest='idx_A',action='store',type='int',default=-1,help='The atomic index of the H-bond acceptor atom on solute')
-   parser.add_option('--r_cut',dest='r_cut',action='store',type='float',default=3.5,help='Distance cutoff for HBs')
-   parser.add_option('--theta_cut',dest='theta_cut',action='store',type='float',default='30.0',help='Angular cutoff for HBs')
+   parser.add_option('--r_cut',dest='r_cut',action='store',type='float',default=3.5,help='Distance cutoff for HBs (default: 3.5 A')
+   parser.add_option('--theta_cut',dest='theta_cut',action='store',type='float',default='30.0',help='Angular cutoff for HBs (default: 30 degs)')
    parser.add_option('--separate',dest='separate',action='store_true',default=False,help='generate separate configurations with HB or non-HB waters only')
 
    options, args = parser.parse_args(ArgsIn)
