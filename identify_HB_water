@@ -8,6 +8,7 @@ from optparse import OptionParser
 
 def ParseInput(ArgsIn):
    UseMsg = '''
+   This script generates separated solute-solvent structures with either HB water or non-HB water only. 
    Usage: python [script] [options] [target_dir]
    '''
    parser = OptionParser(usage=UseMsg)
@@ -15,7 +16,6 @@ def ParseInput(ArgsIn):
    parser.add_option('--acceptor',dest='idx_A',action='store',type='int',default=-1,help='The atomic index of the H-bond acceptor atom on solute')
    parser.add_option('--r_cut',dest='r_cut',action='store',type='float',default=3.5,help='Distance cutoff for HBs (default: 3.5 A')
    parser.add_option('--theta_cut',dest='theta_cut',action='store',type='float',default='30.0',help='Angular cutoff for HBs (default: 30 degs)')
-   parser.add_option('--separate',dest='separate',action='store_true',default=False,help='generate separate configurations with HB or non-HB waters only')
 
    options, args = parser.parse_args(ArgsIn)
    if len(args) < 2:
@@ -32,18 +32,6 @@ def ParseInput(ArgsIn):
 
    return options, args
 
-def convert_number_str2int(number):
-   if number == 'zero':
-      return 0
-   elif number == 'one':
-      return 1
-   elif number == 'two':
-      return 2
-   elif number == 'three':
-      return 3
-   elif number == 'four':
-      return 4
-
 def separate_HB_nonHB_water(xyzfile, natoms_solute, idx_A, r_cut, theta_cut, HB_path, noHB_path):
    #TODO: The vairable names should be further generalized: the acceptor atom may not be O
    AtomList, Coords = xyzgeom.parse_xyz_file(xyzfile) 
@@ -54,45 +42,56 @@ def separate_HB_nonHB_water(xyzfile, natoms_solute, idx_A, r_cut, theta_cut, HB_
    count_HB = 0
    cur_front = natoms_solute
    for idx_Ow in range(natoms_solute, natoms_tot, 3):
-      dist_OO = xyzgeom.compute_distance(Coords, idx_Ow+1, idx_A)
-      angle_H1OwO = xyzgeom.compute_angle(Coords, idx_Ow+2, idx_Ow+1, idx_A)
-      angle_H2OwO = xyzgeom.compute_angle(Coords, idx_Ow+3, idx_Ow+1, idx_A)
-      if (dist_OO < r_cut) and (angle_H1OwO < theta_cut or angle_H2OwO < theta_cut):
+      # The distance between water O and the HB acceptor on solute
+      dist_OwA = xyzgeom.compute_distance(Coords, idx_Ow+1, idx_A)
+      # The H1-Ow...A angle
+      angle_H1OwA = xyzgeom.compute_angle(Coords, idx_Ow+2, idx_Ow+1, idx_A)
+      # The H2-Ow...A angle
+      angle_H2OwA = xyzgeom.compute_angle(Coords, idx_Ow+3, idx_Ow+1, idx_A)
+      if (dist_OwA < r_cut) and (angle_H1OwA < theta_cut or angle_H2OwA < theta_cut):
          debug = False
          if debug:
             print ("Ow atomic index: %d" %(idx_Ow+1))
             print ("HB water detected; index: %d" %((idx_Ow-natoms_solute)/3 + 1))
-            print ("O...O distance: %.4f" %dist_OO)
-            print ("angle H1_Ow_O: %.3f" %angle_H1OwO)
-            print ("angle H2_Ow_O: %.3f" %angle_H2OwO)
+            print ("O...O distance: %.4f" %dist_OwA)
+            print ("angle H1_Ow_A: %.3f" %angle_H1OwA)
+            print ("angle H2_Ow_A: %.3f" %angle_H2OwA)
+         
+         # HB detected; append the atom symbols and coords
          AtomList_HB += AtomList[idx_Ow : idx_Ow+3]
          Coords_HB = np.vstack((Coords_HB, Coords[idx_Ow : idx_Ow+3, :]))
-         if idx_Ow > cur_front:
+
+         if idx_Ow > cur_front: #if true, there are non-HB water molecules before the detected HB water
+            # Append the non-HB water
             AtomList_noHB += AtomList[cur_front : idx_Ow]
             Coords_noHB = np.vstack((Coords_noHB, Coords[cur_front : idx_Ow, :]))
-         cur_front = idx_Ow + 3
+         # update the current front and HB count
+         cur_front = idx_Ow + 3 #current front will be the position right after the detected HB water
          count_HB += 1
+   # This will be executed if the last few water molecules are non-HB
    if cur_front < natoms_tot:
       AtomList_noHB += AtomList[cur_front: ]
       Coords_noHB = np.vstack((Coords_noHB, Coords[cur_front:, :]))
-   print ("Total number of HB water: %d" %count_HB)
 
    #same xyzfile name is used for HB and noHB configurations
-   xyzfile_root = re.search('\/([^\/]+)$', xyzfile).group(1)
-   #print (xyzfile_root)
+   xyzfile_name = re.search('\/([^\/]+)$', xyzfile).group(1)
+   snapshot_id = int(re.search('snapshot(\d+)', xyzfile_name).group(1))
+   print ("Snapshot: %d; Total number of HB water: %d" %(snapshot_id, count_HB))
    if count_HB > 0:
       subdir_name = str(count_HB) + '_HB'
       if not os.path.exists(HB_path + '/' + subdir_name):
          sp.call(['mkdir', HB_path+'/'+subdir_name])
-      xyzgeom.write_xyz_file(HB_path+'/'+subdir_name+'/'+xyzfile_root, AtomList_HB, Coords_HB)
-   xyzgeom.write_xyz_file(noHB_path+'/'+xyzfile_root, AtomList_noHB, Coords_noHB)
+      xyzgeom.write_xyz_file(HB_path+'/'+subdir_name+'/'+xyzfile_name, AtomList_HB, Coords_HB)
+   xyzgeom.write_xyz_file(noHB_path+'/'+xyzfile_name, AtomList_noHB, Coords_noHB)
 
 
+#The actual script starts here
 options, args = ParseInput(sys.argv)
 target_dir = args[1]
 if target_dir[-1] == "/":
    target_dir = target_dir[:-1]
 print ("processing " + target_dir)
+# Create folders for the structures with HB and non-HB waters
 HB_path = target_dir + '/HB'
 if os.path.exists(HB_path):
    os.system('rm -r ' + HB_path)
@@ -101,6 +100,7 @@ noHB_path = target_dir + '/noHB'
 if os.path.exists(noHB_path):
    os.system('rm -r ' + noHB_path)
 os.system('mkdir ' + noHB_path)
+
 xyzfile_list = glob.glob(target_dir + '/*.xyz') 
-for xyzfile in xyzfile_list:
+for xyzfile in sorted(xyzfile_list):
    separate_HB_nonHB_water(xyzfile, options.natoms_solute, options.idx_A, options.r_cut, options.theta_cut, HB_path, noHB_path) 
