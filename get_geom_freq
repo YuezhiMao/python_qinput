@@ -5,7 +5,7 @@ import subprocess as sp
 from optparse import OptionParser
 
 def ParseInput(ArgsIn):
-   UseMsg = "python get_geom.py [options] [result_dir]\nExample for a result dir: reoptimized_geoms/"
+   UseMsg = "get_geom_freq [options] [result_dir]\nExample for a result dir: reoptimized_geoms/"
    parser = OptionParser(UseMsg)
    parser.add_option('-a','--all',dest='all', action='store_true', default=False, help='manipulate all the output directories under the folder \"result\"')
    parser.add_option('-t','--target', dest='target', action='callback', callback=string_sp_callback, type='string', default=None, help='the output directory (only one) to manipulate')
