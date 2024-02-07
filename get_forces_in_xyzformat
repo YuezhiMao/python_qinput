@@ -11,7 +11,7 @@ def ParseInput(ArgsIn):
    Usage: python [script] [options] [target_dir] [xyzfile]
    '''
    parser = OptionParser(usage=UseMsg)
-   parser.add_option('--placeholder',dest='placeholder',action='store',type='string',default=None,help='keyword for parsing the job index')
+   parser.add_option('--placeholder',dest='placeholder',action='store',type='string',default=None,help='keyword for parsing the job index (default: None, which uses the full job name)')
    parser.add_option('--method',dest='method',action='store',type='string',default='scf',
       help='electronic structure method that generates the forces (default: scf; also support: tddft, ccsd, eom-ccsd)')
 
@@ -19,10 +19,7 @@ def ParseInput(ArgsIn):
    if len(args) < 3:
       parser.print_help()
       sys.exit(0)
-   if options.placeholder == None:
-      print ("The placeholder needs to be specified")
-      sys.exit(1)
-   if options.placeholder[-1] == "_":
+   if options.placeholder != None and options.placeholder[-1] == "_":
       options.placeholder = options.placeholder[:-1]
 
    return options, args
