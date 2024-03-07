@@ -107,6 +107,8 @@ def basis_abbr(BasName):    #generating abbreviated name for basis sets, using f
       return 'atz'
    elif fullname == 'aug-cc-pvqz':
       return 'aqz'
+   elif fullname == 'def2-msvp' or fullname == 'msvp':
+      return 'msvp'
    elif fullname == 'def2-svp' or fullname == 'svp':
       return 'svp'
    elif fullname == 'def2-svpd' or fullname == 'svpd':
