@@ -308,17 +308,19 @@ def apply_single_geom_constraint(fw, geom_param, constraint_template):
          fw.write(line)
    fw.write('$end\n')
 
-def AppendSolvationSecs(fw, pcm_epsilon=0.0, smd_solvent=None):
+def AppendSolvationSecs(fw, pcm_epsilon=0.0, smd_solvent=None, pcm_epsilon_opt=0.0):
    if pcm_epsilon > 0.0:
       fw.write('\n$pcm\n')
       fw.write('Theory  CPCM\n')
       fw.write('Method  SWIG\n')
       fw.write('Solver  INVERSION\n') 
-      fw.write('HPoints     302\n')
-      fw.write('HeavyPoints 302\n')
+      #fw.write('HPoints     302\n')
+      #fw.write('HeavyPoints 302\n')
       fw.write('$end\n\n')
       fw.write('$solvent\n')
       fw.write('Dielectric  %.2f\n' %pcm_epsilon)
+      if pcm_epsilon_opt > 0.0:
+         fw.write('OpticalDielectric  %.4f\n' %pcm_epsilon_opt)
       fw.write('$end\n')
    elif smd_solvent != None:
       fw.write('\n$smx\n')
@@ -326,6 +328,29 @@ def AppendSolvationSecs(fw, pcm_epsilon=0.0, smd_solvent=None):
       fw.write('$end\n')
    else:
       print("why here!?")
+      sys.exit(0)
+
+def AppendSolvationSecs2(fw, sol_method, solvent_name=None):
+   if solvent_name == None:
+      print("Specify the solvent_name")
+      sys.exit(0)
+   if sol_method.upper() == 'PCM':
+      fw.write('\n$pcm\n')
+      fw.write('Theory  CPCM\n')
+      fw.write('Method  SWIG\n')
+      fw.write('Solver  INVERSION\n') 
+      #fw.write('HPoints     302\n')
+      #fw.write('HeavyPoints 302\n')
+      fw.write('$end\n\n')
+      fw.write('$solvent\n')
+      fw.write('SolventName  %s\n' %solvent_name)
+      fw.write('$end\n')
+   elif sol_method[:2].upper() == "SM":
+      fw.write('\n$smx\n')
+      fw.write('solvent  %s\n' %solvent_name)
+      fw.write('$end\n')
+   else:
+      print("Solvent method %s does not support solvent name specification" %sol_method)
       sys.exit(0)
 
 def set_popanal_rems(curREM, pop_scheme_list):

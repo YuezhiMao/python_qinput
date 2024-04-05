@@ -31,7 +31,8 @@ def ParseInput(ArgsIn):
    parser.add_option('--tight',dest='tight',action='store_true',default=False,help='use tigher criterion for geom opt convergence')
    parser.add_option('--sym',dest='sym',action='store_true',default=False,help='use sym_ignore = false for geom opt')
    parser.add_option('--sol',dest='sol',action='store',type='string',default=None,help='specify the solvent model to use')
-   parser.add_option('--sol_file',dest='sol_file', action='store', type='string', default=None, help='file for the solvent model input section')
+   parser.add_option('--sol_file',dest='sol_file',action='store',type='string',default=None,help='file for the solvent model input section')
+   parser.add_option('--sol_param',dest='sol_param',action='callback',callback=string_sp_callback,type='string',default=None,help='The parameter for solvent. Dielectric constant for PCM (optical dielectric const can be added too) and solvent name for SMx')
    parser.add_option('--nto',dest='nto', action='store_true', default=False, help='perform nto analysis and save to fchk file')
    parser.add_option('--diab',dest='diab',type='string',action='callback',default=None,callback=string_sp_callback,help='perform GMH and FCD diabatization (specify the number of atoms on fragment 1 and total number of atoms)')
    parser.add_option('--dipole_field',dest='dipole_field',action='store',type='int',default=None,help='apply a dipolar field along Z direction (in MV/cm)')
@@ -73,6 +74,17 @@ def XYZ_to_Input(fw, XYZ, curREM, options):
          sys.exit(0)
       else:
          qrems.copy_section_over(fw, options.sol_file)
+   elif options.sol.upper() == 'PCM':
+      if len(options.sol_param) == 1:
+         qrems.AppendSolvationSecs(fw, pcm_epsilon=float(options.sol_param[0]))
+      elif len(options.sol_param) == 2:
+         qrems.AppendSolvationSecs(fw, pcm_epsilon=float(options.sol_param[0]), pcm_epsilon_opt=float(options.sol_param[1]))
+   elif options.sol[:2].upper() == 'SM':
+      qrems.AppendSolvationSecs(fw, smd_solvent=options.sol_param[0])
+   else:
+      print ("You need to provide a file template for the solvation-related input sections")
+      sys.exit(1)
+
    if options.dipole_field != None and options.dipole_field != 0:
       qrems.apply_dipolar_field(fw, options.dipole_field, options.field_dir)
    if options.freq and options.isotope:
@@ -97,6 +109,17 @@ def XYZ_to_Input_optfreq(fw, XYZ, myrems, options):
          sys.exit(0)
       else:
          qrems.copy_section_over(fw, options.sol_file)
+   elif options.sol.upper() == 'PCM':
+      if len(options.sol_param) == 1:
+         qrems.AppendSolvationSecs(fw, pcm_epsilon=float(options.sol_param[0]))
+      elif len(options.sol_param) == 2:
+         qrems.AppendSolvationSecs(fw, pcm_epsilon=float(options.sol_param[0]), pcm_epsilon_opt=float(options.sol_param[1]))
+   elif options.sol[:2].upper() == 'SM':
+      qrems.AppendSolvationSecs(fw, smd_solvent=options.sol_param[0])
+   else:
+      print ("You need to provide a file template for the solvation-related input sections")
+      sys.exit(1)
+
    if options.dipole_field != None and options.dipole_field != 0:
       qrems.apply_dipolar_field(fw, options.dipole_field, options.field_dir)
    if options.isotope:
