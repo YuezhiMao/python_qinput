@@ -68,22 +68,7 @@ def string_sp_callback(option, opt, value, parser):
 def XYZ_to_Input(fw, XYZ, curREM, options):
    qmol.WriteMolecule(fw, XYZ, options.charge, options.mult)
    qrems.AppendRem(fw, curREM)
-   if options.sol_file != None:
-      if not os.path.exists(options.sol_file):
-         print("specified pcm file does not exist")
-         sys.exit(0)
-      else:
-         qrems.copy_section_over(fw, options.sol_file)
-   elif options.sol.upper() == 'PCM':
-      if len(options.sol_param) == 1:
-         qrems.AppendSolvationSecs(fw, pcm_epsilon=float(options.sol_param[0]))
-      elif len(options.sol_param) == 2:
-         qrems.AppendSolvationSecs(fw, pcm_epsilon=float(options.sol_param[0]), pcm_epsilon_opt=float(options.sol_param[1]))
-   elif options.sol[:2].upper() == 'SM':
-      qrems.AppendSolvationSecs(fw, smd_solvent=options.sol_param[0])
-   else:
-      print ("You need to provide a file template for the solvation-related input sections")
-      sys.exit(1)
+   qrems.AppendSolvationSecs(fw, options.sol, options.sol_file, options.sol_param)
 
    if options.dipole_field != None and options.dipole_field != 0:
       qrems.apply_dipolar_field(fw, options.dipole_field, options.field_dir)
@@ -103,22 +88,7 @@ def XYZ_to_Input_optfreq(fw, XYZ, myrems, options):
    if options.isotope != None:
       qrems.ModRem('ISOTOPES', 'TRUE', curREM)
    qrems.AppendRem(fw, curREM)
-   if options.sol_file != None:
-      if not os.path.exists(options.sol_file):
-         print("specified pcm file does not exist")
-         sys.exit(0)
-      else:
-         qrems.copy_section_over(fw, options.sol_file)
-   elif options.sol.upper() == 'PCM':
-      if len(options.sol_param) == 1:
-         qrems.AppendSolvationSecs(fw, pcm_epsilon=float(options.sol_param[0]))
-      elif len(options.sol_param) == 2:
-         qrems.AppendSolvationSecs(fw, pcm_epsilon=float(options.sol_param[0]), pcm_epsilon_opt=float(options.sol_param[1]))
-   elif options.sol[:2].upper() == 'SM':
-      qrems.AppendSolvationSecs(fw, smd_solvent=options.sol_param[0])
-   else:
-      print ("You need to provide a file template for the solvation-related input sections")
-      sys.exit(1)
+   qrems.AppendSolvationSecs(fw, options.sol, options.sol_file, options.sol_param)
 
    if options.dipole_field != None and options.dipole_field != 0:
       qrems.apply_dipolar_field(fw, options.dipole_field, options.field_dir)

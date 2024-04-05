@@ -308,7 +308,7 @@ def apply_single_geom_constraint(fw, geom_param, constraint_template):
          fw.write(line)
    fw.write('$end\n')
 
-def AppendSolvationSecs(fw, pcm_epsilon=0.0, smd_solvent=None, pcm_epsilon_opt=0.0):
+def AppendSolvationSecs_eps(fw, pcm_epsilon=0.0, pcm_epsilon_opt=0.0):
    if pcm_epsilon > 0.0:
       fw.write('\n$pcm\n')
       fw.write('Theory  CPCM\n')
@@ -322,15 +322,11 @@ def AppendSolvationSecs(fw, pcm_epsilon=0.0, smd_solvent=None, pcm_epsilon_opt=0
       if pcm_epsilon_opt > 0.0:
          fw.write('OpticalDielectric  %.4f\n' %pcm_epsilon_opt)
       fw.write('$end\n')
-   elif smd_solvent != None:
-      fw.write('\n$smx\n')
-      fw.write('solvent  %s\n' %smd_solvent)
-      fw.write('$end\n')
    else:
       print("why here!?")
       sys.exit(0)
 
-def AppendSolvationSecs2(fw, sol_method, solvent_name=None):
+def AppendSolvationSecs_solname(fw, sol_method, solvent_name=None):
    if solvent_name == None:
       print("Specify the solvent_name")
       sys.exit(0)
@@ -352,6 +348,27 @@ def AppendSolvationSecs2(fw, sol_method, solvent_name=None):
    else:
       print("Solvent method %s does not support solvent name specification" %sol_method)
       sys.exit(0)
+
+def AppendSolvationSecs(fw, sol_method, sol_file, sol_param):
+   if sol_file != None:
+      if not os.path.exists(sol_file):
+         print("specified pcm file does not exist")
+         sys.exit(0)
+      else:
+         copy_section_over(fw, sol_file)
+   elif sol_method.upper() == 'PCM':
+      if len(sol_param) == 2:
+         AppendSolvationSecs_eps(fw, pcm_epsilon=float(sol_param[0]), pcm_epsilon_opt=float(sol_param[1]))
+      elif len(sol_param) == 1 and sol_param[0][-1].isnumeric():
+         AppendSolvationSecs_eps(fw, pcm_epsilon=float(sol_param[0]))
+      else:
+         AppendSolvationSecs_solname(fw, sol_method, sol_param[0])
+   elif sol_method[:2].upper() == 'SM':
+      AppendSolvationSecs_solname(fw, sol_method, sol_param[0])
+   else:
+      print ("You need to provide a file template for the solvation-related input sections")
+      sys.exit(1)
+
 
 def set_popanal_rems(curREM, pop_scheme_list):
    for pop_scheme in pop_scheme_list: 

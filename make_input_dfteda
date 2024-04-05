@@ -28,7 +28,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--align_spin',dest='align_spin',action='store_true',default=False,help='set eda_align_frgm_spin = 2')
    parser.add_option('--mbe',dest='mbe',action='store_true',default=False,help='do many body expansion (limited to 3-body systems for now)')
    parser.add_option('--smd', dest='smd', action='store', type='string', default=None, help='turn on SMD solvation and specify the solvent')
-   parser.add_option('--pcm', dest='pcm', action='store', type='float', default=0., help='turn on PCM solvation and specify the dielectric constant')
+   parser.add_option('--pcm', dest='pcm', action='store', type='string', default=None, help='turn on PCM solvation and specify the dielectric constant or solvent name')
    parser.add_option('--index_range', dest='index_range', action='callback', type='string', default=None, callback=string_sp_callback, help='Only run jobs whose integer index is in a certain range (suitable for cases like MD snapshots)')
    options, args = parser.parse_args(ArgsIn)
   
@@ -158,8 +158,13 @@ def XYZ_to_Input(inputfile, XYZ, FRGM, curREM, skipfrgm=0):
 
    WriteMolecule_Frgm(fw, XYZ, FRGM, skipfrgm)
    qrems.AppendRem(fw, curREM)
-   if options.pcm > 0.0 or options.smd != None:
-      qrems.AppendSolvationSecs(fw, options.pcm, options.smd)
+   if options.pcm != None: 
+      if options.pcm[-1].isnumeric(): #given dielectric const
+         qrems.AppendSolvationSecs_eps(fw, pcm_epsilon=float(options.pcm))
+      else: #given solvent name
+         qrems.AppendSolvationSecs_solname(fw, 'PCM', options.pcm)
+   elif options.smd != None:
+      qrems.AppendSolvationSecs_solname(fw, 'SMD', options.smd)
    #qrems.AppendRemFrgm(fw,curREM)
    if options.nonauf:
       qrems.copy_section_over(fw, options.nonauf)
