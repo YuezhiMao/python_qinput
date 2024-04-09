@@ -350,6 +350,8 @@ def AppendSolvationSecs_solname(fw, sol_method, solvent_name=None):
       sys.exit(0)
 
 def AppendSolvationSecs(fw, sol_method, sol_file, sol_param):
+   if sol_method == None:
+      return
    if sol_file != None:
       if not os.path.exists(sol_file):
          print("specified pcm file does not exist")
