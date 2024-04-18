@@ -397,3 +397,9 @@ def apply_dipolar_field(fw, field_strength, direction='Z'):
    fw.write('%s\t%.6f\n' %(direction.upper(), field_in_au))
    fw.write('$end\n')
 
+def apply_dipolar_field_on_bond(fw, field_strength, field_atm_1, field_atm_2):
+   field_in_au = -1.0 * float(field_strength) / 5142.0 #note: the minus comes from q-chem's convention
+   fw.write('\n$multipole_field\n')
+   fw.write('%d %d\t%.6f\n' %(field_atm_1, field_atm_2, field_in_au))
+   fw.write('$end\n')
+

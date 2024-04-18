@@ -14,6 +14,7 @@ def ParseInput(ArgsIn):
    parser.add_option('-b','--basis',dest='basis',action='store',type='string',default='dp',help='The target basis (default: 6-31+G(d))')
    parser.add_option('--increment',dest='increment',type='int',action='store',default=10,help='increment of field scan (default: 10)')
    parser.add_option('--field_dir',dest='field_dir',action='store',type='string',default='Z',help='The direction of the applied field (default: Z)')
+   parser.add_option('--field_atoms',dest='field_atoms',action='callback',callback=string_sp_callback,type='string',default=None,help='specify the indexes of two bond atoms along which the E-field is applied')
    parser.add_option('--sol',dest='sol',type='string',action='store',default=None,help='doing PCM; specify the relevant input section')
    parser.add_option('--noopt',dest='noopt',action='store_true',default=False,help='skip the geometry optimization before frequency calculation')
    parser.add_option('--nofreq',dest='nofreq',action='store_true',default=False,help='doing geometry optimization only')
@@ -31,6 +32,9 @@ def ParseInput(ArgsIn):
       sys.exit(0)
    return options, args
 
+def string_sp_callback(option, opt, value, parser):
+   setattr(parser.values, option.dest, value.split(','))
+
 options, args = ParseInput(sys.argv)
 xyz_file = args[1]
 field_min = int(args[2])
@@ -45,7 +49,13 @@ for field in range(field_min, field_max+1, increment):
       command = "make_input_sp_geom --opt"
    else:
       command = "make_input_sp_geom --opt_freq"
-   command += " --tight -t " + xyz_file + " -m " + options.method + " -b " + options.basis + " -i " + input_dir + " --dipole_field=" + str(field) + " --field_dir=" + str(options.field_dir)
+   command += " --tight -t " + xyz_file + " -m " + options.method + " -b " + options.basis + " -i " + input_dir + " --dipole_field=" + str(field) 
+   
+   if options.field_atoms != None:
+      field_atm_1, field_atm_2 = options.field_atoms[0], options.field_atoms[1]
+      command += " --field_atoms=" + field_atm_1 + "," + field_atm_2
+   else:
+      command += " --field_dir=" + str(options.field_dir)
    if options.sol != None:
       command += ' --sol=PCM --sol_file='+options.sol
    if options.charge != 0:
