@@ -104,7 +104,8 @@ def get_xyz(output_file, options):
       xyz_file = name+'.xyz'
    #os.system('grep -B 100 "OPTIMIZATION CONVERGED" '+output_file+' | grep -A 1000 "Coordinates (Angstroms)" | grep -B 1000 Point | grep -A 1000 ATOM | grep -v ATOM | grep -v Point | awk \'{print $2, $3, $4, $5}\' > '+tmp_file)
    #os.system('grep -A 100 "OPTIMIZATION CONVERGED" '+output_file+' | grep -B 100 "Z-matrix" | grep -A 500 "ATOM" | grep -v "ATOM" | grep -v "Print" > '+tmp_file)
-   command = "sed -n " + "'/OPTIMIZATION CONVERGED/,/Z-matrix/p' " + output_file + " > "+tmp_file
+   #Note: it may become "TRANSITION STATE CONVERGED" for TS jobs (or optimized structures characterized as TS)
+   command = "sed -n " + "'/CONVERGED/,/Z-matrix/p' " + output_file + " > "+tmp_file
    os.system(command)
    fr = open(tmp_file, 'r')
    AtomList =  []

@@ -14,11 +14,16 @@ def ParseInput(ArgsIn):
    parser.add_option('--placeholder',dest='placeholder',action='store',type='string',default=None,help='keyword for parsing the job index (default: None, which uses the full job name)')
    parser.add_option('--method',dest='method',action='store',type='string',default='scf',
       help='electronic structure method that generates the forces (default: scf; also support: tddft, ccsd, eom-ccsd)')
+   parser.add_option('--sol',dest='sol',action='store_true',default=False,help="Turn this on when implicit solvent is used; currently supporting PCM and SMD")
 
    options, args = parser.parse_args(ArgsIn)
    if len(args) < 3:
       parser.print_help()
       sys.exit(0)
+   if options.sol and options.method.lower() != 'scf':
+      print ("The --sol option only works for HF/DFT forces right now")
+      sys.exit(0)
+   #regulate the placeholder: removing "_" at the end
    if options.placeholder != None and options.placeholder[-1] == "_":
       options.placeholder = options.placeholder[:-1]
 
@@ -64,6 +69,21 @@ def parse_forces(infile):
    fr.close()
    return forces
 
+def parse_forces_scf_sol(infile):
+   forces = np.array([])
+   fr = open(infile, 'r')
+   for line in fr.readlines():
+      l_sp = line.split()
+      if len(l_sp) == 4 and l_sp[0].isnumeric():
+         f_i = np.array([float(l_sp[1]), float(l_sp[2]), float(l_sp[3])]) 
+         if len(forces) == 0:
+            forces = f_i
+         else:
+            forces = np.vstack((forces, f_i))
+   fr.close()
+   return forces
+
+
 def write_forces(grad_file, forces, AtomList):
    fw = open(grad_file, 'w')
    fw.write("%d\n\n" %len(AtomList))
@@ -76,7 +96,10 @@ def generate_all_forces(AtomList, options):
    for outfile in outfile_list:
       tmpfile = "tmp.txt"
       if options.method.lower() == 'scf': #default
-         command = "sed -n '/Gradient of SCF Energy/,/Gradient time/p' " + outfile + " > " + tmpfile
+         if options.sol:
+            command = "sed -n '/-- total grad/,/Gradient time/p' " + outfile + " > " + tmpfile
+         else:
+            command = "sed -n '/Gradient of SCF Energy/,/Gradient time/p' " + outfile + " > " + tmpfile
       elif options.method.lower() == 'tddft':
          command = "sed -n '/Gradient of the state energy/,/Gradient time/p' " + outfile + " > " + tmpfile
       elif options.method.lower() == 'ccsd' or options.method.lower() == 'eom-ccsd':
@@ -85,7 +108,10 @@ def generate_all_forces(AtomList, options):
          print ("Electronic structure method not supported by this script")
          sys.exit(1)
       os.system(command)
-      forces = parse_forces(tmpfile)
+      if options.sol:
+         forces = parse_forces_scf_sol(tmpfile)
+      else:
+         forces = parse_forces(tmpfile)
       #print (forces)
       if forces.shape[0] != len(AtomList):
          print ("Length of AtomList: %d; rows in forces: %d" %(len(AtomList), forces.shape[0])) 
