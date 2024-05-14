@@ -88,7 +88,7 @@ def write_forces(grad_file, forces, AtomList):
    fw = open(grad_file, 'w')
    fw.write("%d\n\n" %len(AtomList))
    for i in range(len(AtomList)):
-      fw.write("%s %12.8f %12.8f %12.8f\n" %(AtomList[i], forces[i, 0], forces[i, 1], forces[i, 2]))
+      fw.write("%s %12.10f %12.10f %12.10f\n" %(AtomList[i], forces[i, 0], forces[i, 1], forces[i, 2]))
    fw.close()
 
 def generate_all_forces(AtomList, options):
