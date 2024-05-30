@@ -371,6 +371,10 @@ def AppendSolvationSecs(fw, sol_method, sol_file, sol_param):
       print ("You need to provide a file template for the solvation-related input sections")
       sys.exit(1)
 
+def write_newplots_section(fw, n_pts):
+   fw.write('\n$plots\n') 
+   fw.write(' grid_points %d %d %d\n' %(n_pts, n_pts, n_pts))
+   fw.write('$end\n')
 
 def set_popanal_rems(curREM, pop_scheme_list):
    for pop_scheme in pop_scheme_list: 

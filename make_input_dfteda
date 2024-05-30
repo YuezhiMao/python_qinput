@@ -20,6 +20,8 @@ def ParseInput(ArgsIn):
    parser.add_option('-i','--input_path',dest='input_path',action='store',type='string', default='input/',help='The directory storing the generated inputs')
    parser.add_option('--op',dest='eda_option',action='store',type='int',default=2,help='EDA option; default is 2 (almo-pol)')
    parser.add_option('--bsse',dest='bsse',action='store_true',default=False,help='set EDA_BSSE to true')
+   parser.add_option('--cta',dest='cta',action='store',type='int',default=0,help='1: old PCTA; 2: VCTA; 3: VCTA+PolA')
+   parser.add_option('--covp',dest='covp',action='store_true',default=False,help='Generate COVP cube files')
    parser.add_option('--nonauf',dest='nonauf',action='store',type='string',default=None,help='Turn on the non-aufbau ALMO-EDA and specify the $scfmi_mom section')
    parser.add_option('--skip_ortho_decomp',dest='skip_ortho_decomp',action='store_true',default=False,help='skip the orthogonal decomposition of frozen interaction (frz_ortho_decomp = -1')
    parser.add_option('--skip_ptd',dest='skip_ptd',action='store_true',default=False,help='skip the polarize-then-depolarize procedure by setting frz_relax = -1')
@@ -45,6 +47,12 @@ def ParseInput(ArgsIn):
       print("The target directory must be specified: one or some or all")
       parser.print_help()
       sys.exit(1)
+
+   if options.covp and options.cta < 1:
+      print("Specify the CTA scheme when COVP is requested")
+      parser.print_help()
+      sys.exit(1)
+
    return options, args
 
 def string_sp_callback(option, opt, value, parser):
@@ -113,6 +121,30 @@ def set_rems_eda(curREM, method, basis, options):
       qrems.ModRem('EDA_BSSE', 'TRUE', curREM)
    if options.skip_ortho_decomp:
       qrems.ModRem('FRZ_ORTHO_DECOMP', '-1', curREM)
+      qrems.ModRem('EDA_CLS_DISP', 'TRUE', curREM)
+   if options.cta > 0:
+      if options.cta == 1: #PCTA
+         qrems.ModRem('EDA_PCT_A', 'TRUE', curREM)
+      elif options.cta == 2: #VCTA
+         qrems.ModRem('EDA_VCT_A', 'TRUE', curREM)
+      elif options.cta == 3: #POLA + VCTA
+         qrems.ModRem('EDA_POL_A', 'TRUE', curREM)   
+         qrems.ModRem('EDA_VCT_A', 'TRUE', curREM)
+      else:
+         print("Unrecognized CTA option")
+         sys.exit(1)
+   if options.covp:
+      if options.cta == 1:
+         qrems.ModRem('EDA_COVP', 'TRUE', curREM)
+         qrems.ModRem('EDA_COVP_PRINT', 'AUTOMATED', curREM)
+         qrems.ModRem('MAKE_CUBE_FILES', 'TRUE', curREM)
+         qrems.ModRem('PLOTS', 'TRUE', curREM)
+      elif options.cta > 1:
+         qrems.ModRem('EDA_SAVE_COVP', 'TRUE', curREM)
+         qrems.ModRem('EDA_COVP_THRESH', '1000', curREM)
+         qrems.ModRem('MAKE_CUBE_FILES', 'TRUE', curREM)
+         qrems.ModRem('PLOTS', 'TRUE', curREM)
+         
    if options.dfxc!=None:
       if options.dfxc.upper()=='HF':  #should be handled by default
          qrems.ModRem('DISP_FREE_X', 'HF', curREM)
@@ -168,6 +200,9 @@ def XYZ_to_Input(inputfile, XYZ, FRGM, curREM, skipfrgm=0):
    #qrems.AppendRemFrgm(fw,curREM)
    if options.nonauf:
       qrems.copy_section_over(fw, options.nonauf)
+   if options.covp:
+      n_pts = 100
+      qrems.write_newplots_section(fw, n_pts)
    fw.close()
 
 #the script 
