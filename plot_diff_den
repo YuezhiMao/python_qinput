@@ -19,8 +19,8 @@ def ParseInput(ArgsIn):
    UseMsg='''usage: %prog [final cube] [initial cube] [figure name] [options]
    Generates contour plots of difference densities of two fragments.
    Cubes are assumed to have all been generated on the same grid of points,
-   and F1final.cube is assumed to know about all atomic positions (has ghost atoms for 2).
-   --PRH
+   and F1final.cube is assumed to know about all atomic positions (has ghost atoms for 2). (P. Horn 2016)
+   Revised by YM to make the code compatible with the more recent matplotlib package (2024)
    '''
    parser=OptionParser(usage=UseMsg)
    parser.add_option('--debug',dest='debug',action='store_true',help='Turns on debug printing in the script.')
