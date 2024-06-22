@@ -71,6 +71,7 @@ def XYZ_to_Input(fw, parsed_XYZ, FRGM, myrems, options):
 def set_almotda_rems(myrems, options):
    qrems.ModRem('FRGM_METHOD', 'STOLL', myrems)
    qrems.ModRem('SCFMI_MODE', '1', myrems)
+   qrems.ModRem('CIS_N_ROOTS', str(options.nroots), myrems)
    qrems.ModRem('LOCAL_CIS', '1', myrems)
    qrems.ModRem('EIGSLV_METH', '1', myrems)
    if options.fullct:
