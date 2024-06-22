@@ -141,6 +141,8 @@ def basis_abbr(BasName):    #generating abbreviated name for basis sets, using f
       return '321g'
    elif fullname == '6-31gd' or fullname == '631gd':
       return '631gd'
+   elif fullname == '6-31gdp' or fullname == '631gdp':
+      return '631gdp'
    elif fullname == '6-31+gd' or fullname == '631+gd':
       return '631+gd'
    elif fullname == '6-31+gdp' or fullname == '631+gdp':
@@ -182,6 +184,8 @@ def add_basis_set(curREM, basis):
       ModRem('BASIS','3-21G',curREM)
    elif basis.upper() == '6-31GD' or basis.upper() == '631GD':
       ModRem('BASIS', '6-31G(D)', curREM)
+   elif basis.upper() == '6-31GDP' or basis.upper() == '631GDP':
+      ModRem('BASIS', '6-31G(D,P)', curREM)
    elif basis.upper() == '6-31+GD' or basis.upper() == '631+GD':
       ModRem('BASIS', '6-31+G(D)', curREM)
    elif basis.upper() == '6-31+GDP' or basis.upper() == '631+GDP':
