@@ -1,0 +1,126 @@
+#! /usr/bin/env python3
+
+import os, sys, glob, re
+import numpy as np
+from optparse import OptionParser
+
+def ParseInput(ArgsIn):
+   UseMsg = "parse_eom_results [options] [target_dir]"
+   parser = OptionParser(usage=UseMsg)
+   parser.add_option('--index_key', dest='index_key', action='store', type='string', default=None, help='The keyword in the output names right in front of the indexing parameter; if not provided, the full output file name will be used')
+   parser.add_option('--spec_state', dest='spec_state', action='store', type='int', default=-1, help='Only output the result for one give state')
+   
+   options, args = parser.parse_args(ArgsIn)
+   if len(args) < 2:
+      parser.print_help()
+      sys.exit(0)
+   return options, args
+
+# parser function to call when index_key is given
+def parse_tddft_results(target_dir, options):
+   curdir = os.getcwd()
+   os.chdir(target_dir)
+   tmpfile = 'tddft.tmp'
+   command = "grep -A 4 \"Excited state\" *.out > " + tmpfile
+   os.system(command)
+   data_tddft = {}
+   fr = open(tmpfile, 'r')
+   for line in fr.readlines():
+      l_sp = line.split()
+      if not (len(l_sp) > 1):
+         continue
+      if l_sp[1] == 'Excited' and l_sp[2] == 'state': #first useful line for a given job
+         frame_idx = int(re.search(options.index_key+"([^_]+)_",  l_sp[0]).group(1))
+         if frame_idx not in data_tddft:
+            data_tddft[frame_idx] = {}
+         state_idx = int(l_sp[3]) #state_idx and frame_idx are checked
+      
+      elif l_sp[1] == 'excitation': 
+         data_tddft[frame_idx][state_idx] = {}
+         data_tddft[frame_idx][state_idx]['E_ex'] = float(l_sp[-1]) #excitation energy eV is checked
+      
+      elif l_sp[1] == 'x=': #the line with transition dipole moments
+         mu_x, mu_y, mu_z = float(l_sp[-5]), float(l_sp[-3]), float(l_sp[-1])
+         data_tddft[frame_idx][state_idx]["trans_dip"] = np.array([mu_x, mu_y, mu_z])
+         
+      elif l_sp[1] == 'oscillator': #the line with oscillator strength
+         data_tddft[frame_idx][state_idx]["osc"] = float(l_sp[-1])
+   fr.close()
+   os.system("rm " + tmpfile)
+   #print E_ex and oscillator strength first
+   fw = open("ex_states.csv", 'w')
+   fw.write("frame,state,E_ex,osc\n")
+   for frame_idx in sorted(data_tddft):
+      for state_idx in sorted(data_tddft[frame_idx]):
+         if options.spec_state > 0 and state_idx != options.spec_state:
+            continue
+         fw.write("%d,%d,%.4f,%.4f\n" %(frame_idx, state_idx, data_tddft[frame_idx][state_idx]["E_ex"], data_tddft[frame_idx][state_idx]["osc"]))
+   fw.close()
+   #transition dipole
+   fw = open("trans_dip.csv", 'w')
+   fw.write("frame,state,mu_x,mu_y,mu_z\n")
+   for frame_idx in sorted(data_tddft):
+      for state_idx in sorted(data_tddft[frame_idx]):
+         if options.spec_state > 0 and state_idx != options.spec_state:
+            continue
+         fw.write("%d,%d,%.4f,%.4f,%.4f\n" %(frame_idx, state_idx, data_tddft[frame_idx][state_idx]["trans_dip"][0], data_tddft[frame_idx][state_idx]["trans_dip"][1], data_tddft[frame_idx][state_idx]["trans_dip"][2]))
+   fw.close()
+
+   os.chdir(curdir)
+
+# parser function to call when index_key is not given
+def parse_tddft_results_generic(target_dir, options):
+   curdir = os.getcwd()
+   os.chdir(target_dir)
+   tmpfile = 'tddft.tmp'
+   command = "grep -A 4 \"Excited state\" *.out > " + tmpfile
+   os.system(command)
+   data_tddft = {}
+   fr = open(tmpfile, 'r')
+   for line in fr.readlines():
+      l_sp = line.split()
+      if not (len(l_sp) > 1):
+         continue
+      if l_sp[1] == 'Excited' and l_sp[2] == 'state': #first useful line for a given job
+         jobname = l_sp[0][:-1]
+         if jobname not in data_tddft:
+            data_tddft[jobname] = {}
+         state_idx = int(l_sp[3]) 
+         data_tddft[jobname][state_idx] = {}
+         data_tddft[jobname][state_idx]['E_ex'] = float(l_sp[-1])
+
+      elif l_sp[1] == 'x=': #the line with transition dipole moments
+         mu_x, mu_y, mu_z = float(l_sp[-5]), float(l_sp[-3]), float(l_sp[-1])
+         data_tddft[jobname][state_idx]["trans_dip"] = np.array([mu_x, mu_y, mu_z])
+
+      elif l_sp[1] == 'oscillator': #the line with oscillator strength
+         data_tddft[jobname][state_idx]["osc"] = float(l_sp[-1])
+   fr.close()
+   os.system("rm " + tmpfile)
+   #print E_ex and oscillator strength first
+   fw = open("ex_states.csv", 'w')
+   fw.write("jobname,state,E_ex,osc\n")
+   for jobname in sorted(data_tddft):
+      for state_idx in sorted(data_tddft[jobname]):
+         if options.spec_state > 0 and state_idx != options.spec_state:
+            continue
+         fw.write("%s,%d,%.4f,%.4f\n" %(jobname, state_idx, data_tddft[jobname][state_idx]["E_ex"], data_tddft[jobname][state_idx]["osc"]))
+   fw.close()
+   #transition dipole
+   fw = open("trans_dip.csv", 'w')
+   fw.write("frame,state,mu_x,mu_y,mu_z\n")
+   for jobname in sorted(data_tddft):
+      for state_idx in sorted(data_tddft[jobname]):
+         if options.spec_state > 0 and state_idx != options.spec_state:
+            continue
+         fw.write("%s,%d,%.4f,%.4f,%.4f\n" %(jobname, state_idx, data_tddft[jobname][state_idx]["trans_dip"][0], data_tddft[jobname][state_idx]["trans_dip"][1], data_tddft[jobname][state_idx]["trans_dip"][2]))
+   fw.close()
+
+   os.chdir(curdir)
+
+options, args = ParseInput(sys.argv)
+target_dir = args[1]
+if options.index_key != None:
+   parse_tddft_results(target_dir, options)
+else:
+   parse_tddft_results_generic(target_dir, options)
