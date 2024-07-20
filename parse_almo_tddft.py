@@ -5,7 +5,7 @@ import numpy as np
 from optparse import OptionParser
 
 def ParseInput(ArgsIn):
-   UseMsg = "parse_eom_results [options] [target_dir]"
+   UseMsg = "python [script] [options] [target_dir]"
    parser = OptionParser(usage=UseMsg)
    parser.add_option('--index_key', dest='index_key', action='store', type='string', default=None, help='The keyword in the output names right in front of the indexing parameter; if not provided, the full output file name will be used')
    parser.add_option('--spec_state', dest='spec_state', action='store', type='int', default=-1, help='Only output the result for one give state')
