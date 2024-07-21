@@ -8,8 +8,8 @@ def ParseInput(ArgsIn):
     Usage: python [script] [options] [target_dir]
     '''
     parser = OptionParser(usage=UseMsg)
-    parser.add_option('--enthalpy',dest='enthalpy',action='store',type='string',default=None,help='keyword for parsing the enthalpy from the output file')
-    parser.add_option('--entropy',dest='entropy',action='store',type='string',default=None,help='keyword for parsing the entropy from the output file')
+    #parser.add_option('--enthalpy',dest='enthalpy',action='store',type='string',default=None,help='keyword for parsing the enthalpy from the output file')
+    #parser.add_option('--entropy',dest='entropy',action='store',type='string',default=None,help='keyword for parsing the entropy from the output file')
 
     options, args = parser.parse_args(ArgsIn)
     if len(args) < 2:
@@ -18,18 +18,18 @@ def ParseInput(ArgsIn):
     return options, args
 
 def parse_enthalpy_entropy(target_dir, options):
-    if options.enthalpy:
-        start_keyword = "Translational Enthalpy"
-        end_keyword = "Vibrational Enthalpy"
-        result_file = "QChem_enthalpy_results.csv"
-    if options.entropy:
-        start_keyword = "Translational Entropy"
-        end_keyword = "Vibrational Entropy"
-        result_file = "QChem_entropy_results.csv"
-    else:
-        start_keyword = "Zero point vibrational energy"
-        end_keyword = "Vibrational Entropy"
-        result_file = "QChem_results.csv"
+    #if options.enthalpy:
+    #    start_keyword = "Translational Enthalpy"
+    #    end_keyword = "Vibrational Enthalpy"
+    #    result_file = "QChem_enthalpy_results.csv"
+    #if options.entropy:
+    #    start_keyword = "Translational Entropy"
+    #    end_keyword = "Vibrational Entropy"
+    #    result_file = "QChem_entropy_results.csv"
+    #else:
+    start_keyword = "Zero point vibrational energy"
+    end_keyword = "Vibrational Entropy"
+    result_file = "QChem_results.csv"
     
     output_files = glob.glob(os.path.join(target_dir, '*.out'))
     all_results = []
