@@ -29,7 +29,7 @@ def parse_enthalpy_entropy(target_dir, options):
     #else:
     start_keyword = "Zero point vibrational energy"
     end_keyword = "Vibrational Entropy"
-    result_file = "QChem_results.csv"
+    result_file = "QChem_enthalpy_entropy.csv"
     
     output_files = glob.glob(os.path.join(target_dir, '*.out'))
     all_results = []
