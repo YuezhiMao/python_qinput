@@ -6,7 +6,11 @@ import subprocess as sp
 from optparse import OptionParser
 
 def ParseInput(ArgsIn):
-   parser=OptionParser()
+   UseMsg='''
+   Check whether Q-Chem jobs finished normally
+   Usage: python [script] [options] [target_dir]
+   '''
+   parser=OptionParser(usage=UseMsg)
    parser.add_option('-a','--all',dest='all', action='store_true', default=False, help='check all the output directories')
    parser.add_option('-t','--target', dest='target', action='store', type='string', default=None, help='the output directory to check')
    parser.add_option('-k','--keyword', dest='keyword', action='store', type='string', default=None, help='search for all matching output direcotries based on the keyword')
@@ -17,6 +21,10 @@ def ParseInput(ArgsIn):
    options, args=parser.parse_args(ArgsIn)
    if not options.all and options.target==None and options.keyword==None: 
       print("The target directory must be specified: one or some or all")
+      parser.print_help()
+      sys.exit(1)
+   if (options.all or options.keyword != None) and len(sys.argv) < 2:
+      print ("The target directory must be specified")
       parser.print_help()
       sys.exit(1)
    else:
@@ -105,8 +113,9 @@ options,args=ParseInput(sys.argv)
 outdir_list = []
 unfinished_list = []
 if options.all or options.keyword!=None:
+   target_dir = args[1]
    cur_dir = os.getcwd()
-   os.chdir('result/')
+   os.chdir(target_dir)
    if options.all:
       outdir_list=glob.glob('*/')
    else:
