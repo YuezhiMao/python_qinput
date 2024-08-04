@@ -36,6 +36,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--mem_total',dest='mem_total',action='store',type='int',default=-1,help='set mem_total (no smaller than 8000 MB)')
    parser.add_option('--scf_algo',dest='scf_algo',action='store',type='string',default=None,help='specify the scf algorithm (if not DIIS)')
    parser.add_option('--stab',dest='stab',action='store_true',default=False,help='use gdm algorithm and turn on stability analysis')
+   parser.add_option('--fragmo',dest='fragmo',action='store',type='string',default=None,help='use fragmo guess; need to specify the .frgm file here')
    parser.add_option('--efield',dest='efield',action='store_true',default=False,help='calculate electric field on atomic positions or on grid points')
    parser.add_option('--dipole_field',dest='dipole_field',action='store',type='int',default=None,help='apply a dipolar field along X/Y/Z direction (in MV/cm)')
    parser.add_option('--field_dir',dest='field_dir',action='store',type='string',default='Z',help='The direction of the applied field (default: Z)')
@@ -69,7 +70,14 @@ def append_single_geom_constraint(fw, constraint_template, XYZ, placeholder):
    qrems.apply_single_geom_constraint(fw, geom_param, constraint_template)
 
 def XYZ_to_Input(fw, XYZ, curREM, options):
-   qmol.WriteMolecule(fw, XYZ, options.charge, options.mult)
+   if options.fragmo:
+      if not os.path.exists(options.fragmo):
+         print("Frgm file %s does not exist" %options.fragmo)
+         sys.exit(0)
+      FRGM = qmol.FRGM(options.fragmo)
+      qmol.WriteMolecule_Frgm(fw, XYZ, FRGM)
+   else:
+      qmol.WriteMolecule(fw, XYZ, options.charge, options.mult)
    qrems.AppendRem(fw, curREM)
    if options.geom_constr != None:
       if options.constr_key == "void":
@@ -144,6 +152,8 @@ def set_gs_rems(curREM, options):
       qrems.ModRem('INTERNAL_STABILITY', 'TRUE', curREM)
    if options.scf_algo != None:
       qrems.ModRem('SCF_ALGORITHM', options.scf_algo, curREM)
+   if options.fragmo:
+      qrems.ModRem('SCF_GUESS', 'FRAGMO', curREM)
    if options.efield:
       qrems.ModRem('ESP_GRID', '0', curREM)
       qrems.ModRem('ESP_EFIELD', '1', curREM)
