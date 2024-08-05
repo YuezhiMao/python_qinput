@@ -179,6 +179,15 @@ def parse_neweda_pes(options, output_dir, keyword=None):
          fw.write("%s,%.4f\n" %(geom_param,DataPoints[geom_param]["E_sol"]))
       fw.close()
 
+   if options.prep:
+      f_prep = open('E_prep.csv', 'w')
+      f_prep.write("%s,E_prep,E_int(mod)\n")
+      for geom_param in sorted(DataPoints,key=lambda geom_param:float(geom_param)):
+         E_prp = DataPoints[geom_param]["E_prp"]
+         E_int_mod = DataPoints[geom_param]["E_int"] - E_prp
+         f_prep.write("%s,%.4f,%.4f\n" %(geom_param, E_prp, E_int_mod))
+      f_prep.close()
+
    sp.call(['rm', tmp_filename])
    os.chdir(curdir)
    return
@@ -308,8 +317,7 @@ def parse_neweda_generic(options, output_dir, keyword=None): #TODO: make this th
                E_cls_elec = DataPoints[system]["E_cls_elec"]
                E_cls_disp = DataPoints[system]["E_cls_disp"]
                E_mod_pauli = DataPoints[system]["E_mod_pauli"]
-               f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(system,E_cls_elec,E_mod_pauli,E_cls_disp,E_frz,E_pol,E_vct,E_int))
-
+               f.write("%s,%.8f,%.8f,%.8f,%.4f,%.4f,%.4f,%.4f\n" %(system,E_cls_elec,E_mod_pauli,E_cls_disp,E_frz,E_pol,E_vct,E_int))
          else:
             for method in DataPoints[system]:
                E_frz = DataPoints[system][method]["E_frz"] 
@@ -334,6 +342,23 @@ def parse_neweda_generic(options, output_dir, keyword=None): #TODO: make this th
                   f.write("%s,%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(system,method,E_cls_elec,E_mod_pauli,E_cls_disp,E_frz,E_pol,E_vct,E_int))
 
    f.close()
+
+   if options.prep:
+      f_prep = open('E_prep.csv', 'w') 
+      if not options.modelchem:
+         f_prep.write("system,E_prep,E_int(mod)\n")
+         for system in sorted(DataPoints):
+            E_prp = DataPoints[system]['E_prp']
+            E_int_mod = DataPoints[system]['E_int'] - E_prp 
+            f_prep.write("%s,%.4f,%.4f\n" %(system, E_prp, E_int_mod))
+      else:
+         f_prep.write("system,method,E_prep,E_int(mod)\n")
+         for system in sorted(DataPoints):
+            for method in DataPoints[system]:
+               E_prp = DataPoints[system][method]['E_prp']
+               E_int_mod = DataPoints[system][method]['E_int'] - E_prp 
+               f_prep.write("%s,%s,%.4f,%.4f\n" %(system, method, E_prp, E_int_mod))
+      f_prep.close()
 
    sp.call(['rm', tmp_filename])
    os.chdir(curdir)
@@ -417,9 +442,11 @@ def parse_neweda_snapshot(options, output_dir, keyword=None):
 
    if options.prep:
       fw = open('E_prep.csv', 'w')
-      fw.write("ID,E_prp\n")
+      fw.write("ID,E_prp,E_int(mod)\n")
       for snapID in sorted(DataPoints,key=lambda snapID:float(snapID)):
-         fw.write("%s,%.4f\n" %(snapID,DataPoints[snapID]["E_prp"]))
+         E_prp = DataPoints[snapID]["E_prp"]
+         E_int_mod = DataPoints[snapID]["E_int"] - E_prp
+         fw.write("%s,%.4f\n" %(snapID, E_prp, E_int_mod))
       fw.close()
 
    sp.call(['rm', tmp_filename])
