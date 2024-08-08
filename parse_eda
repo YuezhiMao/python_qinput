@@ -24,9 +24,9 @@ def ParseInput(ArgsIn):
    parser.add_option('--placeholder',dest='placeholder',action='store',default='dist', type='string',help='placeholder for pes scan (the word in front of the geom parameter)')
    parser.add_option('--kcal',dest='kcal',action='store_true',default=False,help='use kcal/mol for printed interactions (only applied to new EDA jobs)')
    parser.add_option('--modelchem',dest='modelchem',action='store_true',default=False,help='parse the model chemistry used for the job')
-   parser.add_option('--bsse',dest='bsse',action='store_true',default=False,help='including the CP-based BSSE manually')
-   parser.add_option('--smd',dest='smd',action='store_true',default=False,help='parse the pcm and cds energies of smd')
-   parser.add_option('--pcm',dest='pcm',action='store_true',default=False,help='parse the solvent contribution to EDA')
+   #parser.add_option('--bsse',dest='bsse',action='store_true',default=False,help='including the CP-based BSSE manually')
+   parser.add_option('--smd',dest='smd',action='store_true',default=False,help='Obsolete (6.2 and before) parser for ALMO-EDA jobs with SMD')
+   parser.add_option('--pcm',dest='pcm',action='store_true',default=False,help='Obsolete (6.2 and before) parser for ALMO-EDA jobs with PCM')
    parser.add_option('--prep',dest='prep',action='store_true',default=False,help='parse the preparation energy (E_prp) and save that in a separate csv file')
 
    #The options below should be purged
@@ -38,7 +38,6 @@ def ParseInput(ArgsIn):
    
    options, args=parser.parse_args(ArgsIn)
    if options.mp2:     #when parsing MP2, we should prevent other options being triggered
-      options.neweda = False
       options.noCT = False
       options.fullavail = False
 
@@ -123,11 +122,12 @@ def parse_neweda_pes(options, output_dir, keyword=None):
             DataPoints[geom_param][item] *= 1.0/hart_to_kj * hart_to_kcal #final results in kcal/mol
    f.close()
 
-   #including the BSSE if desired
-   if options.bsse:
-      for geom_param in DataPoints:
-         DataPoints[geom_param]["E_int"] += DataPoints[system]["BSSE"]
-         DataPoints[geom_param]["E_vct"] += DataPoints[system]["BSSE"]
+   #No longer needed since handled by Q-Chem
+   ##including the BSSE if desired
+   #if options.bsse:
+   #   for geom_param in DataPoints:
+   #      DataPoints[geom_param]["E_int"] += DataPoints[system]["BSSE"]
+   #      DataPoints[geom_param]["E_vct"] += DataPoints[system]["BSSE"]
 
    #generate output
    if not keyword:
@@ -164,20 +164,35 @@ def parse_neweda_pes(options, output_dir, keyword=None):
          f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(geom_param,DataPoints[geom_param]["E_cls_elec"],DataPoints[geom_param]["E_mod_pauli"],DataPoints[geom_param]["E_cls_disp"],DataPoints[geom_param]["E_frz"],DataPoints[geom_param]["E_pol"],DataPoints[geom_param]["E_vct"],DataPoints[geom_param]["E_int"]))
    f.close()
 
-   if options.smd:
-      csvfile_smd = 'sol.csv'
-      fw = open(csvfile_smd, 'w')
-      fw.write('%s,E_pcm,E_cds,E_sol\n' %placeholder1)
-      for geom_param in sorted(DataPoints,key=lambda geom_param:float(geom_param)):
-         fw.write("%s,%.4f,%.4f,%.4f\n" %(geom_param,DataPoints[geom_param]["E_pcm"],DataPoints[geom_param]["E_cds"],DataPoints[geom_param]["E_sol"]))
-      fw.close()
+   #This code will no longer work unless print_level is increased for ALMO-EDA(solv)
+   #if options.smd:
+   #   csvfile_smd = 'sol.csv'
+   #   fw = open(csvfile_smd, 'w')
+   #   fw.write('%s,E_pcm,E_cds,E_sol\n' %placeholder1)
+   #   for geom_param in sorted(DataPoints,key=lambda geom_param:float(geom_param)):
+   #      fw.write("%s,%.4f,%.4f,%.4f\n" %(geom_param,DataPoints[geom_param]["E_pcm"],DataPoints[geom_param]["E_cds"],DataPoints[geom_param]["E_sol"]))
+   #   fw.close()
+   #if options.pcm:
+   #   csvfile_smd = 'sol.csv'
+   #   fw = open(csvfile_smd, 'w')
+   #   fw.write('%s,E_sol\n' %placeholder1)
+   #   for geom_param in sorted(DataPoints,key=lambda geom_param:float(geom_param)):
+   #      fw.write("%s,%.4f\n" %(geom_param,DataPoints[geom_param]["E_sol"]))
+   #   fw.close()
    if options.pcm:
-      csvfile_smd = 'sol.csv'
-      fw = open(csvfile_smd, 'w')
-      fw.write('%s,E_sol\n' %placeholder1)
-      for geom_param in sorted(DataPoints,key=lambda geom_param:float(geom_param)):
-         fw.write("%s,%.4f\n" %(geom_param,DataPoints[geom_param]["E_sol"]))
-      fw.close()
+      for geom_param in DataPoints:
+         if options.modified:
+            DataPoints[geom_param]["E_cls_elec"] = DataPoints[geom_param]["E_cls_elec(solv)"]
+         else:
+            DataPoints[geom_param]["E_elec"] = DataPoints[geom_param]["E_elec(solv)"]
+   elif options.smd:
+      for geom_param in DataPoints:
+         if options.modified:
+            DataPoints[geom_param]["E_cls_elec"] = DataPoints[geom_param]["E_cls_elec(solv)"]
+            DataPoints[geom_param]["E_mod_pauli"] = DataPoints[geom_param]["E_mod_pauli(solv)"]
+         else:
+            DataPoints[geom_param]["E_elec"] = DataPoints[geom_param]["E_elec(solv)"]
+            DataPoints[geom_param]["E_pauli"] = DataPoints[geom_param]["E_pauli(solv)"]
 
    if options.prep:
       f_prep = open('E_prep.csv', 'w')
@@ -238,24 +253,41 @@ def parse_neweda_generic(options, output_dir, keyword=None): #TODO: make this th
             if options.kcal:
                DataPoints[system][method][item] *= 1.0/hart_to_kj * hart_to_kcal
    f.close()
-   #including the BSSE if desired
-   if options.bsse:
-      for system in DataPoints:
-         DataPoints[system]["E_int"] += DataPoints[system]["BSSE"]
-         DataPoints[system]["E_vct"] += DataPoints[system]["BSSE"]
-   #modify elec and frz if doing pcm or smd
+
+   #No longer needed since handled by Q-Chem
+   ##including the BSSE if desired
+   #if options.bsse:
+   #   for system in DataPoints:
+   #      DataPoints[system]["E_int"] += DataPoints[system]["BSSE"]
+   #      DataPoints[system]["E_vct"] += DataPoints[system]["BSSE"]
+
+   ##modify elec and frz if doing pcm or smd
+   #if options.pcm:
+   #   print("Adding PCM sol contribution to the ELEC term")
+   #   for system in DataPoints:
+   #      DataPoints[system]["E_frz"] += DataPoints[system]["E_sol"]
+   #      DataPoints[system]["E_cls_elec"] += DataPoints[system]["E_sol"]
+   #      DataPoints[system]["E_elec"] += DataPoints[system]["E_sol"]
+   #elif options.smd:
+   #   print("Adding SMD sol contribution to the ELEC and PAULI terms")
+   #   for system in DataPoints:
+   #      DataPoints[system]["E_frz"] += DataPoints[system]["E_sol"]
+   #      DataPoints[system]["E_cls_elec"] += DataPoints[system]["E_pcm"]
+   #      DataPoints[system]["E_mod_pauli"] += DataPoints[system]["E_cds"]
    if options.pcm:
-      print("Adding PCM sol contribution to the ELEC term")
       for system in DataPoints:
-         DataPoints[system]["E_frz"] += DataPoints[system]["E_sol"]
-         DataPoints[system]["E_cls_elec"] += DataPoints[system]["E_sol"]
-         DataPoints[system]["E_elec"] += DataPoints[system]["E_sol"]
+         if options.modified:
+            DataPoints[system]["E_cls_elec"] = DataPoints[system]["E_cls_elec(solv)"]
+         else:
+            DataPoints[system]["E_elec"] = DataPoints[system]["E_elec(solv)"]
    elif options.smd:
-      print("Adding SMD sol contribution to the ELEC and PAULI terms")
       for system in DataPoints:
-         DataPoints[system]["E_frz"] += DataPoints[system]["E_sol"]
-         DataPoints[system]["E_cls_elec"] += DataPoints[system]["E_pcm"]
-         DataPoints[system]["E_mod_pauli"] += DataPoints[system]["E_cds"]
+         if options.modified:
+            DataPoints[system]["E_cls_elec"] = DataPoints[system]["E_cls_elec(solv)"]
+            DataPoints[system]["E_mod_pauli"] = DataPoints[system]["E_mod_pauli(solv)"]
+         else:
+            DataPoints[system]["E_elec"] = DataPoints[system]["E_elec(solv)"]
+            DataPoints[system]["E_pauli"] = DataPoints[system]["E_pauli(solv)"]
 
    #generate output
    if not keyword:
@@ -317,7 +349,8 @@ def parse_neweda_generic(options, output_dir, keyword=None): #TODO: make this th
                E_cls_elec = DataPoints[system]["E_cls_elec"]
                E_cls_disp = DataPoints[system]["E_cls_disp"]
                E_mod_pauli = DataPoints[system]["E_mod_pauli"]
-               f.write("%s,%.8f,%.8f,%.8f,%.4f,%.4f,%.4f,%.4f\n" %(system,E_cls_elec,E_mod_pauli,E_cls_disp,E_frz,E_pol,E_vct,E_int))
+               #f.write("%s,%.8f,%.8f,%.8f,%.4f,%.4f,%.4f,%.4f\n" %(system,E_cls_elec,E_mod_pauli,E_cls_disp,E_frz,E_pol,E_vct,E_int))
+               f.write("%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n" %(system,E_cls_elec,E_mod_pauli,E_cls_disp,E_frz,E_pol,E_vct,E_int))
          else:
             for method in DataPoints[system]:
                E_frz = DataPoints[system][method]["E_frz"] 
@@ -399,11 +432,26 @@ def parse_neweda_snapshot(options, output_dir, keyword=None):
          if options.kcal:
             DataPoints[snapID][item] *= 1.0/hart_to_kj * hart_to_kcal
    f.close()
-   #including the BSSE if desired
-   if options.bsse:
-      for sanpID in DataPoints:
-         DataPoints[snapID]["E_int"] += DataPoints[system]["BSSE"]
-         DataPoints[snapID]["E_vct"] += DataPoints[system]["BSSE"]
+   ##including the BSSE if desired
+   #if options.bsse:
+   #   for sanpID in DataPoints:
+   #      DataPoints[snapID]["E_int"] += DataPoints[system]["BSSE"]
+   #      DataPoints[snapID]["E_vct"] += DataPoints[system]["BSSE"]
+
+   if options.pcm:
+      for snapID in DataPoints:
+         if options.modified:
+            DataPoints[snapID]["E_cls_elec"] = DataPoints[snapID]["E_cls_elec(solv)"]
+         else:
+            DataPoints[snapID]["E_elec"] = DataPoints[snapID]["E_elec(solv)"]
+   elif options.smd:
+      for snapID in DataPoints:
+         if options.modified:
+            DataPoints[snapID]["E_cls_elec"] = DataPoints[snapID]["E_cls_elec(solv)"]
+            DataPoints[snapID]["E_mod_pauli"] = DataPoints[snapID]["E_mod_pauli(solv)"]
+         else:
+            DataPoints[snapID]["E_elec"] = DataPoints[snapID]["E_elec(solv)"]
+            DataPoints[snapID]["E_pauli"] = DataPoints[snapID]["E_pauli(solv)"]
 
    #generate output
    if not keyword:
@@ -446,7 +494,7 @@ def parse_neweda_snapshot(options, output_dir, keyword=None):
       for snapID in sorted(DataPoints,key=lambda snapID:float(snapID)):
          E_prp = DataPoints[snapID]["E_prp"]
          E_int_mod = DataPoints[snapID]["E_int"] - E_prp
-         fw.write("%s,%.4f\n" %(snapID, E_prp, E_int_mod))
+         fw.write("%s,%.4f,%.4f\n" %(snapID, E_prp, E_int_mod))
       fw.close()
 
    sp.call(['rm', tmp_filename])
