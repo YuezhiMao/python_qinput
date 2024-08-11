@@ -31,6 +31,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--mbe',dest='mbe',action='store_true',default=False,help='do many body expansion (limited to 3-body systems for now)')
    parser.add_option('--smd', dest='smd', action='store', type='string', default=None, help='turn on SMD solvation and specify the solvent')
    parser.add_option('--pcm', dest='pcm', action='store', type='string', default=None, help='turn on PCM solvation and specify the dielectric constant or solvent name')
+   parser.add_option('--extchg',dest='extchg',action='store',type='string',default=None,help='specify the directory containing the text files for the $external_charges section')
    parser.add_option('--index_range', dest='index_range', action='callback', type='string', default=None, callback=string_sp_callback, help='Only run jobs whose integer index is in a certain range (suitable for cases like MD snapshots)')
    options, args = parser.parse_args(ArgsIn)
   
@@ -181,6 +182,14 @@ def set_rems_eda(curREM, method, basis, options):
    qrems.ModRem_Frgm('MEM_STATIC', '2000', curREM)
    qrems.ModRem_Frgm('SCF_GUESS', 'SAD', curREM)
 
+def append_ext_charges(inputfile, XYZ, xyz_path, ext_chg_dir):
+   fw = open(inputfile, 'a')
+   if ext_chg_dir[-1] != '/':
+      ext_chg_dir += '/'
+   ext_chg_file = ext_chg_dir + XYZ.Name + ".pc"
+   qrems.copy_section_over(fw, ext_chg_file)
+   fw.close()
+
 def XYZ_to_Input(inputfile, XYZ, FRGM, curREM, skipfrgm=0):
    fw = open(inputfile, 'w')
    #check if unrestricted (any open-shell fragment?)
@@ -204,6 +213,8 @@ def XYZ_to_Input(inputfile, XYZ, FRGM, curREM, skipfrgm=0):
       n_pts = 100
       qrems.write_newplots_section(fw, n_pts)
    fw.close()
+
+   
 
 #the script 
 options, args = ParseInput(sys.argv)
@@ -258,6 +269,8 @@ for method in options.method:
          #supersystem job
          inputfile = input_path+parsed_XYZ.Name+'_eda2_op'+str(options.eda_option)+'_'+method+'_'+basis_short+'.in'
          XYZ_to_Input(inputfile, parsed_XYZ, FRGM, curREM)
+         if options.extchg != None:
+            append_ext_charges(inputfile, parsed_XYZ, xyz_path, options.extchg) 
 
          #run 3 more jobs if do MBE
          if options.mbe:
