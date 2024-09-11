@@ -28,7 +28,7 @@ count = options.offset
 fw = None
 for line in fr.readlines():
    l_sp = line.split()
-   if len(l_sp) == 1:
+   if len(l_sp) == 1 and l_sp[0].isdigit():
       count += 1
       if fw != None: #finish writing the previous
          fw.close()
