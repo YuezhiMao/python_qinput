@@ -31,7 +31,8 @@ def parse_tddft_results(target_dir, options):
       l_sp = line.split()
       if not (len(l_sp) > 1):
          continue
-      if l_sp[1] == 'Excited' and l_sp[-1] != 'eV': #first useful line for a given job
+      #Note: the latter two conditions below are to present reading the lines for NTOs
+      if l_sp[1] == 'Excited' and l_sp[-1] != 'eV' and l_sp[-1][-1] != ")": #first useful line for a given job
          frame_idx = int(re.search(options.index_key+"([^_]+)_", l_sp[0]).group(1))
          if frame_idx not in data_tddft:
             data_tddft[frame_idx] = {}
@@ -79,7 +80,8 @@ def parse_tddft_results_generic(target_dir, options):
       l_sp = line.split()
       if not (len(l_sp) > 1):
          continue
-      if l_sp[1] == 'Excited' and l_sp[-1] != 'eV': #first useful line for a given job
+      #Note: the latter two conditions below are to present reading the lines for NTOs
+      if l_sp[1] == 'Excited' and l_sp[-1] != 'eV' and l_sp[-1][-1] != ")": #first useful line for a given job
          jobname = l_sp[0][:-1]
          if jobname not in data_tddft:
             data_tddft[jobname] = {}

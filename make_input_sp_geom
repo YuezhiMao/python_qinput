@@ -44,6 +44,8 @@ def ParseInput(ArgsIn):
    parser.add_option('--isotope',dest='isotope',action='store',type='string',default=None,help='Doing isotope substitution for vib analysis; specify the file for isotope section')
    parser.add_option('--cdft',dest='cdft',action='store',type='string',default=None,help='Doing CDFT; specify the $cdft section')
    parser.add_option('--pop_anal',dest='pop_anal',action='callback',callback=string_sp_callback,type='string',default=None,help='specify population analysis schemes to run')
+   parser.add_option('--fdseg',dest='fdseg',action='store',type='int',default=-2,help='Doing finite-difference frequency calculations with segments (default: -1, which is the wrap-up job)')
+   parser.add_option('--fdseg_size',dest='fdseg_size',action='store',type='int',default=5,help='default #of atoms in one segment')
 
    options, args = parser.parse_args(ArgsIn)
    if len(args) < 2 and (options.all or options.keyword!=None):
@@ -55,6 +57,9 @@ def ParseInput(ArgsIn):
       sys.exit(1)
    if options.sol_file != None and (not os.path.exists(options.sol_file)):
       print("Specified sol_file does not exist")
+      sys.exit(0)
+   if options.fdseg >= -1 and (not options.freq):
+      print("Only frequency jobs should use the fdseg feature")
       sys.exit(0)
    return options, args
 
@@ -137,6 +142,10 @@ def set_gs_rems(curREM, options):
          qrems.ModRem('ISOTOPES', 'TRUE', curREM)
       if (options.dipole_field != None and options.dipole_field != 0) or options.cdft != None:
          qrems.ModRem('IDERIV', '1', curREM)
+      if options.fdseg >= -1:
+         qrems.ModRem('IDERIV', '1', curREM)
+         qrems.ModRem('FD2ND_BLOCK_SIZE', str(options.fdseg_size), curREM)
+         qrems.ModRem('FD2ND_BLOCK_INDEX', str(options.fdseg), curREM) 
    if options.unrestricted:
       qrems.ModRem('UNRESTRICTED', 'TRUE', curREM)
    if options.mem_total > 8000:
@@ -223,7 +232,11 @@ for method in options.method:
             if options.opt:
                inputfile += '_geom_'+method+'_'+qrems.basis_abbr(basis)+'.in'
             elif options.freq:
-               inputfile += '_freq_'+method+'_'+qrems.basis_abbr(basis)+'.in'
+               if options.fdseg >= 0:
+                  inputfile += '_freq_seg'+str(options.fdseg)+'_'+method+'_'+qrems.basis_abbr(basis)+'.in'
+               else:
+                  inputfile += '_freq_'+method+'_'+qrems.basis_abbr(basis)+'.in'
+
             elif options.opt_freq:
                inputfile += '_optfreq_'+method+'_'+qrems.basis_abbr(basis)+'.in'
             else:
