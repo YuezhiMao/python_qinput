@@ -99,7 +99,10 @@ def get_xyz(output_file, options):
    name = output_file[:-4]
    tmp_file = name+'.tmp'
    if options.short_xyz:
-      xyz_file = re.search('(\S+)_opt', name).group(1) + '.xyz'
+      if re.search('(\S+)_opt', name) != None:
+         xyz_file = re.search('(\S+)_opt', name).group(1) + '.xyz'
+      else:
+         xyz_file = re.search('(\S+)_geom', name).group(1) + '.xyz'
    else:
       xyz_file = name+'.xyz'
    #os.system('grep -B 100 "OPTIMIZATION CONVERGED" '+output_file+' | grep -A 1000 "Coordinates (Angstroms)" | grep -B 1000 Point | grep -A 1000 ATOM | grep -v ATOM | grep -v Point | awk \'{print $2, $3, $4, $5}\' > '+tmp_file)
