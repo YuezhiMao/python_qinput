@@ -12,6 +12,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--bond_atoms', dest='bond_atoms', action='callback', type='string', callback=string_sp_callback, default=None, help='specify the two bond atoms')
    parser.add_option('--vib_mode', dest='vib_mode', action='store', type='int', default=None, help='The vibrational mode to be parsed (can be negative)')
    parser.add_option('--placeholder', dest='placeholder', action='store', type='string', default='dist_', help='The keyword in the output names right in front of the scanned parameter (default: dist_)')
+   parser.add_option('--intens',dest='intens',action='store_true',default=False,help='parse the IR intensities')
    options, args = parser.parse_args(ArgsIn)
    if options.bond_atoms == None and options.vib_mode == None:
       print ("Should collect data for either a geometry parameter or a vibrational mode")
@@ -38,8 +39,11 @@ def get_bond_length_data(data, idx_1, idx_2):
       bond_length = xyzgeom.compute_distance(Coords, idx_1, idx_2)
       data[scan_param]['bond_length'] = bond_length
 
-def get_frequency_data(data, mode_idx):
-   df = pd.read_csv('frequency.csv', header=None, usecols=[0, mode_idx])
+def get_frequency_data(data, mode_idx, intens):
+   if intens:
+      df = pd.read_csv('intensity.csv', header=None, usecols=[0, mode_idx])
+   else:
+      df = pd.read_csv('frequency.csv', header=None, usecols=[0, mode_idx])
    df.columns = ['name', 'frequency']
    for i in df.index:
       full_name = df.iloc[i]['name']
@@ -58,6 +62,12 @@ def write_data(data, csvfile, datatype):
    elif datatype == "freq":
       fw = open(csvfile, 'w')
       fw.write('scan_param,frequency\n')
+      for scan_param in sorted(data):
+         fw.write("%.2f,%.2f\n" %(scan_param, data[scan_param]['freq']))
+      fw.close()
+   elif datatype == "intens":
+      fw = open(csvfile, 'w')
+      fw.write('scan_param,intensity\n')
       for scan_param in sorted(data):
          fw.write("%.2f,%.2f\n" %(scan_param, data[scan_param]['freq']))
       fw.close()
@@ -91,7 +101,13 @@ else:
       write_data(data, csvfile_name, "bond")
    elif options.vib_mode != None:
       mode_idx = options.vib_mode
-      get_frequency_data(data, mode_idx)
-      csvfile_name = "frequency_scan_mode_" + str(mode_idx) + ".csv"
-      write_data(data, csvfile_name, "freq")
+      if options.intens:
+         get_frequency_data(data, mode_idx, True)
+         csvfile_name = "intensity_scan_mode_" + str(mode_idx) + ".csv"
+         write_data(data, csvfile_name, "intens")
+      else:
+         get_frequency_data(data,mode_idx, False)
+         csvfile_name = "frequency_scan_mode_" + str(mode_idx) + ".csv"
+         write_data(data, csvfile_name, "freq")
+
 os.chdir(curdir)
