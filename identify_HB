@@ -16,7 +16,8 @@ def ParseInput(ArgsIn):
    parser.add_option('--grouping',dest='grouping',action='store_true',default=False,help='Group the xyz files and copy them into separate directories')
    parser.add_option('--r_cut',dest='r_cut',action='store',type='float',default=3.5,help='Distance cutoff for HBs')
    parser.add_option('--theta_cut',dest='theta_cut',action='store',type='float',default='30.0',help='Angular cutoff for HBs')
-
+   parser.add_option('--reversed',dest='reversed',action='store_true',default=False,help='Use when solvent comes before solute in xyz')
+   
    options, args = parser.parse_args(ArgsIn)
    if len(args) < 2:
       parser.print_help()
@@ -59,6 +60,25 @@ def identify_HB_solvent(xyzfile, ntot_solute, ntot_solvent, idx_D, idx_H, idx_A,
       cur_front += ntot_solvent
 
    return found_HB
+
+def identify_HB_solvent_reverse(xyzfile, ntot_solute, ntot_solvent, idx_D, idx_H, idx_A, r_cut, theta_cut):
+   AtomList, Coords = xyzgeom.parse_xyz_file(xyzfile)
+   natoms_tot = len(AtomList)
+   cur_front = 0
+   found_HB = False
+   solvent_count = 0
+   offset = natoms_tot - ntot_solute
+   while cur_front < offset:
+      solvent_count += 1
+      dist_DA = xyzgeom.compute_distance(Coords, offset+idx_D, cur_front+idx_A)
+      angle_HDA = xyzgeom.compute_angle(Coords, offset+idx_H, offset+idx_D, cur_front+idx_A)
+      if (dist_DA < r_cut) and (angle_HDA < theta_cut):
+         print ("Found HB in %s; solvent index: %d" %(xyzfile, solvent_count))
+         found_HB = True
+         break
+      cur_front += ntot_solvent
+
+   return found_HB
       
 options, args = ParseInput(sys.argv)
 target_dir = args[1]
@@ -82,7 +102,10 @@ if do_grouping:
 xyzfile_list = glob.glob('*.xyz')
 count_HB_frame = 0
 for xyzfile in sorted(xyzfile_list):
-   found_HB = identify_HB_solvent(xyzfile, ntot_solute, ntot_solvent, idx_D, idx_H, idx_A, r_cut, theta_cut)
+   if options.reversed:
+      found_HB = identify_HB_solvent_reverse(xyzfile, ntot_solute, ntot_solvent, idx_D, idx_H, idx_A, r_cut, theta_cut)
+   else:
+      found_HB = identify_HB_solvent(xyzfile, ntot_solute, ntot_solvent, idx_D, idx_H, idx_A, r_cut, theta_cut)
    if found_HB:
       count_HB_frame += 1
    if do_grouping:
