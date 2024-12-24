@@ -6,6 +6,7 @@ from optparse import OptionParser
 
 def ParseInput(ArgsIn):
    UseMsg = '''
+   Mateo's code for finite-difference frequency
    make_input_finite_difference [xyz_file] [fd_segment_size] [num_threads] [input_dir]
    '''
    # all options that can be used with make_input_sp_geom script and are useful for finite difference calculations
