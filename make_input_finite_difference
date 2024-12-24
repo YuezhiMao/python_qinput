@@ -6,8 +6,8 @@ from optparse import OptionParser
 
 def ParseInput(ArgsIn):
    UseMsg = '''
-   Mateo's code for finite-difference frequency
-   make_input_finite_difference [xyz_file] [fd_segment_size] [num_threads] [input_dir]
+   Mateo's code for finite-difference frequency with molecular segments
+   make_input_finite_difference [xyz_file] [fd_segment_size] [input_dir]
    '''
    # all options that can be used with make_input_sp_geom script and are useful for finite difference calculations
    parser = OptionParser(usage=UseMsg)
@@ -15,20 +15,15 @@ def ParseInput(ArgsIn):
    parser.add_option('-b','--basis',dest='basis',action='store',type='string',default='631+gd',help='The target basis (default: 6-31+G(d))')
    parser.add_option('--sol',dest='sol',type='string',action='store',default=None,help='doing PCM; specify the relevant input section')
    parser.add_option('--sol_param',dest='sol_param',type='float',action='store',default=None,help='The parameter for solvent. Dielectric constant for PCM')
-   parser.add_option('--opt',dest='opt',action='store_true',default=False,help='doing geometry optimization')
-   parser.add_option('--freq',dest='freq',action='store_true',default=False,help='doing harmonic frequency calculation')
    parser.add_option('--charge',dest='charge',action='store',type='int',default=0,help='total charge of the system')
-   parser.add_option('--geom_constr', dest='geom_constr', action='store', default=None, type='string', help='specify the template file for adding geometry optimization constraint')
-   parser.add_option('--constr_key',dest='constr_key',action='store',default='dist',type='string',help='specify the key in the XYZ filename for the constraint value')
+   parser.add_option('--mult',dest='mult',action='store',type='int',default=1,help='total multiplicity of the system') 
+   parser.add_option('--unrestricted',dest='unrestricted',action='store_true',default=False,help='set unrestricted = true explicitly')
    parser.add_option('--scf_algo',dest='scf_algo',action='store',default=None,type='string',help='specify the scf algorithm (if not DIIS)')
+   parser.add_option('--exec',dest='exec',action='store',type='int',default=0,help='submit the jobs directly with the number of omp threads specified (default: 0, which means not running jobs)')
    options, args = parser.parse_args(ArgsIn)
    # must put in at least arguments
-   if len(args) < 5:
+   if len(args) < 4:
       parser.print_help()
-      sys.exit(0)
-   # cannot do both an opt and freq job
-   if options.opt and options.freq:
-      print("Can't do both opt and freq")
       sys.exit(0)
    return options, args
 
@@ -38,37 +33,35 @@ def string_sp_callback(option, opt, value, parser):
 options, args = ParseInput(sys.argv)
 xyz_file = args[1]
 fd_segment_size = int(args[2])
-num_threads = int(args[3])
+num_threads = options.exec
 # collect number of atoms in a system using the xyz file inputted by user
 Atomlist, coords = xyzgeom.parse_xyz_file(xyz_file)
 num_atoms = len(Atomlist)
 # calculating the number of segments or max index number by dividing size of system by size of segments
 num_segments = math.ceil(num_atoms/fd_segment_size)
-input_dir = args[4]
+input_dir = args[3]
+if not os.path.exists(input_dir):
+   os.system("mkdir " + input_dir)
 
-# main loop that goes from index 0 and ends when all segments are created
-for index in range(0, num_segments):
-   # start the command by specifying job type
-   if options.freq:
-      command = "make_input_sp_geom --freq"
-      job_type = "freq"
-   elif options.opt:
-      command = "make_input_sp_geom --opt"
-      job_type = "opt"
-   else:
-      command = "make_input_sp_geom --opt_freq"
-      job_type = "opt_freq"
+# main loop that goes from index 0 and ends when all segments are created;
+# "-1" is also included, which is the final wrap up job
+for index in range(-1, num_segments):
+   # start the command by specifying job type to be "freq"
+   command = "make_input_sp_geom --freq"
    # puts in the target, method, basis, and input directory options
    command += " -t " + xyz_file + " -m " + options.method + " -b " + options.basis + " -i " + input_dir
    
    # other options (if they are specified) are added to the command
-   if (options.sol and options.sol_param) != None:
-      command += ' --sol='+options.sol+' --sol_param='+str(options.sol_param)
+   if options.sol != None:
+      command += ' --sol='+options.sol
+   if options.sol_param != None:
+      command += ' --sol_param='+str(options.sol_param)
    if options.charge != 0:
       command += ' --charge='+str(options.charge)
-   if options.geom_constr != None:
-      command += ' --geom_constr='+options.geom_constr
-      command += ' --constr_key='+options.constr_key
+   if options.mult != 1:
+      command += '--mult='+str(options.mult)
+   if options.unrestricted:
+      command += '--unrestricted'
    if options.scf_algo != None:
       command += ' --scf_algo='+options.scf_algo
 
@@ -79,13 +72,12 @@ for index in range(0, num_segments):
    print (command)
    os.system(command)
    
-   # automated submission of the job to the server using user inputted number of threads
-   os.chdir(input_dir)
+# automated submission of the job to the server using user inputted number of threads
+if options.exec > 0:
    xyz_filename = xyz_file[:-4]
-   for file in glob.glob(xyz_filename + '_' + job_type + '_seg' + str(index) + '*.in'):
-      input_file = file
-      print (file)
-      os.system(file)
-   submission = "submit_qchem -p " + str(num_threads) + " " + input_file
-   print(submission)
-   os.system(submission)
+   os.chdir(input_dir)
+   for index in range(0, num_segments): #not including -1 at the beginning
+      input_file = xyz_filename + '_freq_seg' + str(index) + "_*.in"
+      submission_cmd = "submit_qchem -p " + str(num_threads) + " " + input_file
+      print(submission_cmd)
+      os.system(submission_cmd)
