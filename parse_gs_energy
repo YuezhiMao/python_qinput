@@ -5,7 +5,7 @@ import numpy as np
 from optparse import OptionParser
 
 def ParseInput(ArgsIn):
-   UseMsg = "parse_eom_results [options] [target_dir]"
+   UseMsg = "parse_gs_energy [options] [target_dir]"
    parser = OptionParser(usage=UseMsg)
    parser.add_option('--energy_type', dest='energy_type', action='store', type='string', default='dft', help='The type of energy to parse: e.g. dft, rimp2, ccsd, etc. (default: dft)')
    parser.add_option('--index_key', dest='index_key', action='store', type='string', default='snapshot', help='The keyword in the output names right in front of the indexing parameter (default: snapshot)')
@@ -21,7 +21,7 @@ def parse_scf_energies(target_dir, key):
    curdir = os.getcwd()
    os.chdir(target_dir)
    tmpfile = 'scf.tmp'
-   command = "grep \"Total energy in\" *.out > " + tmpfile
+   command = "grep \"Total energy =\" *.out > " + tmpfile
    os.system(command)
    data_scf = {}
    fr = open(tmpfile, 'r')

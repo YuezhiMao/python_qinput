@@ -66,7 +66,7 @@ def WriteMolecule(fw,MyMOLECULE,CoordinateValue):
    #fw.write('$molecule\n') 
    for line in range(MyMOLECULE["nlines"]):
       if (MyMOLECULE["has_scan"]) and (MyMOLECULE["scan_line_number"] == line):
-         fw.write("scan = "+str(CoordinateValue)+"\n")
+         fw.write("scan = "+"{:.6f}".format(CoordinateValue)+"\n")
       else:
          fw.write(MyMOLECULE["the_line"][str(line)])
    fw.write("\n")
@@ -146,7 +146,7 @@ if (name_root == None):
 if not os.path.exists(options.dest_path):
    sp.call(['mkdir',options.dest_path])
 for c in coord_values:
-   file_name = options.dest_path+"/"+name_root+'_'+str(c)+'.in'
+   file_name = options.dest_path+"/"+name_root+'_'+'{:.2f}'.format(c)+'.in'
    fw = open(file_name, 'w')
    WriteMolecule(fw, MyMol, c)
    qrems.AppendRem(fw, MyRems)
