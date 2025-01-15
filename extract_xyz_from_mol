@@ -1,0 +1,64 @@
+#! /usr/bin/env python3
+
+import os, re, sys, glob
+import numpy as np
+import xyzgeom
+from optparse import OptionParser
+
+#This script is used to extract the XYZ coordinates from the $molecule section of a Q-Chem job
+def ParseInput(ArgsIn):
+   UseMsg = "extract_xyz_from_mol [options] [target_dir]"
+   parser = OptionParser(usage=UseMsg)
+   parser.add_option('--stopper', dest='stopper', action='store', type='string', default='single', help='The keyword in the output names right after the nameroot (default: single)')
+   parser.add_option('--energy', dest='energy', action='store_true', default=False, help='write the energy value in the comment line of the XYZ files obtained')
+   #parser.add_option('--index_type', dest='index_type', action='store', type='string', default='int', help='Data type of the index (default: int)')
+
+   options, args = parser.parse_args(ArgsIn)
+   if len(args) < 2:
+      parser.print_help()
+      sys.exit(0)
+   return options, args
+
+options, args = ParseInput(sys.argv)
+target_dir = args[1]
+curdir = os.getcwd()
+os.chdir(target_dir)
+outfile_list = glob.glob('*.out')
+for outfile in outfile_list:
+    mol_file = outfile[:-4] + '.mol'
+    command = "sed -n '/molecule/,/end/p' " + outfile + " > " + mol_file
+    os.system(command)
+    if options.energy:
+       command2 = "grep 'Total energy' " + outfile + " >> " + mol_file 
+       os.system(command2)
+
+molfile_list = glob.glob('*.mol')
+for molfile in molfile_list:
+   nameroot = molfile[:-4]
+   molname = re.search('(\S+)_'+options.stopper, nameroot).group(1)
+   xyzfile = molname + '.xyz'
+   fr = open(molfile, 'r')
+   atomlist = []
+   coords = []
+   energy = 0.0
+   for line in fr.readlines():
+      l_sp = line.split()
+      if l_sp[0] != "Total":
+         if len(l_sp) == 4:
+            elem = l_sp[0]
+            coord = np.array([float(l_sp[1]), float(l_sp[2]), float(l_sp[3])])
+            atomlist.append(elem)
+            coords.append(coord)
+      else:
+         energy = float(l_sp[-1])
+  
+   fr.close()
+   if options.energy:
+      xyzgeom.write_xyz_file_w_energy(xyzfile, atomlist, coords, energy)
+   else:
+      xyzgeom.write_xyz_file(xyzfile, atomlist, coords)
+
+os.system("rm *.mol")
+
+os.chdir(curdir)
+

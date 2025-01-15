@@ -87,6 +87,15 @@ def write_xyz_file(outfile, AtomList, Coords):
       fw.write("%-3s %15.10f %15.10f %15.10f\n" %(AtomList[iAtom], x, y, z))
    fw.close()
 
+def write_xyz_file_w_energy(outfile, AtomList, Coords, energy):
+   fw = open(outfile, 'w')
+   fw.write("%d\n" %len(AtomList))
+   fw.write("Energy = %.10f a.u.\n" %energy)
+   for iAtom in range(0, len(AtomList)):
+      x, y, z = Coords[iAtom][0], Coords[iAtom][1], Coords[iAtom][2]
+      fw.write("%-3s %15.10f %15.10f %15.10f\n" %(AtomList[iAtom], x, y, z))
+   fw.close()
+
 def set_origin(Coords, idx_orig):
    print("Set the position of Atom %d as the origin" %idx_orig)
    origin = np.copy(Coords[idx_orig-1])
