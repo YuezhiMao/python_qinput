@@ -16,6 +16,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--placeholder',dest='placeholder',action='store',type='string',default='dist',help='placeholder to get the geom param')
    parser.add_option('--do_freq',dest='do_freq',action='store_true',default=False,help='parse the vibrational frequencies')
    parser.add_option('--intens',dest='intensity',action='store_true',default=False,help='parse the IR intensities together with the frequencies')
+   parser.add_option('--xyz_w_eng',dest='xyz_w_eng',action='store_true',default=False,help='record the energy value in the comment line of the XYZ file')
    parser.add_option('--n_imag',dest='n_imag',action='store_true',default=False,help='count the number of imaginary frequencies')
    parser.add_option('--sorted',dest='sorted',action='store',type='string',default=None,help='sort the output based on a given criteria: [given_str]_[sort_key]_')
    parser.add_option('--reverse_order',dest='reverse_order',action='store_true',default=False,help='sort the output name in the reverse order')
@@ -105,26 +106,42 @@ def get_xyz(output_file, options):
          xyz_file = re.search('(\S+)_geom', name).group(1) + '.xyz'
    else:
       xyz_file = name+'.xyz'
-   #os.system('grep -B 100 "OPTIMIZATION CONVERGED" '+output_file+' | grep -A 1000 "Coordinates (Angstroms)" | grep -B 1000 Point | grep -A 1000 ATOM | grep -v ATOM | grep -v Point | awk \'{print $2, $3, $4, $5}\' > '+tmp_file)
-   #os.system('grep -A 100 "OPTIMIZATION CONVERGED" '+output_file+' | grep -B 100 "Z-matrix" | grep -A 500 "ATOM" | grep -v "ATOM" | grep -v "Print" > '+tmp_file)
+   #Parse the optimized geometry
    #Note: it may become "TRANSITION STATE CONVERGED" for TS jobs (or optimized structures characterized as TS)
    command = "sed -n " + "'/CONVERGED/,/Z-matrix/p' " + output_file + " > "+tmp_file
    os.system(command)
    fr = open(tmp_file, 'r')
    AtomList =  []
    CoordList = []
-   all_lines = fr.readlines()
-   for line in all_lines:
+   for line in fr.readlines():
       l = re.search('^\s*(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*$', line)
       if l!=None:
          AtomList.append(l.group(2))
          CoordList.append((float(l.group(3)), float(l.group(4)), float(l.group(5))))
    fr.close()
+   
+   #Collect the energy if needed
+   energies = []
+   if options.xyz_w_eng:
+      command = "grep \"Final energy is\" " + output_file + " > " + tmp_file
+      os.system(command)
+      fr = open(tmp_file, 'r') 
+      for line in fr.readlines():
+         l_sp = line.split()
+         if len(l_sp) == 4:
+            energies.append(float(l_sp[3]))
+      fr.close()
+
    sp.call(['rm', tmp_file])
+
    fw = open(xyz_file, 'w')
    if (not options.multigeom) or ('adiabatic' not in name):
       NAtom = len(AtomList)
-      fw.write("%d\n\n" %NAtom) #NAtom
+      fw.write("%d\n" %NAtom) #NAtom
+      if options.xyz_w_eng: #write the energy value to the comment line of XYZ
+         fw.write("E = %.10f a.u.\n" %energies[0])
+      else:
+         fw.write("\n")
       for index in range(0, NAtom):
          atomic_symbol = AtomList[index]
          x,y,z = CoordList[index]
@@ -134,7 +151,11 @@ def get_xyz(output_file, options):
       n_geom = options.multigeom
       NAtom = int(len(AtomList) / n_geom)
       for i in range(0, n_geom):
-         fw.write("%d\n\n" %NAtom)
+         fw.write("%d\n" %NAtom)
+         if options.xyz_w_eng:
+            fw.write("E = %.10f a.u.\n" %energies[i])
+         else:
+            fw.write("\n")
          for index in range(0, NAtom):
             offset = i*NAtom
             atomic_symbol = AtomList[index+offset]
@@ -149,19 +170,31 @@ def get_xyz_adiab_eda(output_file, options):
    nameroot = re.search('(\S+)_adiabatic_eda', output_file).group(1)
    tmp_file = nameroot+'.tmp'
    xyz_files = []
+   #Collect geometries
    command = "sed -n " + "'/OPTIMIZATION CONVERGED/,/Z-matrix/p' " + output_file + " > "+tmp_file
    os.system(command)
    fr = open(tmp_file, 'r')
    AtomList =  []
    CoordList = []
-   all_lines = fr.readlines()
-   for line in all_lines:
+   for line in fr.readlines():
       l = re.search('^\s*(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*$', line)
       if l!=None:
          AtomList.append(l.group(2))
          CoordList.append((float(l.group(3)), float(l.group(4)), float(l.group(5))))
    fr.close()
+   #Collect energies if needed
+   energies = []
+   if options.xyz_w_eng:
+      command = "grep \"Final energy is\" " + output_file + " > " + tmp_file
+      os.system(command)
+      fr = open(tmp_file, 'r') 
+      for line in fr.readlines():
+         l_sp = line.split()
+         if len(l_sp) == 4:
+            energies.append(float(l_sp[3]))
+      fr.close()
    sp.call(['rm', tmp_file])
+
    n_geom = options.multigeom
    NAtom = int(len(AtomList) / n_geom)
    for i in range(0, n_geom):
@@ -173,7 +206,11 @@ def get_xyz_adiab_eda(output_file, options):
          filename = nameroot+'_frzgeom.xyz'
       xyz_files.append(filename)
       fw = open(filename, 'w')
-      fw.write("%d\n\n" %NAtom)
+      fw.write("%d\n" %NAtom)
+      if options.xyz_w_eng:
+         fw.write("E = %.10f a.u.\n" %energies[i])
+      else:
+         fw.write("\n")
       for index in range(0, NAtom):
          offset = i*NAtom
          atomic_symbol = AtomList[index+offset]
