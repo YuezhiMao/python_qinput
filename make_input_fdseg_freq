@@ -14,7 +14,7 @@ def ParseInput(ArgsIn):
    parser.add_option('-m','--method',dest='method',action='store',type='string', default='B3LYP-D3BJ', help='The method to use (default: B3LYP-D3BJ)')
    parser.add_option('-b','--basis',dest='basis',action='store',type='string',default='631+gd',help='The target basis (default: 6-31+G(d))')
    parser.add_option('--sol',dest='sol',type='string',action='store',default=None,help='doing PCM; specify the relevant input section')
-   parser.add_option('--sol_param',dest='sol_param',type='float',action='store',default=None,help='The parameter for solvent. Dielectric constant for PCM')
+   parser.add_option('--sol_param',dest='sol_param',type='string',action='store',default=None,help='The parameter for solvent. Dielectric constant for PCM')
    parser.add_option('--charge',dest='charge',action='store',type='int',default=0,help='total charge of the system')
    parser.add_option('--mult',dest='mult',action='store',type='int',default=1,help='total multiplicity of the system') 
    parser.add_option('--unrestricted',dest='unrestricted',action='store_true',default=False,help='set unrestricted = true explicitly')
@@ -55,13 +55,13 @@ for index in range(-1, num_segments):
    if options.sol != None:
       command += ' --sol='+options.sol
    if options.sol_param != None:
-      command += ' --sol_param='+str(options.sol_param)
+      command += ' --sol_param='+options.sol_param
    if options.charge != 0:
       command += ' --charge='+str(options.charge)
    if options.mult != 1:
-      command += '--mult='+str(options.mult)
+      command += ' --mult='+str(options.mult)
    if options.unrestricted:
-      command += '--unrestricted'
+      command += ' --unrestricted'
    if options.scf_algo != None:
       command += ' --scf_algo='+options.scf_algo
 
