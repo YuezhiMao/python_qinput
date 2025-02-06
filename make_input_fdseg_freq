@@ -19,6 +19,8 @@ def ParseInput(ArgsIn):
    parser.add_option('--mult',dest='mult',action='store',type='int',default=1,help='total multiplicity of the system') 
    parser.add_option('--unrestricted',dest='unrestricted',action='store_true',default=False,help='set unrestricted = true explicitly')
    parser.add_option('--scf_algo',dest='scf_algo',action='store',default=None,type='string',help='specify the scf algorithm (if not DIIS)')
+   parser.add_option('--geom_constr',dest='geom_constr',action='store',default=None,type='string',help='specify the template file for adding geometry optimization constraint')
+   parser.add_option('--harm_confine',dest='harm_confine',action='store',type='int',default=0,help='Turn on harmonic confining potential on a given number of atoms (specify here)')
    parser.add_option('--exec',dest='exec',action='store',type='int',default=0,help='submit the jobs directly with the number of omp threads specified (default: 0, which means not running jobs)')
    options, args = parser.parse_args(ArgsIn)
    # must put in at least arguments
@@ -64,6 +66,10 @@ for index in range(-1, num_segments):
       command += ' --unrestricted'
    if options.scf_algo != None:
       command += ' --scf_algo='+options.scf_algo
+   if options.geom_constr != None:
+      command += ' --geom_constr='+options.geom_constr
+   if options.harm_confine > 0:
+      command += ' --harm_confine='+str(options.harm_confine)
 
    # final additions for specifically the finite difference job
    command += ' --fdseg=' + str(index) + ' --fdseg_size=' + str(fd_segment_size)
