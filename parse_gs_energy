@@ -10,6 +10,8 @@ def ParseInput(ArgsIn):
    parser.add_option('--energy_type', dest='energy_type', action='store', type='string', default='dft', help='The type of energy to parse: e.g. dft, rimp2, ccsd, etc. (default: dft)')
    parser.add_option('--index_key', dest='index_key', action='store', type='string', default='snapshot', help='The keyword in the output names right in front of the indexing parameter (default: snapshot)')
    parser.add_option('--index_type', dest='index_type', action='store', type='string', default='int', help='Data type of the index (default: int)')
+   parser.add_option('--verbatim', dest='verbatim', action='store_true', default=False, help='retain the full molecule name')
+   parser.add_option('--bench', dest='bench', action='store_true', default=False, help='benchmark mode; distinguish jobs by functionals')
 
    options, args = parser.parse_args(ArgsIn)
    if len(args) < 2:
@@ -49,6 +51,48 @@ def parse_scf_energies(target_dir, key):
          fw.write("%.4f,%.10f\n" %(index, data_scf[index]["energy"]))
    fw.close()
    os.chdir(curdir)
+
+def parse_scf_energies_noindex(target_dir, options):
+   curdir = os.getcwd()
+   os.chdir(target_dir)
+   tmpfile = 'scf.tmp'
+   command = "grep \"Total energy =\" *.out > " + tmpfile
+   os.system(command)
+   data_scf = {}
+   fr = open(tmpfile, 'r')
+   for line in fr.readlines():
+      l_sp = line.split()
+      if not (len(l_sp) > 1): #just in case
+         continue
+      else:
+         l = re.search('(\S+)_([^_]+)_([^_]+).out', l_sp[0])
+         mol_name = l.group(1)
+         if mol_name not in data_scf:
+            data_scf[mol_name] = {}
+         if options.bench:
+            func = l.group(2)
+            #not using basis for now
+            data_scf[mol_name][func] = float(l_sp[-1])
+         else:
+            data_scf[mol_name]['energy'] = float(l_sp[-1])
+
+   fr.close()
+   os.system("rm " + tmpfile)
+
+   fw = open("scf_energy.csv", 'w')
+   if options.bench:
+      fw.write("mol_name,functional,energy\n")
+      for mol_name in sorted(data_scf):
+         for func in sorted(data_scf[mol_name]):
+            fw.write("%s,%s,%.10f\n" %(mol_name, func, data_scf[mol_name][func]))
+      fw.close()
+   else:
+      fw.write("mol_name,energy\n")
+      for mol_name in sorted(data_scf):
+         fw.write("%s,%.10f\n" %(mol_name, data_scf[mol_name]["energy"]))
+      fw.close()
+   os.chdir(curdir)
+   
 
 def parse_frozen_energies(target_dir, key):
    curdir = os.getcwd()
@@ -122,7 +166,10 @@ def parse_rimp2_energies(target_dir, key):
 options, args = ParseInput(sys.argv)
 target_dir = args[1]
 if options.energy_type.lower() == 'dft':
-   parse_scf_energies(target_dir, options.index_key)
+   if options.verbatim:
+      parse_scf_energies_noindex(target_dir, options)
+   else:
+      parse_scf_energies(target_dir, options.index_key)
 elif options.energy_type.lower() == 'frozen':
    parse_frozen_energies(target_dir, options.index_key)
 elif options.energy_type.lower() == 'rimp2':
