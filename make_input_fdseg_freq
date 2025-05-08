@@ -13,12 +13,13 @@ def ParseInput(ArgsIn):
    parser = OptionParser(usage=UseMsg)
    parser.add_option('-m','--method',dest='method',action='store',type='string', default='B3LYP-D3BJ', help='The method to use (default: B3LYP-D3BJ)')
    parser.add_option('-b','--basis',dest='basis',action='store',type='string',default='631+gd',help='The target basis (default: 6-31+G(d))')
-   parser.add_option('--sol',dest='sol',type='string',action='store',default=None,help='doing PCM; specify the relevant input section')
-   parser.add_option('--sol_param',dest='sol_param',type='string',action='store',default=None,help='The parameter for solvent. Dielectric constant for PCM')
+   parser.add_option('--sol',dest='sol',type='string',action='store',default=None,help='Specify the solvent model to use')
+   parser.add_option('--sol_param',dest='sol_param',type='string',action='store',default=None,help='The solvent name or the dielectric constant (for PCM)')
    parser.add_option('--charge',dest='charge',action='store',type='int',default=0,help='total charge of the system')
    parser.add_option('--mult',dest='mult',action='store',type='int',default=1,help='total multiplicity of the system') 
    parser.add_option('--unrestricted',dest='unrestricted',action='store_true',default=False,help='set unrestricted = true explicitly')
    parser.add_option('--scf_algo',dest='scf_algo',action='store',default=None,type='string',help='specify the scf algorithm (if not DIIS)')
+   parser.add_option('--coarse',dest='coarse',action='store',type='int',default=0,help='use less tight integral thresh and less fine grid for SCF calculations')
    parser.add_option('--geom_constr',dest='geom_constr',action='store',default=None,type='string',help='specify the template file for adding geometry optimization constraint')
    parser.add_option('--harm_confine',dest='harm_confine',action='store',type='int',default=0,help='Turn on harmonic confining potential on a given number of atoms (specify here)')
    parser.add_option('--exec',dest='exec',action='store',type='int',default=0,help='submit the jobs directly with the number of omp threads specified (default: 0, which means not running jobs)')
@@ -70,6 +71,8 @@ for index in range(-1, num_segments):
       command += ' --geom_constr='+options.geom_constr
    if options.harm_confine > 0:
       command += ' --harm_confine='+str(options.harm_confine)
+   if options.coarse > 0:
+      command += ' --coarse='+str(options.coarse)
 
    # final additions for specifically the finite difference job
    command += ' --fdseg=' + str(index) + ' --fdseg_size=' + str(fd_segment_size)
