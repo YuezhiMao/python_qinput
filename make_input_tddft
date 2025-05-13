@@ -26,6 +26,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--mult',dest='mult',action='store',type='int',default=1,help='total multiplicity of the system') 
    parser.add_option('--nroots',dest='nroots',action='store',type='int',default=4,help='number of roots (default 4)')
    parser.add_option('--triplets',dest='triplets',action='store_true',default=False,help='calculate triplet roots')
+   parser.add_option('--no_singlet',dest='no_singlet',action='store_true',default=False,help='turn off the calculation of singlet states')
    parser.add_option('--rpa',dest='rpa',action='store_true',default=False,help='use full TDDFT (instead of TDA)')
    parser.add_option('--spinflip',dest='spinflip',action='store_true',default=False,help='do spin-flip')
    parser.add_option('--tight',dest='tight',action='store_true',default=False,help='use tigher criterion for geom opt convergence')
@@ -126,6 +127,8 @@ def set_rems_tddft(myrems, options):
       qrems.ModRem('CIS_N_ROOTS', str(options.nroots), myrems)
    if options.triplets:
       qrems.ModRem('CIS_TRIPLETS', 'TRUE', myrems)
+   if options.no_singlet:
+      qrems.ModRem('CIS_SINGLETS', 'FALSE', myrems)
    if options.spinflip:
       qrems.ModRem('SPIN_FLIP', 'TRUE', myrems)
       options.mult += 2
