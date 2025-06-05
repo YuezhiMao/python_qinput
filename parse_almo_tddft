@@ -86,6 +86,8 @@ def parse_tddft_results_generic(target_dir, options):
          if jobname not in data_tddft:
             data_tddft[jobname] = {}
          state_idx = int(l_sp[3]) 
+
+      elif l_sp[1] == 'excitation':
          data_tddft[jobname][state_idx] = {}
          data_tddft[jobname][state_idx]['E_ex'] = float(l_sp[-1])
 
