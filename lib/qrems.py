@@ -381,15 +381,25 @@ def write_newplots_section(fw, n_pts):
    fw.write('$end\n')
 
 def set_popanal_rems(curREM, pop_scheme_list):
+   do_hirsh = False
+   do_iterhirsh = False
    for pop_scheme in pop_scheme_list: 
       if pop_scheme.lower() == 'esp':
          ModRem('ESP_CHARGES', '1', curREM)
       elif pop_scheme.lower() == 'chelpg':
          ModRem('CHELPG', 'TRUE', curREM)
       elif pop_scheme.lower() == 'hirshfeld':
+         if do_iterhirsh:
+            print ("Can't do both Hirshfeld and iterative Hirshfeld in a single job")
+            sys.exit(1)
          ModRem('HIRSHFELD', 'TRUE', curREM)
+         do_hirsh = True
       elif pop_scheme.lower() == 'iterhirsh':
+         if do_hirsh:
+            print ("Can't do both Hirshfeld and iterative Hirshfeld in a single job")
+            sys.exit(1)
          ModRem('HIRSHITER', 'TRUE', curREM)
+         do_iterhirsh = True
       elif pop_scheme.lower() == 'cm5':
          ModRem('CM5', 'TRUE', curREM)
       else:
