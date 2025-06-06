@@ -402,6 +402,8 @@ def set_popanal_rems(curREM, pop_scheme_list):
          do_iterhirsh = True
       elif pop_scheme.lower() == 'cm5':
          ModRem('CM5', 'TRUE', curREM)
+      elif pop_scheme.lower() == 'nbo' or pop_scheme.lower() == 'npa':
+         ModRem('NBO', 'TRUE', curREM) # this will print out the NBO charges
       else:
          print("Population scheme %s: unrecognized or nothing needs to be done; skip it" %pop_scheme)
          continue
