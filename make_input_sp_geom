@@ -42,6 +42,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--dipole_field',dest='dipole_field',action='store',type='int',default=None,help='apply a dipolar field along X/Y/Z direction (in MV/cm)')
    parser.add_option('--field_dir',dest='field_dir',action='store',type='string',default='Z',help='The direction of the applied field (default: Z)')
    parser.add_option('--field_atoms',dest='field_atoms',action='callback',callback=string_sp_callback,type='string',default=None,help='specify the indexes of two bond atoms along which the E-field is applied')
+   parser.add_option('--extchg',dest='extchg',action='store',default=None,type='string',help="specify the file for the $external_charges section")
    parser.add_option('--isotope',dest='isotope',action='store',type='string',default=None,help='Doing isotope substitution for vib analysis; specify the file for isotope section')
    parser.add_option('--cdft',dest='cdft',action='store',type='string',default=None,help='Doing CDFT; specify the $cdft section')
    parser.add_option('--pop_anal',dest='pop_anal',action='callback',callback=string_sp_callback,type='string',default=None,help='specify population analysis schemes to run; supported options: ESP, ChelpG, Hirshfeld, IterHirsh, CM5, NBO')
@@ -105,6 +106,10 @@ def XYZ_to_Input(fw, XYZ, curREM, options):
       qrems.copy_section_over(fw, options.isotope)
    if options.cdft:
       qrems.copy_section_over(fw, options.cdft)
+   if options.harm_confine > 0:
+      qrems.copy_section_over(fw, options.geom_constr)
+   if options.extchg:
+      qrems.copy_section_over(fw, options.extchg)
 
 def XYZ_to_Input_optfreq(fw, XYZ, myrems, options):
    curREM = copy.deepcopy(myrems)
@@ -134,6 +139,8 @@ def XYZ_to_Input_optfreq(fw, XYZ, myrems, options):
       qrems.copy_section_over(fw, options.cdft)
    if options.harm_confine > 0:
       qrems.copy_section_over(fw, options.geom_constr)
+   if options.extchg:
+      qrems.copy_section_over(fw, options.extchg)
 
 def set_gs_rems(curREM, options):
    if options.opt or options.opt_freq: #the latter also starts with OPT
@@ -241,6 +248,9 @@ for method in options.method:
                inputfile += '_0.in'
             else:
                inputfile += '_'+str(options.dipole_field)+'.in'
+         elif options.extchg != None:
+            extchg_spec = re.search('(\S+).extchg', options.extchg).group(1)
+            inputfile += '_'+extchg_spec+'.in'
          else:
             if options.opt:
                inputfile += '_geom_'+method+'_'+qrems.basis_abbr(basis)+'.in'
