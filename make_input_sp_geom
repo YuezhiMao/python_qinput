@@ -249,7 +249,7 @@ for method in options.method:
             else:
                inputfile += '_'+str(options.dipole_field)+'.in'
          elif options.extchg != None:
-            extchg_spec = re.search('(\S+).extchg', options.extchg).group(1)
+            extchg_spec = re.search('([^\/]+).extchg', options.extchg).group(1)
             inputfile += '_'+extchg_spec+'.in'
          else:
             if options.opt:
