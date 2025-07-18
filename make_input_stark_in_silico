@@ -8,6 +8,7 @@ def ParseInput(ArgsIn):
    UseMsg = '''
    make_input_stark_in_silico [xyz_file] [field_min] [field_max] [input_dir]
    Note: when field_min is negative (e.g. -20 MV/cm), write " -20" in the command
+   For the "sp_mode", skip field_min and field_max
    '''
    parser = OptionParser(usage=UseMsg)
    parser.add_option('-m','--method',dest='method',action='store',type='string', default='B3LYP', help='The method to use (default: B3LYP)')
@@ -18,15 +19,22 @@ def ParseInput(ArgsIn):
    parser.add_option('--sol',dest='sol',type='string',action='store',default=None,help='doing PCM; specify the relevant input section')
    parser.add_option('--noopt',dest='noopt',action='store_true',default=False,help='skip the geometry optimization before frequency calculation')
    parser.add_option('--nofreq',dest='nofreq',action='store_true',default=False,help='doing geometry optimization only')
+   parser.add_option('--sp_mode',dest='sp_mode',action='store_true',default=False,help='doing single-point calculations at geometries optimized under given a given field')
    parser.add_option('--charge',dest='charge',action='store',type='int',default=0,help='total charge of the system')
    parser.add_option('--isotope',dest='isotope',action='store',type='string',default=None,help='Doing isotope substitution for vib analysis; specify the file for isotope section')
    parser.add_option('--cdft',dest='cdft',action='store',type='string',default=None,help='Doing CDFT; specify the $cdft section')
    parser.add_option('--geom_constr', dest='geom_constr', action='store', default=None, type='string', help='specify the template file for adding geometry optimization constraint')
    parser.add_option('--constr_key',dest='constr_key',action='store',default='dist',type='string',help='specify the key in the XYZ filename for the constraint value')
+   parser.add_option('--pop_anal',dest='pop_anal',action='callback',callback=string_sp_callback,type='string',default=None,help='performing population analysis when doing in-silico Stark; supported options: ESP, ChelpG, Hirshfeld, IterHirsh, CM5, NBO')
    options, args = parser.parse_args(ArgsIn)
-   if len(args) < 5:
-      parser.print_help()
-      sys.exit(0)
+   if not options.sp_mode:
+      if len(args) < 5:
+         parser.print_help()
+         sys.exit(0)
+   else:
+      if len(args) < 3:
+         parser.print_help()
+         sys.exit(0)
    if options.noopt and options.nofreq:
       print("Can't do both noopt and nofreq")
       sys.exit(0)
@@ -35,21 +43,38 @@ def ParseInput(ArgsIn):
 def string_sp_callback(option, opt, value, parser):
    setattr(parser.values, option.dest, value.split(','))
 
-options, args = ParseInput(sys.argv)
-xyz_file = args[1]
-field_min = int(args[2])
-field_max = int(args[3])
-input_dir = args[4]
-increment = options.increment
+def make_input_singlegeom(xyz_file, field_min, field_max, input_dir, options):
+   for field in range(field_min, field_max+1, options.increment):
+      if options.noopt:
+         command = "make_input_sp_geom --freq"
+      elif options.nofreq:
+         command = "make_input_sp_geom --opt"
+      else:
+         command = "make_input_sp_geom --opt_freq"
+      command += " --tight -t " + xyz_file + " -m " + options.method + " -b " + options.basis + " -i " + input_dir + " --dipole_field=" + str(field) 
+      
+      if options.field_atoms != None:
+         field_atm_1, field_atm_2 = options.field_atoms[0], options.field_atoms[1]
+         command += " --field_atoms=" + field_atm_1 + "," + field_atm_2
+      else:
+         command += " --field_dir=" + str(options.field_dir)
+      if options.sol != None:
+         command += ' --sol=PCM --sol_file='+options.sol
+      if options.charge != 0:
+         command += ' --charge='+str(options.charge)
+      if options.isotope != None:
+         command += ' --isotope='+options.isotope
+      if options.cdft != None:
+         command += ' --cdft='+options.cdft
+      if options.geom_constr != None:
+         command += ' --geom_constr='+options.geom_constr
+         command += ' --constr_key='+options.constr_key
 
-for field in range(field_min, field_max+1, increment):
-   if options.noopt:
-      command = "make_input_sp_geom --freq"
-   elif options.nofreq:
-      command = "make_input_sp_geom --opt"
-   else:
-      command = "make_input_sp_geom --opt_freq"
-   command += " --tight -t " + xyz_file + " -m " + options.method + " -b " + options.basis + " -i " + input_dir + " --dipole_field=" + str(field) 
+      print (command)
+      os.system(command)
+
+def make_input_singlefield(xyz_file, field, input_dir, options):
+   command = "make_input_sp_geom -t " + xyz_file + " -m " + options.method + " -b " + options.basis + " -i " + input_dir + " --dipole_field=" + field
    
    if options.field_atoms != None:
       field_atm_1, field_atm_2 = options.field_atoms[0], options.field_atoms[1]
@@ -67,6 +92,30 @@ for field in range(field_min, field_max+1, increment):
    if options.geom_constr != None:
       command += ' --geom_constr='+options.geom_constr
       command += ' --constr_key='+options.constr_key
+   if options.pop_anal != None:
+      pop_scheme_list = options.pop_anal
+      command += ' --pop_anal='+pop_scheme_list[0]
+      if len(pop_scheme_list) > 1:
+         for pop_scheme in pop_scheme_list[1:]:
+            command += ',' + pop_scheme
+
    print (command)
    os.system(command)
 
+options, args = ParseInput(sys.argv)
+
+if not options.sp_mode:
+   xyz_file = args[1]
+   field_min = int(args[2])
+   field_max = int(args[3])
+   input_dir = args[4]
+   make_input_singlegeom(xyz_file, field_min, field_max, input_dir, options)
+else:
+   xyz_dir = args[1]
+   if xyz_dir[-1] == '/':
+      xyz_dir = xyz_dir[:-1]
+   input_dir = args[2] 
+   xyzfile_list = glob.glob(xyz_dir+'/*.xyz')
+   for xyzfile in xyzfile_list: #work out the field based on the XYZ file name 
+      field = re.search('_([^_]+).xyz', xyzfile).group(1)
+      make_input_singlefield(xyzfile, field, input_dir, options)
