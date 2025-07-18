@@ -2,6 +2,7 @@
 
 import os, sys, glob, re
 import numpy as np
+import pandas as pd
 from optparse import OptionParser
 
 def ParseInput(ArgsIn):
@@ -12,12 +13,23 @@ def ParseInput(ArgsIn):
    parser.add_option('--do_resp', dest='do_resp', action='store_true', default=False, help='parse RESP charges for each state')
    parser.add_option('--do_chelpg', dest='do_chelpg', action='store_true', default=False, help='parse ChelpG charges for each state')
    parser.add_option('--do_hirsh', dest='do_hirsh', action='store_true', default=False, help='parse the Hirshfeld charges (GS only)')
+   parser.add_option('--atompop', dest='atompop', action='callback', callback=string_sp_callback, type='string', default=None, help='parse population for specific atoms and save the results to separate CSV files')
+   parser.add_option('--atompop_state', dest='atompop_state', action='store', type='int', default=0, help='the state for which atomic population is parsed (default is ground state)')
+   parser.add_option('--index_key', dest='index_key', action='store', type='string', default=None, help='The keyword in the output names right in front of the indexing parameter')
 
    options, args = parser.parse_args(ArgsIn)
    if len(args) < 2:
       parser.print_help()
       sys.exit(0)
+
+   if options.atompop != None and options.index_key == None:
+      print ("You need to specify an index key for parsing atomic populations")
+      parser.print_help()
+      sys.exit(0)
    return options, args
+
+def string_sp_callback(option, opt, value, parser):
+   setattr(parser.values, option.dest, value.split(','))
 
 def parse_mulliken_pop(outfile):
    tmpfile = "mulliken.tmp"
@@ -199,6 +211,37 @@ def parse_hirshfeld_charges(outfile):
       fw.write("%s,%.6f\n" %(atom_list[iatm], charge_list[iatm]))
    fw.close()
 
+def parse_atompop(atom_list, index_key, state, pop_scheme):
+   popfile_list = glob.glob('*.'+pop_scheme)
+   #Check the atom_list first
+   for atom_idx in atom_list:
+      if atom_idx > len(pd.read_csv(popfile_list[0]).Atom):
+         print ("%d is beyond the total number of atoms" %atom_idx)
+         sys.exit(0)
+
+   pop_data = {}
+   col_name = 'state_' + str(state)  #by default, the column is state_0
+   for popfile in popfile_list:
+      df_pop = pd.read_csv(popfile)
+      index = int(re.search(index_key+'([^_]+)_', popfile).group(1))
+      pop_data[index] = {}
+      for atom_idx in atom_list:
+         pop_data[index][atom_idx] = df_pop.loc[atom_idx-1][col_name] #atom_idx starts from 0
+
+   fw = open(pop_scheme+'.csv', 'w')
+   fw.write('index') #This can be a electric field value, or something else
+   for atom_idx in sorted(atom_list):
+      fw.write(",atom"+'_'+str(atom_idx))
+   fw.write("\n")
+   for index in sorted(pop_data):
+      fw.write("%d" %index)
+      for atom_idx in sorted(atom_list):
+         fw.write(",%.6f" %pop_data[index][atom_idx])
+      fw.write("\n")
+
+   fw.close()
+   
+
 options, args = ParseInput(sys.argv)
 target_dir = args[1]
 cur_dir = os.getcwd()
@@ -213,6 +256,21 @@ for outfile in outfile_list:
       parse_hirshfeld_charges(outfile)
    if options.do_chelpg:
       parse_chelpg_charges(outfile)
+
+if options.atompop != None:
+   atom_list = []
+   for atom_idx in options.atompop: #convert string to int
+      atom_list.append(int(atom_idx))
+   index_key = options.index_key
+   state = options.atompop_state
+   if options.do_mulliken:
+      parse_atompop(atom_list, index_key, state, "mulliken")
+   if options.do_esp or options.do_resp:
+      parse_atompop(atom_list, index_key, state, "espchg")
+   if options.do_hirsh:
+      parse_atompop(atom_list, index_key, state, "hirshfeld")
+   if options.do_chelpg:
+      parse_atompop(atom_list, index_key, state, "chelpg")
 
 os.chdir(cur_dir)
 
