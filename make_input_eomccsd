@@ -59,8 +59,8 @@ def ParseInput(ArgsIn):
       sys.exit(0)
    if options.libwfa: #turn on all the property stuff when doing state analysis
       options.state_prop = True
-      if not options.gs:
-         options.trans_prop = True
+      if not options.gs and options.trans_prop == 0:
+         options.trans_prop = 1
 
    return options, args
 
