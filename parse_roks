@@ -1,0 +1,342 @@
+#!/usr/bin/env python3
+"""
+Parse ROKS overlaps and energies from Q-Chem .out files.
+
+Columns:
+  molecule, functional, basis, algorithm, ss_mixing, [ss_mixing_intended], step, status,
+  overlap_total, overlap_alpha, overlap_beta,
+  scf_conv_sp, scf_conv_roks,
+  total_energy_ground, total_energy_final, dE_eV
+  [+ key, filepath if requested]
+
+Rules:
+  - ss_mixing (detected): from ROKS block; if ROKS block missing => N/A.
+      * If ROKS block is present and ROKS_SS_MIXING missing => default 1.
+      * If ROKS block present and ROKS_SS_MIXING 0 => 0.
+  - ss_mixing_intended (optional): infer 0/1 from path '.../mixing_0/' or '.../mixing_1/'.
+  - step: 'true' if 'step  true' appears OR filename ends with '_step'; else N/A.
+  - Energies: first 'Total energy' (or SCF) = ground; last 'Total energy' (or SCF) = final.
+  - dE_eV = (E_final - E_ground) * 27.211386245988
+  - Filename parsing (underscore-safe): from right → algorithm, basis, functional; rest joined as molecule.
+    Special-case: filenames ending with '_step' → algorithm = previous token; step=true.
+
+Outputs:
+  Excel (default roks_summary.xlsx), or CSV fallback if Excel libs unavailable.
+
+Usage:
+  parse_roks TARGET_DIR [options]
+
+Examples:
+  parse_roks .
+  parse_roks . --recursive
+  parse_roks . --recursive --index_key mixing_
+  parse_roks . --recursive --pattern "*sgm.out"
+  parse_roks . --outfile my_roks.xlsx --also-csv
+  parse_roks . --include-intended-mixing
+"""
+
+import os, re, glob, math, sys
+from optparse import OptionParser
+
+HARTREE_TO_EV = 27.211386245988
+
+# Content regexes (case/spacing tolerant)
+RE_OVERLAP_TOT   = re.compile(r'<S1\|S0>\s*=\s*([+-]?\d+(?:\.\d+)?(?:[Ee][+-]?\d+)?)')
+RE_OVERLAP_ALPH  = re.compile(r'<S1\|S0>\s*\(alpha\)\s*=\s*([+-]?\d+(?:\.\d+)?(?:[Ee][+-]?\d+)?)', re.IGNORECASE)
+RE_OVERLAP_BETA  = re.compile(r'<S1\|S0>\s*\(beta\)\s*=\s*([+-]?\d+(?:\.\d+)?(?:[Ee][+-]?\d+)?)',  re.IGNORECASE)
+RE_SCF_ENERGY    = re.compile(r'\bSCF\s+energy\s*=\s*([+-]?\d+(?:\.\d+)?(?:[Ee][+-]?\d+)?)',      re.IGNORECASE)
+RE_TOTAL_ENERGY  = re.compile(r'\bTotal\s+energy\s*=\s*([+-]?\d+(?:\.\d+)?(?:[Ee][+-]?\d+)?)',    re.IGNORECASE)
+RE_SCF_CONV      = re.compile(r'^\s*scf_convergence\s+(\d+)\s*$', re.IGNORECASE)
+RE_SSMIX         = re.compile(r'^\s*ROKS_SS_MIXING\s+(\d+)\s*$',  re.IGNORECASE)
+RE_STEP_TRUE     = re.compile(r'^\s*step\s+true\s*$',             re.IGNORECASE)
+RE_REM_START     = re.compile(r'^\s*\$rem\s*$',                   re.IGNORECASE)
+RE_REM_END       = re.compile(r'^\s*\$end\s*$',                   re.IGNORECASE)
+RE_ROKS_TRUE     = re.compile(r'^\s*roks\s+true\s*$',             re.IGNORECASE)
+
+def parse_args():
+    p = OptionParser(add_help_option=True, usage="parse_roks TARGET_DIR [options]")
+    p.add_option('--index_key', dest='index_key', type='string', default=None,
+                 help='Token preceding an index in filenames (adds column "key" if found).')
+    p.add_option('-r', '--recursive', dest='recursive', action='store_true', default=False,
+                 help='Recurse into subdirectories')
+    p.add_option('--pattern', dest='pattern', type='string', default='*.out',
+                 help='Filename glob (default: *.out)')
+    p.add_option('--outfile', dest='outfile', type='string', default='roks_summary.xlsx',
+                 help='Output Excel filename (default: roks_summary.xlsx)')
+    p.add_option('--also-csv', dest='also_csv', action='store_true', default=False,
+                 help='Additionally write CSV next to the Excel file')
+    p.add_option('--na', dest='na', type='string', default='N/A',
+                 help='String for missing values (default: N/A)')
+    p.add_option('--include-filepath', dest='include_filepath', action='store_true', default=False,
+                 help='Include relative filepath column (off by default)')
+    p.add_option('--include-intended-mixing', dest='include_intended_mixing', action='store_true', default=False,
+                 help="Add 'ss_mixing_intended' from path segment 'mixing_0'/'mixing_1'")
+    (opts, args) = p.parse_args()
+
+    if len(args) != 1:
+        print(__doc__.strip()); p.print_help(); sys.exit(1)
+    return opts, args[0]
+
+def safe_float(x):
+    try: return float(x)
+    except Exception: return float('nan')
+
+def key_from_name(basename, index_key):
+    if not index_key: return None
+    m = re.search(re.escape(index_key) + r'([A-Za-z0-9\-]+)', basename)
+    return m.group(1) if m else None
+
+def parse_modelchem_from_name(basename):
+    """
+    From right to left: [..., molecule parts ..., functional, basis, algorithm]
+    Special case: if name ends with '_step', treat 'step' as a flag and take the previous token as algorithm.
+    Returns: molecule, functional, basis, algorithm, step_from_name (bool)
+    """
+    parts = basename.split('_')
+    if len(parts) < 4:
+        return None, None, None, None, False
+    step_from_name = False
+    if parts[-1].lower() == 'step' and len(parts) >= 5:
+        algorithm = parts[-2]
+        idx_end = -2
+        step_from_name = True
+    else:
+        algorithm = parts[-1]
+        idx_end = -1
+    basis = parts[idx_end-1] if len(parts) >= 4 else None
+    functional = parts[idx_end-2] if len(parts) >= 4 else None
+    molecule_parts = parts[:idx_end-2]
+    molecule = '_'.join(molecule_parts) if molecule_parts else None
+    return molecule, functional, basis, algorithm, step_from_name
+
+def infer_intended_mixing_from_path(path):
+    # Returns 0, 1, or None based on directory segment 'mixing_0'/'mixing_1'
+    m = re.search(r'(?<!\w)mixing_(\d)(?!\w)', path)
+    if m:
+        try: return int(m.group(1))
+        except Exception: return None
+    return None
+
+def parse_one_file(path):
+    """
+    Return dict with:
+      overlap_total, overlap_alpha, overlap_beta,
+      total_energy_ground, total_energy_final,
+      scf_conv_sp, scf_conv_roks,
+      ss_mixing (detected), step_seen (bool)
+    """
+    res = {
+        'overlap_total': float('nan'),
+        'overlap_alpha': float('nan'),
+        'overlap_beta' : float('nan'),
+
+        'total_energy_ground': float('nan'),
+        'total_energy_final' : float('nan'),
+
+        'scf_conv_sp'  : None,
+        'scf_conv_roks': None,
+
+        'ss_mixing': None,   # unknown initially; finalize after we know if ROKS block exists
+        'step_seen': False,
+    }
+
+    first_tot, last_tot = float('nan'), float('nan')
+    first_scf, last_scf = float('nan'), float('nan')
+
+    blk = 0
+    roks_block_seen = False
+
+    try:
+        with open(path, 'r', errors='ignore') as fh:
+            for line in fh:
+                # block detection
+                if RE_REM_START.match(line):
+                    blk += 1
+                    if blk >= 2:
+                        roks_block_seen = True
+                elif RE_ROKS_TRUE.match(line):
+                    roks_block_seen = True
+
+                # overlaps
+                m = RE_OVERLAP_TOT.search(line)
+                if m: res['overlap_total'] = safe_float(m.group(1))
+                m = RE_OVERLAP_ALPH.search(line)
+                if m: res['overlap_alpha'] = safe_float(m.group(1))
+                m = RE_OVERLAP_BETA.search(line)
+                if m: res['overlap_beta']  = safe_float(m.group(1))
+
+                # energies
+                m = RE_TOTAL_ENERGY.search(line)
+                if m:
+                    val = safe_float(m.group(1))
+                    if not math.isfinite(first_tot): first_tot = val
+                    last_tot = val
+                m = RE_SCF_ENERGY.search(line)
+                if m:
+                    val = safe_float(m.group(1))
+                    if not math.isfinite(first_scf): first_scf = val
+                    last_scf = val
+
+                # convergence
+                m = RE_SCF_CONV.match(line)
+                if m and blk == 1:
+                    res['scf_conv_sp'] = m.group(1)
+                elif m and blk >= 2:
+                    res['scf_conv_roks'] = m.group(1)
+
+                # ss mixing (explicit)
+                m = RE_SSMIX.match(line)
+                if m:
+                    try:
+                        res['ss_mixing'] = int(m.group(1))
+                    except Exception:
+                        pass
+
+                # step flag
+                if RE_STEP_TRUE.match(line):
+                    res['step_seen'] = True
+    except Exception:
+        pass
+
+    # finalize energies
+    ground = first_tot if math.isfinite(first_tot) else first_scf
+    final  = last_tot  if math.isfinite(last_tot)  else last_scf
+    res['total_energy_ground'] = ground
+    res['total_energy_final']  = final
+
+    # finalize ss_mixing: only default to 1 if ROKS block seen and no explicit value
+    if roks_block_seen:
+        if res['ss_mixing'] is None:
+            res['ss_mixing'] = 1
+    else:
+        res['ss_mixing'] = None  # will render as N/A
+
+    return res
+
+def classify_status(ot, oa, ob, eg, ef):
+    has_overlap = any(isinstance(x, float) and math.isfinite(x) for x in (ot, oa, ob))
+    has_energy  = any(isinstance(x, float) and math.isfinite(x) for x in (eg, ef))
+    if has_overlap: return 'ROKS_done'
+    if has_energy : return 'SP_only'
+    return 'No_data'
+
+def compute_gap_ev(eg, ef):
+    if all(isinstance(x, float) and math.isfinite(x) for x in (eg, ef)):
+        return (ef - eg) * HARTREE_TO_EV
+    return float('nan')
+
+def write_excel(rows, outfile, na_str, include_filepath, include_intended):
+    cols = ['molecule','functional','basis','algorithm','ss_mixing']
+    if include_intended:
+        cols += ['ss_mixing_intended']
+    cols += ['step','status',
+             'overlap_total','overlap_alpha','overlap_beta',
+             'scf_conv_sp','scf_conv_roks',
+             'total_energy_ground','total_energy_final','dE_eV']
+    if any(r.get('key') is not None for r in rows):
+        cols = ['key'] + cols
+    if include_filepath:
+        cols = cols + ['filepath']
+
+    # Try openpyxl
+    try:
+        from openpyxl import Workbook
+        from openpyxl.utils import get_column_letter
+        wb = Workbook(); ws = wb.active; ws.title = 'ROKS'
+        ws.append(cols)
+        for r in rows:
+            row = []
+            for c in cols:
+                v = r.get(c)
+                if isinstance(v, float) and not math.isfinite(v): v = na_str
+                if v is None: v = na_str
+                row.append(v)
+            ws.append(row)
+        for i in range(1, len(cols)+1):
+            ws.column_dimensions[get_column_letter(i)].width = 18
+        wb.save(outfile)
+        return True
+    except Exception:
+        pass
+
+    # Try xlsxwriter
+    try:
+        import xlsxwriter
+        wb = xlsxwriter.Workbook(outfile); ws = wb.add_worksheet('ROKS')
+        for j,h in enumerate(cols): ws.write(0, j, h)
+        for i, r in enumerate(rows, start=1):
+            for j, c in enumerate(cols):
+                v = r.get(c)
+                if isinstance(v, float) and not math.isfinite(v): v = na_str
+                if v is None: v = na_str
+                ws.write(i, j, v)
+        wb.close()
+        return True
+    except Exception:
+        pass
+
+    # CSV fallback
+    try:
+        csv_name = os.path.splitext(outfile)[0] + '.csv'
+        with open(csv_name, 'w') as fw:
+            fw.write(','.join(cols) + '\n')
+            def fmt(v, nd=12):
+                if isinstance(v, float) and math.isfinite(v): return f'{v:.{nd}f}'
+                return na_str if v is None or isinstance(v, float) else str(v)
+            for r in rows:
+                fw.write(','.join(fmt(r.get(c)) for c in cols) + '\n')
+        print(f'[warn] openpyxl/xlsxwriter not available; wrote CSV fallback: {csv_name}')
+        return False
+    except Exception:
+        print('[error] could not write Excel or CSV.')
+        return False
+
+def main():
+    opts, target_dir = parse_args()
+    pattern = os.path.join(target_dir, '**', opts.pattern) if opts.recursive else os.path.join(target_dir, opts.pattern)
+    files = sorted([f for f in glob.glob(pattern, recursive=opts.recursive) if os.path.isfile(f)])
+
+    rows = []
+    for f in files:
+        base = os.path.splitext(os.path.basename(f))[0]
+        key  = key_from_name(base, opts.index_key)
+        mol, func, basis, algo, step_from_name = parse_modelchem_from_name(base)
+
+        data = parse_one_file(f)
+        status = classify_status(data['overlap_total'], data['overlap_alpha'], data['overlap_beta'],
+                                 data['total_energy_ground'], data['total_energy_final'])
+        dE_eV = compute_gap_ev(data['total_energy_ground'], data['total_energy_final'])
+
+        row = {
+            'key': key,
+            'molecule': mol, 'functional': func, 'basis': basis, 'algorithm': algo,
+            'ss_mixing': data['ss_mixing'],
+            'step': 'true' if (data['step_seen'] or step_from_name) else None,
+            'status': status,
+            'overlap_total': data['overlap_total'],
+            'overlap_alpha': data['overlap_alpha'],
+            'overlap_beta' : data['overlap_beta'],
+            'scf_conv_sp'  : data['scf_conv_sp'],
+            'scf_conv_roks': data['scf_conv_roks'],
+            'total_energy_ground': data['total_energy_ground'],
+            'total_energy_final' : data['total_energy_final'],
+            'dE_eV': dE_eV,
+            'filepath'  : os.path.relpath(f, start=target_dir),
+        }
+
+        if opts.include_intended_mixing:
+            intended = infer_intended_mixing_from_path(os.path.dirname(os.path.abspath(f)))
+            row['ss_mixing_intended'] = intended
+
+        rows.append(row)
+
+    ok = write_excel(rows, opts.outfile, opts.na, opts.include_filepath, opts.include_intended_mixing)
+    if opts.also_csv:
+        csv_name = os.path.splitext(opts.outfile)[0] + '.csv'
+        _ = write_excel(rows, csv_name, opts.na, opts.include_filepath, opts.include_intended_mixing)
+
+    print(f'Processed {len(rows)} files.')
+    if ok: print(f'Wrote Excel: {opts.outfile}')
+
+if __name__ == '__main__':
+    main()
