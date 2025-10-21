@@ -1,0 +1,249 @@
+#!/usr/bin/env python3
+"""
+ROKS input generator for Q-Chem.
+
+What this does
+--------------
+Given a template XYZ geometry, generate two-block Q-Chem inputs:
+  (1) SP/SAD (writes orbitals), then
+  (2) ROKS (reads orbitals, optimizes singlet ES).
+
+You can sweep comma-separated lists of methods, bases, and algorithms to produce
+the Cartesian product of inputs.
+
+Special rule (your request)
+---------------------------
+If the chosen algorithm is 'sgm':
+  - SP block uses 'diis'
+  - ROKS block uses 'sgm'
+Otherwise:
+  - both blocks use the chosen algorithm.
+
+Tunable parameters (CLI)
+------------------------
+  --methods            Comma-separated methods (e.g., hf,pbe,pbe0,lrc-wpbeh)   [REQUIRED]
+  --bases              Comma-separated bases (e.g., def2-svpd,def2-tzvpd)     [REQUIRED]
+  --algorithms         Comma-separated algorithms (default: diis,gdm,sgm)
+  --scf-convergence    Integer applied to BOTH SP and ROKS (default: 8)
+  --scf-conv-sp        Integer override for SP only (optional)
+  --scf-conv-roks      Integer override for ROKS only (optional)
+  --ss-mixing          1 (default) or 0 — used in ROKS block
+  --step               If set, inserts "step true" in BOTH blocks and appends "_step" to filenames
+  --charge             Molecular charge (default: 0)
+  --mult               Spin multiplicity (default: 1)
+  --outdir             Output directory (default: .)
+  --name               Override base 'name' (else from XYZ filename)
+  --force              Overwrite existing files
+
+Usage examples
+--------------
+# Minimal example (single method/basis, sweep algorithms)
+make_roks_inputs.py geom.xyz --methods pbe0 --bases def2-svpd --algorithms diis,gdm,sgm --charge 0 --mult 1
+
+# Full sweep with step + mixing off, different ROKS convergence
+make_roks_inputs.py geom.xyz \
+  --methods hf,pbe,pbe0,lrc-wpbeh \
+  --bases def2-svpd,def2-tzvpd \
+  --algorithms diis,gdm,sgm \
+  --scf-convergence 8 --scf-conv-roks 5 \
+  --ss-mixing 0 --step \
+  --charge 0 --mult 1 --outdir inputs/
+"""
+
+import argparse, itertools, os, sys
+from pathlib import Path
+
+def parse_csv_list(s: str):
+    return [t.strip() for t in s.split(",") if t.strip()]
+
+def read_xyz_coords(xyz_path: Path):
+    """Parse XYZ; accept standard (N + comment) or bare coords."""
+    txt = xyz_path.read_text(errors="ignore").strip().splitlines()
+    if not txt:
+        raise ValueError(f"XYZ appears empty: {xyz_path}")
+    # Try standard header
+    coords = []
+    try:
+        N = int(txt[0].strip())
+        coords = txt[-N:] if len(txt) >= N + 2 else txt[2:]
+    except Exception:
+        coords = txt
+    coords = [line for line in coords if line.strip()]
+    if not coords:
+        raise ValueError(f"No coordinates parsed from: {xyz_path}")
+    return coords
+
+def build_rem_block(method: str,
+                    basis: str,
+                    algorithm: str,
+                    scf_conv: int,
+                    ss_mixing: int = 1,
+                    step: bool = False,
+                    roks: bool = False):
+    """Compose a $rem block."""
+    lines = []
+    lines.append("$rem")
+    lines.append("jobtype       sp")
+    lines.append(f"method        {method}")
+    lines.append(f"basis         {basis}")
+    lines.append("symmetry      false")
+    lines.append("sym_ignore    true")
+    lines.append(f"scf_algorithm {algorithm}")
+    if step:
+        lines.append("step          true")
+    if roks:
+        lines.append("scf_guess     read")
+        lines.append("roks          true")
+    else:
+        lines.append("scf_guess     sad")
+    lines.append("gen_scfman    true")
+    lines.append(f"scf_convergence {scf_conv}")
+    lines.append("xc_grid       000075000302")
+    lines.append("nl_grid       1")
+    lines.append("max_scf_cycles 200")
+    lines.append("mem_total     8000")
+    lines.append("mem_static    2000")
+    if roks:
+        lines.append(f"ROKS_SS_MIXING {ss_mixing}")
+    lines.append("$end")
+    return "\n".join(lines)
+
+def build_input_text(coords,
+                     charge: int, mult: int,
+                     method: str, basis: str,
+                     algorithm_sp: str, algorithm_roks: str,
+                     scf_sp: int, scf_roks: int,
+                     ss_mixing: int, step: bool):
+    """Compose the full two-block input text."""
+    out = []
+    # Block 1: SP/SAD with explicit coordinates
+    out += ["$molecule", f"{charge} {mult}", *coords, "$end", ""]
+    out += [build_rem_block(method, basis, algorithm_sp, scf_sp,
+                            ss_mixing=ss_mixing, step=step, roks=False)]
+    out += ["", "@@@", ""]
+    # Block 2: ROKS with read
+    out += ["$molecule", "read", "$end", ""]
+    out += [build_rem_block(method, basis, algorithm_roks, scf_roks,
+                            ss_mixing=ss_mixing, step=step, roks=True)]
+    return "\n".join(out) + "\n"
+
+def main():
+    epilog = (
+        "Examples:\n"
+        "  make_roks_inputs.py geom.xyz --methods pbe0 --bases def2-svpd --algorithms diis,gdm,sgm --charge 0 --mult 1\n"
+        "  make_roks_inputs.py geom.xyz --methods hf,pbe,pbe0,lrc-wpbeh --bases def2-svpd,def2-tzvpd --step --ss-mixing 0\n"
+        "  make_roks_inputs.py geom.xyz --methods pbe0 --bases def2-tzvpd --scf-convergence 8 --scf-conv-roks 5\n"
+        "\nRule: if algorithm == sgm → SP uses diis, ROKS uses sgm.\n"
+    )
+    p = argparse.ArgumentParser(
+        prog="make_roks_inputs.py",
+        description="Generate Q-Chem ROKS input files from a template XYZ.",
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog=epilog
+    )
+    p.add_argument("xyz", nargs="?", help="Path to template XYZ (e.g., name.xyz)")
+    p.add_argument("--methods", "-m", help="Comma-separated methods (e.g., hf,pbe,pbe0,lrc-wpbeh)  [REQUIRED]")
+    p.add_argument("--bases", "-b", help="Comma-separated bases (e.g., def2-svpd,def2-tzvpd)     [REQUIRED]")
+    p.add_argument("--algorithms", "-a", default="diis,gdm,sgm",
+                   help="Comma-separated SCF algorithms (default: diis,gdm,sgm)")
+    p.add_argument("--scf-convergence", type=int, default=8,
+                   help="SCF convergence for BOTH blocks unless overridden (default: 8)")
+    p.add_argument("--scf-conv-sp", type=int, default=None,
+                   help="Override SCF convergence for SP block")
+    p.add_argument("--scf-conv-roks", type=int, default=None,
+                   help="Override SCF convergence for ROKS block")
+    p.add_argument("--ss-mixing", type=int, choices=[0,1], default=1,
+                   help="ROKS_SS_MIXING for the ROKS block (default: 1)")
+    p.add_argument("--step", action="store_true",
+                   help="Insert 'step true' in BOTH blocks and append '_step' to filename")
+    p.add_argument("--charge", type=int, default=0, help="Molecular charge (default: 0)")
+    p.add_argument("--mult",   type=int, default=1, help="Spin multiplicity (default: 1)")
+    p.add_argument("--outdir", "-o", default=".", help="Output directory (default: .)")
+    p.add_argument("--name", help="Override base name (else derived from XYZ)")
+    p.add_argument("--force", action="store_true", help="Overwrite existing files")
+
+    # No-arg guidance
+    if len(sys.argv) == 1:
+        p.print_help(sys.stderr)
+        print("\nThis builds two-block inputs: SP/SAD → ROKS. "
+              "You may pass comma-separated lists for methods/bases/algorithms to sweep combinations.")
+        print("Special rule: if algorithm is 'sgm', SP uses 'diis' and ROKS uses 'sgm'.")
+        sys.exit(1)
+
+    args = p.parse_args()
+
+    if not args.xyz:
+        p.error("Please provide an XYZ file (e.g., name.xyz).")
+    xyz_path = Path(args.xyz)
+    if not xyz_path.exists():
+        p.error(f"XYZ not found: {xyz_path}")
+
+    if not args.methods or not args.bases:
+        p.error("Both --methods and --bases are required (comma-separated lists allowed).")
+
+    methods = parse_csv_list(args.methods)
+    bases   = parse_csv_list(args.bases)
+    algos   = parse_csv_list(args.algorithms)
+
+    if not methods: p.error("No methods parsed from --methods.")
+    if not bases:   p.error("No bases parsed from --bases.")
+    if not algos:   p.error("No algorithms parsed from --algorithms.")
+
+    # Convergence values
+    scf_sp   = args.scf_conv_sp   if args.scf_conv_sp   is not None else args.scf_convergence
+    scf_roks = args.scf_conv_roks if args.scf_conv_roks is not None else args.scf_convergence
+
+    # Read coords
+    try:
+        coords = read_xyz_coords(xyz_path)
+    except Exception as e:
+        p.error(str(e))
+
+    base_name = args.name if args.name else xyz_path.stem
+    outdir = Path(args.outdir); outdir.mkdir(parents=True, exist_ok=True)
+
+    print("== ROKS input generator ==")
+    print(f"XYZ:              {xyz_path}")
+    print(f"Charge/Mult:      {args.charge} / {args.mult}")
+    print(f"Methods:          {methods}")
+    print(f"Bases:            {bases}")
+    print(f"Algorithms:       {algos}  (rule: if 'sgm' → SP=diis, ROKS=sgm)")
+    print(f"SCF conv (SP):    {scf_sp}")
+    print(f"SCF conv (ROKS):  {scf_roks}")
+    print(f"ROKS_SS_MIXING:   {args.ss_mixing}")
+    print(f"step true:        {'yes' if args.step else 'no'}")
+    print(f"Output dir:       {outdir.resolve()}")
+    print("Generating...")
+
+    count = 0
+    for method, basis, algo in itertools.product(methods, bases, algos):
+        # Apply the rule for per-block algorithm choice
+        algorithm_sp   = "diis" if algo.lower() == "sgm" else algo
+        algorithm_roks = algo
+
+        suffix = f"{method}_{basis}_{algo}"
+        if args.step:
+            suffix = f"{suffix}_step"
+        out_name = f"{base_name}_{suffix}.in"
+        out_path = outdir / out_name
+
+        if out_path.exists() and not args.force:
+            print(f"  [skip] {out_name} (exists; use --force to overwrite)")
+            continue
+
+        text = build_input_text(
+            coords=coords,
+            charge=args.charge, mult=args.mult,
+            method=method, basis=basis,
+            algorithm_sp=algorithm_sp, algorithm_roks=algorithm_roks,
+            scf_sp=scf_sp, scf_roks=scf_roks,
+            ss_mixing=args.ss_mixing, step=args.step
+        )
+        out_path.write_text(text)
+        print(f"  [ok]   {out_name}   (SP:{algorithm_sp}  ROKS:{algorithm_roks})")
+        count += 1
+
+    print(f"Done. Wrote {count} file(s).")
+
+if __name__ == "__main__":
+    main()
