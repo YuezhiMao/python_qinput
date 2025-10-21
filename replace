@@ -11,7 +11,7 @@ new = sys.argv[2]
 print("replacing %s with %s in all filenames" %(old, new))
 replace_list = glob.glob('*'+old+'*')
 for oldfile in replace_list:
-    l = re.search('(\S*)'+old+'(\S*)', oldfile)
+    l = re.search(r'(\S*)'+old+r'(\S*)', oldfile)
     newfile = l.group(1) + new + l.group(2)
     command = 'mv ' + oldfile + ' ' + newfile
     print(command)
