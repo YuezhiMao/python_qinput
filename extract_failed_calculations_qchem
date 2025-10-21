@@ -1,0 +1,229 @@
+#!/usr/bin/env python3
+"""
+extract_failed_calculations_qchem (v2)
+
+Recursively find Q-Chem *.out files whose "success" flag appears
+fewer than the expected number of times, and copy those failed
+outputs (and their matching .in files, if present) to a target
+debug directory.
+
+Default behavior:
+  - Source: current directory "."
+  - Pattern: *.out (recursive)
+  - Success flag: "Have a nice day"
+  - Expected count: 2  (e.g., SP + ROKS in a single output)
+  - Preserve the source folder tree under the target
+  - Also copy matching .in (same basename)
+  - Exclude the target directory from scanning (prevents recursion)
+
+Examples:
+  # From current directory; copy failures into ./debug_failed
+  ./extract_failed_calculations_qchem
+
+  # Two sources into one target, expecting 2 flags each
+  ./extract_failed_calculations_qchem -s roks_trial_2_mixing_0 -s roks_trial_3_mixing_1 \
+      -t roks_trial_5_debug -n 2
+
+  # Different flag, flat target (no subfolders), dry run
+  ./extract_failed_calculations_qchem -f "Have a nice day" --flat --dry-run
+
+  # Custom pattern and a CSV manifest of failures
+  ./extract_failed_calculations_qchem -p "*sgm.out" --manifest failed_manifest.csv
+"""
+
+import argparse
+import csv
+import os
+import shutil
+import sys
+from pathlib import Path
+from typing import Iterable, List, Tuple
+
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(
+        prog="extract_failed_calculations_qchem",
+        description="Copy failed Q-Chem jobs (by missing success-flag counts) into a debug directory.",
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
+    p.add_argument("-s", "--source", action="append", default=[],
+                   help="Add a source directory to scan (can repeat). "
+                        "If none provided, defaults to current directory '.'.")
+    p.add_argument("-t", "--target", default="./debug_failed",
+                   help="Target debug directory (default: ./debug_failed)")
+    p.add_argument("-n", "--expected", type=int, default=2,
+                   help="Expected number of success-flag lines per output (default: 2). "
+                        "Files with COUNT < EXPECTED are marked as failed.")
+    p.add_argument("-f", "--flag", default="Have a nice day",
+                   help='Success flag string to search (default: "Have a nice day")')
+    p.add_argument("-p", "--pattern", default="*.out",
+                   help='Glob pattern for outputs (default: "*.out")')
+    p.add_argument("--flat", action="store_true",
+                   help="Do NOT preserve source subfolder structure under target (flat copy).")
+    p.add_argument("--no-copy-in", action="store_true",
+                   help="Do not copy matching .in files (only .out).")
+    p.add_argument("--dry-run", action="store_true",
+                   help="Print planned actions; do not copy anything.")
+    p.add_argument("-v", "--verbose", action="store_true",
+                   help="Print successes too (files that meet EXPECTED count).")
+    p.add_argument("--manifest", default=None,
+                   help="Optional CSV manifest path to write details of failed copies.")
+    p.add_argument("--force", action="store_true",
+                   help="Overwrite existing files in target (default: skip if exists).")
+    p.add_argument("extra_sources", nargs="*", help="Additional source directories.")
+
+    # Auto-show options when no args are provided
+    if len(sys.argv) == 1:
+        p.print_help()
+        print("\nExamples:\n"
+              "  ./extract_failed_calculations_qchem\n"
+              "  ./extract_failed_calculations_qchem -s roks_trial_2_mixing_0 -s roks_trial_3_mixing_1 \\\n"
+              "      -t roks_trial_5_debug -n 2\n"
+              "  ./extract_failed_calculations_qchem --flat --no-copy-in --dry-run\n")
+        sys.exit(0)
+
+    args = p.parse_args()
+
+    # Consolidate sources (defaults to '.')
+    sources = args.source + args.extra_sources
+    if not sources:
+        sources = ["."]
+    args.sources = sources
+    return args
+
+def canonical(path: str) -> Path:
+    return Path(path).expanduser().resolve()
+
+def iter_out_files(root: Path, pattern: str) -> Iterable[Path]:
+    yield from root.rglob(pattern)
+
+def count_flag_lines(path: Path, flag: str) -> int:
+    cnt = 0
+    with path.open("r", errors="ignore") as fh:
+        for line in fh:
+            if flag in line:
+                cnt += 1
+    return cnt
+
+def ensure_dir(p: Path):
+    p.mkdir(parents=True, exist_ok=True)
+
+def copy_file(src: Path, dst_dir: Path, force: bool, dry: bool) -> Tuple[bool, Path]:
+    ensure_dir(dst_dir)
+    dst = dst_dir / src.name
+    if dst.exists() and not force:
+        return False, dst
+    if not dry:
+        shutil.copy2(src, dst)
+    return True, dst
+
+def is_within(child: Path, parent: Path) -> bool:
+    """True if 'child' resides under 'parent' directory."""
+    try:
+        child.resolve().relative_to(parent.resolve())
+        return True
+    except Exception:
+        return False
+
+def main():
+    args = parse_args()
+
+    target = canonical(args.target)
+    print(f"Flag:        {args.flag}")
+    print(f"Expected:    {args.expected} per {args.pattern}")
+    print(f"Sources:     {', '.join(str(canonical(s)) for s in args.sources)}")
+    print(f"Target:      {target}")
+    print(f"Preserve tree: {'yes' if not args.flat else 'no (flat)'}")
+    print(f"Copy .in:      {'yes' if not args.no_copy_in else 'no'}")
+    print(f"Dry run:       {'yes' if args.dry_run else 'no'}")
+    print(f"Verbose:       {'yes' if args.verbose else 'no'}")
+    if args.manifest:
+        print(f"Manifest:    {args.manifest}")
+    print()
+
+    if not args.dry_run:
+        ensure_dir(target)
+
+    total = 0
+    failed = 0
+    manifest_rows: List[dict] = []
+
+    for src_str in args.sources:
+        root = canonical(src_str)
+        if not root.exists():
+            print(f"[warn] Source not found, skipping: {root}", file=sys.stderr)
+            continue
+
+        print(f"Scanning: {root}")
+
+        # Snapshot BEFORE copying to avoid chasing our own output
+        all_outs = list(iter_out_files(root, args.pattern))
+
+        # Exclude any file already under the target
+        outs = [p for p in all_outs if not is_within(p, target)]
+
+        # Heads-up if target is inside this source
+        if is_within(target, root):
+            print(f"[note] Target is inside this source; excluding {target} from scan.")
+
+        for out_file in outs:
+            if not out_file.is_file():
+                continue
+            total += 1
+            try:
+                count = count_flag_lines(out_file, args.flag)
+            except Exception as e:
+                print(f"[warn] Could not read {out_file}: {e}", file=sys.stderr)
+                continue
+
+            ok = count >= args.expected
+            if ok and not args.verbose:
+                continue
+
+            status = "OK " if ok else "FAIL"
+            # destination directory
+            if args.flat:
+                dest_dir = target
+            else:
+                rel_parent = out_file.parent.relative_to(root)
+                dest_dir = target / rel_parent
+
+            print(f"[{status}] {out_file}  ({count}/{args.expected})  →  {dest_dir}")
+            if not ok:
+                failed += 1
+                # copy .out
+                copied_out, dst_out = copy_file(out_file, dest_dir, args.force, args.dry_run)
+                # copy matching .in (if requested and exists)
+                copied_in = False
+                dst_in = None
+                if not args.no_copy_in:
+                    in_file = out_file.with_suffix(".in")
+                    if in_file.exists():
+                        copied_in, dst_in = copy_file(in_file, dest_dir, args.force, args.dry_run)
+                manifest_rows.append({
+                    "source_root": str(root),
+                    "out_path": str(out_file),
+                    "in_path": str(out_file.with_suffix(".in")),
+                    "count": count,
+                    "expected": args.expected,
+                    "copied_out_to": str(dst_out) if dst_out else "",
+                    "copied_in_to": str(dst_in) if dst_in else "",
+                })
+
+    print(f"\nDone. Checked: {total}   Failed: {failed}   Target: {target}")
+
+    if args.manifest:
+        try:
+            with open(args.manifest, "w", newline="") as fw:
+                w = csv.DictWriter(fw, fieldnames=[
+                    "source_root","out_path","in_path","count","expected",
+                    "copied_out_to","copied_in_to"
+                ])
+                w.writeheader()
+                for row in manifest_rows:
+                    w.writerow(row)
+            print(f"Manifest written: {args.manifest}")
+        except Exception as e:
+            print(f"[warn] Could not write manifest: {e}", file=sys.stderr)
+
+if __name__ == "__main__":
+    main()
