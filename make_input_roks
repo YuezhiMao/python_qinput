@@ -11,7 +11,7 @@ Given a template XYZ geometry, generate two-block Q-Chem inputs:
 You can sweep comma-separated lists of methods, bases, and algorithms to produce
 the Cartesian product of inputs.
 
-Special rule (your request)
+Special rule:
 ---------------------------
 If the chosen algorithm is 'sgm':
   - SP block uses 'diis'
