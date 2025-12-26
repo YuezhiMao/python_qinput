@@ -21,6 +21,7 @@ def ParseInput(ArgsIn):
    parser.add_option('--charge',dest='charge',action='store',type='int',default=0,help='total charge of the entire system')
    parser.add_option('--mult',dest='mult',action='store',type='int',default=1,help='total multiplicity of the system') 
    parser.add_option('--coarse',dest='coarse',action='store',type='int',default=0,help='use less tight integral thresh and less fine grid for SCF calculations')
+   parser.add_option('--gdm',dest='gdm',action='store_true',default=False,help='use GDM algorithm for the first job')
    parser.add_option('--both_field',dest='both_field',action='store_true',default=False,help='calculate electric field in both jobs')
    parser.add_option('--solute',dest='solute',action='store',type='int',default=22,help='number of atoms on solute')
    parser.add_option('--solute_chg',dest='solute_chg',action='store',type='int',default=0,help='net charge of the solute')
@@ -101,10 +102,13 @@ for method in options.method:
       qrems.set_rems_common(myrems_1, method, basis, options.coarse)
       qrems.set_rems_common(myrems_2, method, basis, options.coarse)
       #job 1 specific
+      if options.gdm:
+         qrems.ModRem('SCF_ALGORITHM', 'GDM', myrems_1)
       if options.almo:
          qrems.ModRem('FRGM_METHOD', 'STOLL', myrems_1)
          qrems.ModRem('SCFMI_MODE', '1', myrems_1)
          qrems.ModRem('ALMO_EFIELD', 'TRUE', myrems_1)
+         qrems.ModRem('SCF_PRINT_FRGM', 'TRUE', myrems_1)
       else:
          qrems.ModRem('ENV_METHOD', method, myrems_1)
          qrems.ModRem('GEN_SCFMAN_EMBED', 'TRUE', myrems_1)
