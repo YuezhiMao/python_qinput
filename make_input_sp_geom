@@ -106,8 +106,8 @@ def XYZ_to_Input(fw, XYZ, curREM, options):
       qrems.copy_section_over(fw, options.isotope)
    if options.cdft:
       qrems.copy_section_over(fw, options.cdft)
-   if options.harm_confine > 0:
-      qrems.copy_section_over(fw, options.geom_constr)
+   #if options.harm_confine > 0: #no need to duplicate this
+   #   qrems.copy_section_over(fw, options.geom_constr)
    if options.extchg:
       qrems.copy_section_over(fw, options.extchg)
 
