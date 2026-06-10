@@ -182,7 +182,7 @@ def set_rems_eda(curREM, method, basis, options):
    qrems.ModRem_Frgm('MEM_STATIC', '2000', curREM)
    qrems.ModRem_Frgm('SCF_GUESS', 'SAD', curREM)
 
-def append_ext_charges(inputfile, XYZ, xyz_path, ext_chg_dir):
+def append_ext_charges(inputfile, XYZ, ext_chg_dir):
    fw = open(inputfile, 'a')
    if ext_chg_dir[-1] != '/':
       ext_chg_dir += '/'
@@ -270,7 +270,7 @@ for method in options.method:
          inputfile = input_path+parsed_XYZ.Name+'_eda2_op'+str(options.eda_option)+'_'+method+'_'+basis_short+'.in'
          XYZ_to_Input(inputfile, parsed_XYZ, FRGM, curREM)
          if options.extchg != None:
-            append_ext_charges(inputfile, parsed_XYZ, xyz_path, options.extchg) 
+            append_ext_charges(inputfile, parsed_XYZ, options.extchg) 
 
          #run 3 more jobs if do MBE
          if options.mbe:
