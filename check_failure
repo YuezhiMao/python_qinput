@@ -46,7 +46,7 @@ def CheckComplete_Single(target_path, flag, unfinished_list):
    n_fail = n_jobs
    n_complete = 0
    for line in f.readlines():
-      jobname = re.search("(\S+):",line).group(1)
+      jobname = re.search(r"(\S+):",line).group(1)
       job_status[jobname] = True
       n_fail -= 1
       n_complete += 1
@@ -54,7 +54,7 @@ def CheckComplete_Single(target_path, flag, unfinished_list):
    sp.call(['rm', tmp])
    target_root = target_path
    if 'result/' in target_path:
-      target_root = re.search('result/(\S+)', target_path).group(1)
+      target_root = re.search(r'result/(\S+)', target_path).group(1)
    #print out the failures
    for jobname in job_status:
       if job_status[jobname] != True:
@@ -83,7 +83,7 @@ def CheckComplete_Multi(target_path, multiple, flag, unfinished_list):
    n_fail = n_jobs
    n_complete = 0
    for line in f.readlines():
-      l = re.search("(\S+):",line)
+      l = re.search(r"(\S+):",line)
       job_status[l.group(1)]["counts"] += 1
       if job_status[l.group(1)]["counts"] == multiple:  #expected number of flags reached
          job_status[l.group(1)]["status"] = True
